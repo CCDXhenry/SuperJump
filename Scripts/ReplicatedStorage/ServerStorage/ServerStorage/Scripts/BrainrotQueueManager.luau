@@ -1,0 +1,468 @@
+--!strict
+local BrainrotQueueManager = {}
+
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local serverStorage = game:GetService("ServerStorage")
+
+local scripts = replicatedStorage:WaitForChild("Scripts")
+local sharedScripts = scripts:WaitForChild("Shared")
+local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
+local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
+local GameTexts = require(sharedScripts:FindFirstChild("GameTexts"))
+
+local serverScripts = serverStorage:WaitForChild("Scripts")
+local ServerGameInfo = require(serverScripts:FindFirstChild("ServerGameInfo"))
+local AnalyticsTool = require(serverScripts:FindFirstChild("AnalyticsTool"))
+
+local actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
+local modelsFolder = replicatedStorage:WaitForChild("Models")
+local actualChests = modelsFolder:FindFirstChild(GameConfig.FactoryChestsFolderName)
+	or modelsFolder:FindFirstChild("LittleElfChests")
+if not actualChests then
+	warn(
+		"[BrainrotQueueManager] Missing Models."
+			.. GameConfig.FactoryChestsFolderName
+			.. " or legacy LittleElfChests folder — add FactoryChests with ChestData models"
+	)
+	actualChests = modelsFolder:WaitForChild(GameConfig.FactoryChestsFolderName)
+end
+local actualCoils = replicatedStorage:WaitForChild("Tools")
+local OpenChestRevealDelay = 5.7
+
+-- 生成 Tool 并放入玩家 Backpack
+local function CreateToolForItem(player: Player, item: GameConfig.BrainrotQueueItem): Tool?
+	local itemType = item.itemType or GameConfig.ItemType.Brainrot
+	local config: any
+	if itemType == GameConfig.ItemType.Brainrot then
+		config = GameConfig.BrainrotIdMap[item.configId]
+	elseif itemType == GameConfig.ItemType.Coil then
+		config = GameConfig.CoilIdMap[item.configId]
+	elseif itemType == GameConfig.ItemType.Chest then
+		config = GameConfig.ChestIdMap[item.configId]
+	end
+
+	if not config then
+		warn("[BrainrotQueueManager] CreateToolForItem: no config for itemType", itemType, "configId", item.configId)
+		return nil
+	end
+
+	local tool
+	if itemType == GameConfig.ItemType.Brainrot then
+		tool = Instance.new("Tool")
+		tool.Name = config.name_t or ("Brainrot_" .. item.configId)
+		tool.RequiresHandle = true
+		tool.CanBeDropped = false
+		tool:SetAttribute("ItemType", itemType)
+		tool:SetAttribute("BrainrotUID", item.uid)
+		tool:SetAttribute("ConfigId", item.configId)
+		tool:SetAttribute("Quality", item.quality)
+		tool:SetAttribute("Level", item.level)
+
+		-- 创建 Handle
+		local handle = Instance.new("Part")
+		handle.Name = "Handle"
+		handle.Size = Vector3.new(1, 1, 1)
+		handle.Anchored = false
+		handle.CanCollide = false
+		handle.Transparency = 1
+		handle.Massless = true
+		handle.Parent = tool
+
+		-- Clone 视觉模型到 Tool（兼容 Brainrots 下单个 MeshPart 模板）
+		local template = GameConfig.FindResourceTemplateByResourceName(actualModels, config.resourceName)
+		if template then
+			local visualModel = GameConfig.CloneTemplateAsModel(template)
+			visualModel.Name = "VisualModel"
+			local rootPart = visualModel.PrimaryPart or visualModel:FindFirstChild("RootPart") or visualModel:FindFirstChildWhichIsA("BasePart")
+			if rootPart and rootPart:IsA("BasePart") then
+				local targetRoot = rootPart :: BasePart
+				for _, part in ipairs(visualModel:GetDescendants()) do
+					if part:IsA("BasePart") then
+						part.CanCollide = false
+						part.Anchored = false
+						part.Massless = true
+						part.CanQuery = false
+						part.CanTouch = false
+					end
+				end
+				visualModel:PivotTo(handle.CFrame)
+				visualModel.Parent = tool
+
+				local motor = Instance.new("Motor6D")
+				motor.Name = "VisualMotor"
+				motor.Part0 = handle
+				motor.Part1 = targetRoot
+				motor.C0 = CFrame.new()
+				motor.C1 = targetRoot.CFrame:ToObjectSpace(handle.CFrame)
+				motor.Parent = handle
+			else
+				visualModel.Parent = tool
+			end
+		else
+			warn(
+				"[BrainrotQueueManager] Brainrot model not found in Brainrots:",
+				config.resourceName,
+				"candidates:",
+				table.concat(GameConfig.GetResourceNameCandidates(config.resourceName), ", ")
+			)
+		end
+	elseif itemType == GameConfig.ItemType.Coil then
+		local sourceModel = actualCoils:FindFirstChild(config.modelRes)
+		if sourceModel and sourceModel:IsA("Tool") then
+			tool = sourceModel:Clone()
+			tool.CanBeDropped = false
+			tool:SetAttribute("ItemType", itemType)
+			tool:SetAttribute("BrainrotUID", item.uid)
+			tool:SetAttribute("ConfigId", item.configId)
+			tool:SetAttribute("Quality", item.quality)
+			tool:SetAttribute("Level", item.level)
+		else
+			warn("[BrainrotQueueManager] Coil Tool not found in ReplicatedStorage.Tools:", config.modelRes)
+			return nil
+		end
+	elseif itemType == GameConfig.ItemType.Chest then
+		local chestTemplate = GameConfig.FindResourceTemplateByResourceName(actualChests, config.resourceName)
+		if chestTemplate then
+			tool = Instance.new("Tool")
+			tool.Name = config.name_t or ("Chest_" .. item.configId)
+			tool.RequiresHandle = true
+			tool.CanBeDropped = false
+			tool:SetAttribute("ItemType", itemType)
+			tool:SetAttribute("BrainrotUID", item.uid)
+			tool:SetAttribute("ConfigId", item.configId)
+			tool:SetAttribute("Quality", item.quality)
+			tool:SetAttribute("Level", item.level)
+			if item.chestStoredExp ~= nil then
+				tool:SetAttribute("ChestStoredExp", item.chestStoredExp)
+			end
+
+			local handle = Instance.new("Part")
+			handle.Name = "Handle"
+			handle.Size = Vector3.new(1, 1, 1)
+			handle.Anchored = false
+			handle.CanCollide = false
+			handle.Transparency = 1
+			handle.Massless = true
+			handle.Parent = tool
+
+			local visualModel = GameConfig.CloneTemplateAsModel(chestTemplate)
+			visualModel.Name = "VisualModel"
+			local root = visualModel.PrimaryPart or visualModel:FindFirstChild("RootPart") or visualModel:FindFirstChildWhichIsA("BasePart")
+			if root and root:IsA("BasePart") then
+				for _, part in ipairs(visualModel:GetDescendants()) do
+					if part:IsA("BasePart") then
+						part.CanCollide = false
+						part.Anchored = false
+						part.Massless = true
+						part.CanQuery = false
+						part.CanTouch = false
+					end
+				end
+				visualModel:PivotTo(handle.CFrame)
+				visualModel.Parent = tool
+
+				local motor = Instance.new("Motor6D")
+				motor.Name = "VisualMotor"
+				motor.Part0 = handle
+				motor.Part1 = root
+				motor.Parent = handle
+			else
+				visualModel.Parent = tool
+			end
+		else
+			warn(
+				"[BrainrotQueueManager] Chest model not found in FactoryChests:",
+				config.resourceName,
+				"candidates:",
+				table.concat(GameConfig.GetResourceNameCandidates(config.resourceName), ", ")
+			)
+			return nil
+		end
+	end
+
+	if tool then
+		tool.Parent = player.Backpack
+		--print("[BrainrotQueueManager] Created Tool for uid:", item.uid, "name:", tool.Name)
+	end
+	return tool
+end
+
+-- 生成唯一 UID
+local function GenerateUID(): string
+	return "bq_" .. tostring(math.floor(os.clock() * 100000)) .. "_" .. tostring(math.random(10000, 99999))
+end
+
+-- 通知客户端队列变化
+local function NotifyQueueUpdate(player: Player, queue: { GameConfig.BrainrotQueueItem })
+	NetMsg.FireNotifyBrainrotQueueUpdate(player, queue)
+end
+
+local function PickWeightedRewardEntry(rewardPool: { any }, chestConfigId: number): any?
+	local totalWeight = 0
+	for _, entry in ipairs(rewardPool) do
+		local weight = entry.weight
+		if type(weight) == "number" and weight > 0 then
+			totalWeight += weight
+		end
+	end
+
+	if totalWeight <= 0 then
+		warn("[BrainrotQueueManager] OpenChest error: invalid total weight for chest", chestConfigId)
+		return nil
+	end
+
+	local threshold = math.random() * totalWeight
+	local accumulated = 0
+	local lastValidEntry: any? = nil
+	for _, entry in ipairs(rewardPool) do
+		local weight = entry.weight
+		if type(weight) == "number" and weight > 0 then
+			accumulated += weight
+			lastValidEntry = entry
+			if threshold <= accumulated then
+				return entry
+			end
+		end
+	end
+
+	return lastValidEntry
+end
+
+-- _shouldEnforceMaxCapacity: 保留形参以兼容旧调用，已不再做容量限制。
+-- grantTipKey/grantExpectedCount/grantShopBundleId:
+-- - 用于客户端“获得奖励提示”的播放分组判定（不做服务端去重）
+function BrainrotQueueManager.AddItem(
+	player: Player,
+	configId: number,
+	quality: number,
+	level: number,
+	equipImmediately: boolean?,
+	itemType: number?,
+	_shouldEnforceMaxCapacity: boolean?,
+	grantTipKey: string?,
+	grantExpectedCount: number?,
+	grantShopBundleId: number?,
+	analyticsGetSource: number?,
+	analyticsGetSourceId: number?,
+	chestStoredExp: number?
+): boolean
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if not playerInfo then
+		warn("[BrainrotQueueManager] AddItem failed: playerInfo not found for", player.Name)
+		return false
+	end
+
+	local item: GameConfig.BrainrotQueueItem = {
+		uid = GenerateUID(),
+		itemType = itemType or GameConfig.ItemType.Brainrot,
+		configId = configId,
+		quality = quality,
+		level = level,
+		chestStoredExp = chestStoredExp,
+
+		grantTipKey = grantTipKey,
+		grantExpectedCount = grantExpectedCount,
+		grantShopBundleId = grantShopBundleId,
+	}
+
+	table.insert(playerInfo.brainrotQueue, item)
+	playerInfo.playerInfoChanged = true
+
+	-- 创建对应的 Tool 并放入玩家 Backpack
+	task.defer(function()
+		local tool = CreateToolForItem(player, item)
+		if equipImmediately and tool then
+			local char = player.Character
+			local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+			if humanoid then
+				humanoid:EquipTool(tool)
+			end
+		end
+	end)
+
+	--print("[BrainrotQueueManager] AddItem for", player.Name, "configId:", configId, "uid:", item.uid, "total:", #playerInfo.brainrotQueue)
+	NotifyQueueUpdate(player, playerInfo.brainrotQueue)
+
+	local resolvedType = itemType or GameConfig.ItemType.Brainrot
+	if analyticsGetSource ~= nil then
+		AnalyticsTool.LogModelGet(player, configId, level, analyticsGetSource, analyticsGetSourceId or 0, resolvedType)
+	end
+
+	return true
+end
+
+-- 从玩家背包队列移除指定 uid 的 Brainrot
+function BrainrotQueueManager.RemoveItem(player: Player, uid: string): boolean
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if not playerInfo then
+		warn("[BrainrotQueueManager] RemoveItem failed: playerInfo not found for", player.Name)
+		return false
+	end
+
+	local removedIndex: number? = nil
+	for i, item in ipairs(playerInfo.brainrotQueue) do
+		if item.uid == uid then
+			removedIndex = i
+			break
+		end
+	end
+
+	if removedIndex then
+		table.remove(playerInfo.brainrotQueue, removedIndex)
+		playerInfo.playerInfoChanged = true
+		--print("[BrainrotQueueManager] RemoveItem for", player.Name, "uid:", uid, "remaining:", #playerInfo.brainrotQueue)
+		NotifyQueueUpdate(player, playerInfo.brainrotQueue)
+		return true
+	else
+		warn("[BrainrotQueueManager] RemoveItem failed: uid not found", uid, "for", player.Name)
+		return false
+	end
+end
+
+-- 移除队列中指定索引的 Brainrot（按数字键消耗时使用）
+function BrainrotQueueManager.RemoveItemByIndex(player: Player, index: number): GameConfig.BrainrotQueueItem?
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if not playerInfo then
+		warn("[BrainrotQueueManager] RemoveItemByIndex failed: playerInfo not found for", player.Name)
+		return nil
+	end
+
+	local item = playerInfo.brainrotQueue[index]
+	if not item then
+		warn("[BrainrotQueueManager] RemoveItemByIndex failed: no item at index", index, "for", player.Name)
+		return nil
+	end
+
+	table.remove(playerInfo.brainrotQueue, index)
+	playerInfo.playerInfoChanged = true
+	print("[BrainrotQueueManager] RemoveItemByIndex for", player.Name, "index:", index, "remaining:", #playerInfo.brainrotQueue)
+	NotifyQueueUpdate(player, playerInfo.brainrotQueue)
+	return item
+end
+
+-- 获取玩家当前背包队列（只读引用）
+function BrainrotQueueManager.GetQueue(player: Player): { GameConfig.BrainrotQueueItem }?
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if not playerInfo then
+		return nil
+	end
+	return playerInfo.brainrotQueue
+end
+
+-- 玩家上线时，根据存档数据恢复所有 Tool
+function BrainrotQueueManager.LoadPlayerQueue(player: Player)
+	local queue = BrainrotQueueManager.GetQueue(player)
+	if queue then
+		for _, item in ipairs(queue) do
+			CreateToolForItem(player, item)
+		end
+	end
+end
+
+-- 玩家开启宝箱
+function BrainrotQueueManager.OpenChest(player: Player, uid: string)
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if not playerInfo then return end
+
+	-- 1. 验证宝箱是否存在
+	local chestItem: GameConfig.BrainrotQueueItem? = nil
+	local itemIndex: number? = nil
+	for i, item in ipairs(playerInfo.brainrotQueue) do
+		if item.uid == uid and item.itemType == GameConfig.ItemType.Chest then
+			chestItem = item
+			itemIndex = i
+			break
+		end
+	end
+
+	if not chestItem or not itemIndex then
+		warn("[BrainrotQueueManager] OpenChest failed: chest uid not found", uid)
+		return
+	end
+
+	local chestConfig = GameConfig.ChestIdMap[chestItem.configId]
+	if not chestConfig then return end
+
+	-- 2. 随机获得掉落
+	local rewardPool = GameConfig.ChestRewardPoolMap[chestItem.configId]
+	if not rewardPool or #rewardPool == 0 then
+		warn("[BrainrotQueueManager] OpenChest error: rewardPool is empty for chest", chestItem.configId)
+		return
+	end
+
+	local rewardEntry = PickWeightedRewardEntry(rewardPool, chestItem.configId)
+	if not rewardEntry then
+		return
+	end
+	local rewardType = rewardEntry.itemType
+	local rewardId = rewardEntry.itemId
+
+	local rewardConfig: any
+	if rewardType == GameConfig.ItemType.Brainrot then
+		rewardConfig = GameConfig.BrainrotIdMap[rewardId]
+	elseif rewardType == GameConfig.ItemType.Coil then
+		rewardConfig = GameConfig.CoilIdMap[rewardId]
+	end
+
+	if not rewardConfig then
+		warn("[BrainrotQueueManager] OpenChest error: reward config not found", rewardType, rewardId)
+		return
+	end
+
+	-- 2.5 先把权威结果通知给客户端，用于播放开箱动画
+	local chestLevel = chestItem.level or 1
+	NetMsg.FireNotifyChestOpenResult(player, uid, chestItem.configId, chestLevel, rewardId)
+
+	-- 3. 移除宝箱，添加新宠物
+	-- 先移除 Tool
+	local char = player.Character
+	if char then
+		for _, child in ipairs(char:GetChildren()) do
+			if child:IsA("Tool") and child:GetAttribute("BrainrotUID") == uid then
+				child:Destroy()
+			end
+		end
+	end
+	for _, child in ipairs(player.Backpack:GetChildren()) do
+		if child:IsA("Tool") and child:GetAttribute("BrainrotUID") == uid then
+			child:Destroy()
+		end
+	end
+
+	-- 更新数据
+	table.remove(playerInfo.brainrotQueue, itemIndex)
+	playerInfo.playerInfoChanged = true
+	NotifyQueueUpdate(player, playerInfo.brainrotQueue)
+
+	-- 动画播放期间先不显示最终 brainrotTool，延迟后再发放并展示
+	local chestConfigIdForAnalytics = chestItem.configId
+	task.delay(OpenChestRevealDelay, function()
+		local latestPlayerInfo = ServerGameInfo.GetPlayerInfo(player)
+		if not latestPlayerInfo then
+			return
+		end
+		BrainrotQueueManager.AddItem(
+			player,
+			rewardId,
+			rewardConfig.quality,
+			chestLevel,
+			true,
+			rewardType,
+			false,
+			nil,
+			nil,
+			nil,
+			if rewardType == GameConfig.ItemType.Brainrot then GameConfig.ModelGetSource.Chest else nil,
+			if rewardType == GameConfig.ItemType.Brainrot then chestConfigIdForAnalytics else nil
+		)
+		-- 提示
+	NetMsg.FireNotifyShowGameTip(player, GameTexts.ReceivedReward.source, GameConfig.GameTipTweenType.FlyUp, GameTexts.ReceivedReward.key, {rewardConfig.name_t})
+	end)
+end
+
+-- 模块初始化 (服务端监听)
+task.defer(function()
+	NetMsg.ConnectRequestOpenChest(BrainrotQueueManager.OpenChest)
+end)
+
+return BrainrotQueueManager

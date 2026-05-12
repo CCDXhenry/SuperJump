@@ -1,0 +1,4 @@
+--!strict
+-- 家园槽位、Remote、产出 Heartbeat、重生入口已迁至 ServerStorage/Scripts/PlayerHomeServerManager。
+-- 由 ServerScriptService/ServerGameManager/init.legacy.luau 调用 PlayerHomeServerManager.Init()。
+-- 本文件保留为空壳以兼容旧目录；Studio 中可删除本 Script，不影响工厂玩法。
