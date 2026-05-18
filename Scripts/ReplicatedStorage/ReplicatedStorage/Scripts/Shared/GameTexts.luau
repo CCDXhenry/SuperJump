@@ -78,5 +78,12 @@ local GameTexts = {
 	ShopBundleBoxCount = { key = "ShopBundleBoxCount", source = "{1}x Box" },
 	ChestWorkbenchExpProgress = { key = "ChestWorkbenchExpProgress", source = "{1}/{2} EXP" },
 	ChestWorkbenchExpAtMax = { key = "ChestWorkbenchExpAtMax", source = "{1} / MAX" },
+	-- JumpRunway 终局 DistanceRecorder：{1} 为取整后的显示距离（与跑道 HUD 同 stud 语义，后缀 m）
+	JumpRunwayDistanceMeters = { key = "JumpRunwayDistanceMeters", source = "{1}m" },
+	-- JumpRunway 起跳窗时机评级（与 TranslationTool 绑定，静态英文 source）
+	JumpRunwayWindowRatingOk = { key = "", source = "Ok" },
+	JumpRunwayWindowRatingPerfect = { key = "", source = "Perfect" },
+	JumpRunwayWindowRatingLate = { key = "", source = "Late" },
+	JumpRunwayWindowRatingMiss = { key = "", source = "Miss" },
 }
 return GameTexts

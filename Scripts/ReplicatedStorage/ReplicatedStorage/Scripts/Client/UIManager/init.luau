@@ -26,6 +26,7 @@ UIManager.WindowId = {
 	SellShop = "SellShopFrame",
 	Rebirth = "RebirthFrame",
 	StoreBundle = "StoreBundleFrame",
+	JumpRunWayFrame = "JumpRunWayFrame",
 }
 
 type WindowConfig = {
@@ -53,6 +54,11 @@ local WindowConfigs: { [string]: WindowConfig } = {
 		FrameName = "StoreBundleFrame",
 		scriptName = "StoreBundleFrame",
 		isModal = true,
+	},
+	[UIManager.WindowId.JumpRunWayFrame] = {
+		FrameName = "JumpRunWayFrame",
+		scriptName = "JumpRunWayFrame",
+		isModal = false,
 	},
 }
 
@@ -394,6 +400,14 @@ function UIManager.Init(gameScreenGuiNew: ScreenGui)
 			end
 		end
 	end
+end
+
+function UIManager.GetGameScreenGui(): ScreenGui?
+	return gameScreenGui
+end
+
+function UIManager.GetWindowRoot(windowId: string): GuiBase2d?
+	return addedWindows[windowId]
 end
 
 --非窗口方式创建界面

@@ -1,4 +1,37 @@
 --!strict
+export type JumpRunwayStatePayload = {
+	phase: number,
+	distance: number,
+	windowRemainSec: number?,
+	fuel: number,
+	takeoffCount: number,
+	ratingTier: number?,
+	finalScore: number?,
+	runwayForward: Vector3,
+	runwayOrigin: Vector3?,
+}
+
+-- 客户端→服务端的统一上报载荷
+--   kind=1 Input  : 起跳/冲刺按键状态（可选附带 clientPhase 供服端日志）
+--   kind=2 Sample : 周期性物理样本（沿轴距离、速度、偏离、是否着地；可选 clientPhase）
+--   kind=3 Final  : 客户端报告本局结束（落地稳定），服务端据此锁定（成绩以服端样本 maxAlong 为准）
+--   kind=4 Start  : 客户端权威开局（跑道轴、原点、沿轴 baseline），服端仅登记会话并做后续样本校验
+export type JumpRunwayInputReport = {
+	kind: number,
+	jumpPressed: boolean?,
+	dashHeld: boolean?,
+	sampleAlong: number?,
+	sampleAlongSpeed: number?,
+	samplePerpMag: number?,
+	grounded: boolean?,
+	finalAlong: number?,
+	clientClock: number?,
+	clientPhase: number?,
+	alongBaseline: number?,
+	runwayForward: Vector3?,
+	runwayOrigin: Vector3?,
+}
+
 local NetMsg = {}
 
 local replicatedStorage: ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -69,6 +102,10 @@ local requestPlaceChestOnWorkbenchSlotEvent: RemoteEvent? =
 local requestPickupChestFromWorkbenchSlotEvent: RemoteEvent? =
 	remoteEventsFolder:FindFirstChild("RequestPickupChestFromWorkbenchSlot") :: RemoteEvent?
 local notifyWorkbenchSlotsUpdateEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyWorkbenchSlotsUpdate") :: RemoteEvent?
+
+-- JumpRunway：在 Studio 的 ReplicatedStorage.RemoteEvents 下创建 `NotifyJumpRunwayState`、`RequestJumpRunwayInput`
+local notifyJumpRunwayStateEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyJumpRunwayState") :: RemoteEvent?
+local requestJumpRunwayInputEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestJumpRunwayInput") :: RemoteEvent?
 
 --客户端请求设置背景音乐音量
 function NetMsg.FireRequestSetBGMVolume(volume: number)
@@ -587,6 +624,44 @@ function NetMsg.ConnectNotifyWorkbenchSlotsUpdate(
 		return
 	end
 	notifyWorkbenchSlotsUpdateEvent.OnClientEvent:Connect(callback)
+end
+
+function NetMsg.FireNotifyJumpRunwayState(player: Player, payload: JumpRunwayStatePayload)
+	if notifyJumpRunwayStateEvent == nil then
+		return
+	end
+	notifyJumpRunwayStateEvent:FireClient(player, payload)
+end
+
+function NetMsg.ConnectNotifyJumpRunwayState(callback: (payload: JumpRunwayStatePayload) -> ())
+	if notifyJumpRunwayStateEvent == nil then
+		return
+	end
+	notifyJumpRunwayStateEvent.OnClientEvent:Connect(callback)
+end
+
+function NetMsg.FireRequestJumpRunwayInput(report: JumpRunwayInputReport)
+	if requestJumpRunwayInputEvent == nil then
+		return
+	end
+	-- 单参 FireServer(table)：与 Connect 端一致；服务端 JumpRunwayServerManager 会对别名/封装再归一化
+	requestJumpRunwayInputEvent:FireServer(report)
+end
+
+function NetMsg.ConnectRequestJumpRunwayInput(callback: (player: Player, report: JumpRunwayInputReport) -> ())
+	if requestJumpRunwayInputEvent == nil then
+		return
+	end
+	requestJumpRunwayInputEvent.OnServerEvent:Connect(function(player: Player, payload: any)
+		if typeof(payload) ~= "table" then
+			return
+		end
+		callback(player, payload :: JumpRunwayInputReport)
+	end)
+end
+
+function NetMsg.JumpRunwayRemotesExist(): boolean
+	return notifyJumpRunwayStateEvent ~= nil and requestJumpRunwayInputEvent ~= nil
 end
 
 return NetMsg

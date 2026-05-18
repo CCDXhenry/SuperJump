@@ -15,13 +15,18 @@ local defaultWalkSpeed: number = 16
 local defaultJumpPower: number = 50
 local defaultJumpHeight: number = 7.2
 
--- 按当前装备的 Tool 一次性写入 WalkSpeed 与跳跃，避免 += / 重复除法在切 Tool 时算错
+-- 按当前装备的 Tool 一次性写入 WalkSpeed 与跳跃，避免 += / 重复除法在切 Tool 时算错。
+-- JumpRunway 期间完全由客户端表现控制；服务端不写 WalkSpeed/JumpPower/JumpHeight，避免网络拉扯。
 local function syncCoilLocomotionForCharacter(character: Model)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if humanoid == nil then
 		return
 	end
 	local player = players:GetPlayerFromCharacter(character)
+	-- JumpRunway：客户端全表现，服务端在该阶段不写任何 Humanoid 运动参数。
+	if player ~= nil and player:GetAttribute("JumpRunwayActive") == true then
+		return
+	end
 	local baseWalk = defaultWalkSpeed
 	local isDecelerationOn = false
 	if player ~= nil then

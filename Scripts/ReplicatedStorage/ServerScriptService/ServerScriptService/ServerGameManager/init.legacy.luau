@@ -231,6 +231,8 @@ PlayerHomeServerManager.Init()
 ChestWorkbenchManager.Init()
 -- BrainrotIslandManager.Init()
 BrainrotHomeManager.Init()
+local JumpRunwayServerManager = require(serverScripts:WaitForChild("JumpRunwayServerManager"))
+JumpRunwayServerManager.Init()
 
 players.PlayerAdded:Connect(OnPlayerAdded)
 players.PlayerRemoving:Connect(OnPlayerRemoving)
