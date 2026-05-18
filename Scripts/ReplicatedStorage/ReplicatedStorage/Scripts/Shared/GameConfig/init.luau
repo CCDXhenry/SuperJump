@@ -678,6 +678,8 @@ GameConfig.JumpRunwayDesigner = {
 	RUNWAY_FINAL_LAND_PHASE_A_VY_RETAIN_PER_BOUNCE = 0.55,
 	-- 子阶段 A：折减后竖直弹起初速下限（studs/s）
 	RUNWAY_FINAL_LAND_PHASE_A_MIN_POP_VY = 10,
+	-- 终局落地触地检测：脚下射线距离阈值（stud）；实际落地距离小于此值判定触地
+	RUNWAY_FINAL_LAND_TOUCHDOWN_FEET_MAX_DIST_STUDS = 0,
 	-- 子阶段 B：趴滑沿轴速度衰减指数（每帧 exp(-brakeK * dt)）；越大停得越快
 	RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP = 1.6,
 	-- 子阶段 B：趴姿 HRP 相对地面下沉偏移（stud）；越大越贴地，负值则抬高
@@ -882,6 +884,8 @@ GameConfig.JumpRunway = {
 	RUNWAY_FINAL_LAND_TUMBLE_ZERO_PERP = true,
 	-- 终局 A：多点贴地（相对 HRP 局部偏移向下 Raycast）；每点须命中且命中距离 ≤ 该值（stud）才算「全身贴地」，避免水平姿态下单点误触地
 	RUNWAY_FINAL_LAND_FULL_BODY_GROUND_MAX_DIST_STUDS = 1.35,
+	-- 终局落地触地检测：脚下射线距离阈值（stud），独立于 RUNWAY_SCRIPTED_GROUNDED_MAX_DIST_ABOVE_BASELINE_STUDS
+	RUNWAY_FINAL_LAND_TOUCHDOWN_FEET_MAX_DIST_STUDS = jumpRunwayDesigner.RUNWAY_FINAL_LAND_TOUCHDOWN_FEET_MAX_DIST_STUDS,
 
 	-- 子阶段 B 滑行速度衰减指数（每帧 exp(-brakeK * dt)）
 	RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP = jumpRunwayDesigner.RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP,

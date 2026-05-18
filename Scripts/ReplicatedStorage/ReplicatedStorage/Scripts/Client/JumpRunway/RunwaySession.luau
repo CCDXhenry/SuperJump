@@ -2727,7 +2727,12 @@ function RunwaySession.ProcessFinalLandingSubPhaseTransition(humanoid: Humanoid,
 		vyFbAbsMax = vyFbAbsMaxRaw
 	end
 
-	local geomTouch = RunwaySession.IsRunwayFinalLandPhaseAGeometricTouchdown(humanoid, hrp)
+	-- 终局触地检测：使用独立配置 RUNWAY_FINAL_LAND_TOUCHDOWN_FEET_MAX_DIST_STUDS，不依赖 preLandRayBaselineStuds
+	local okFeet, distFeet = RunwaySession.RaycastFeet(humanoid)
+	local fullBody = RunwaySession.IsRunwayFinalLandFullBodyGrounded(humanoid, hrp)
+	local touchdownDistRaw = cfg.RUNWAY_FINAL_LAND_TOUCHDOWN_FEET_MAX_DIST_STUDS
+	local touchdownDist = (typeof(touchdownDistRaw) == "number" and touchdownDistRaw == touchdownDistRaw and touchdownDistRaw > 0) and touchdownDistRaw or 4
+	local geomTouch = fullBody or (okFeet and distFeet <= touchdownDist)
 	local vy = hrp.AssemblyLinearVelocity.Y
 	if not geomTouch or vy > vyScriptMax or math.abs(vy) > vyFbAbsMax then
 		return
