@@ -2483,6 +2483,13 @@ function RunwaySession.GetEffectivePhysicsPhase(humanoid: Humanoid, nowClock: nu
 end
 
 function RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid: Humanoid, nowClock: number)
+	-- 终局 Slide 子阶段 A（翻滚阶段）：WalkSpeed 设为 0，防止 Humanoid 走路动画干扰翻滚
+	if localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindFinalLanding and localState.finalLandSubPhase == 1 then
+		if humanoid.WalkSpeed ~= 0 then
+			humanoid.WalkSpeed = 0
+		end
+		return
+	end
 	local eff = RunwaySession.GetEffectivePhysicsPhase(humanoid, nowClock)
 	if eff == Ph.JumpWindow then
 		local w = cfg.JUMP_WINDOW_WALK_SPEED
