@@ -657,7 +657,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- 摔滑 Slide 重力比例；↓ 摔滑更飘
 	RUNWAY_SLIDE_EFFECTIVE_GRAVITY_SCALE = 1,
 	-- 脚本贴地射线容差(stud)；↑ 更易判贴地
-	RUNWAY_SCRIPTED_GROUNDED_MAX_DIST_ABOVE_BASELINE_STUDS = 5,
+	RUNWAY_SCRIPTED_GROUNDED_MAX_DIST_ABOVE_BASELINE_STUDS = 0,
 
 	-- ═══════════════════════════════════════
 	-- —— ④ 终局冲刺 Dash ——

@@ -68,6 +68,7 @@ local Refs: {
 	finalTakeoffForceFreefallUntilClock: number,
 	initDone: boolean,
 	jumpStateEnabledBeforeRunway: boolean?,
+	runningStateEnabledBeforeFinalSegment: boolean?,
 	flyingStateEnabledBeforeRunway: boolean?,
 	runwayGravityAttachment: Attachment?,
 	runwayGravityVectorForce: VectorForce?,
@@ -95,6 +96,7 @@ local Refs: {
 	autoRotateSavedForFinalPitch: boolean?,
 	finalLandTumbleStartHrpCf: CFrame?,
 	platformStandSavedBeforeFinalLand: boolean?,
+	finalPitchSmoothedExtraDeg: number,
 	slideTraceTemplateWarned: boolean,
 	slideTraceCachedTemplate: BasePart?,
 	slideTraceFollowerPart: BasePart?,
@@ -147,6 +149,7 @@ local Refs: {
 	slideTraceSegmentList = {},
 	slideTraceDestroyScheduleToken = 0,
 	prevGroundedHeartbeat = true,
+	finalPitchSmoothedExtraDeg = 0,
 	chestSpawnedForThisRun = false,
 	chestSpawnedModel = nil,
 	chestSpawnedConnList = nil,
@@ -365,6 +368,56 @@ function RunwaySession.HudRefresh()
 	end
 end
 
+function RunwaySession.RestoreRunningStateAfterFinalSegment(humanoid: Humanoid?)
+	if Refs.runningStateEnabledBeforeFinalSegment == nil then
+		return
+	end
+	if humanoid ~= nil and humanoid.Parent ~= nil then
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, Refs.runningStateEnabledBeforeFinalSegment :: boolean)
+	end
+	Refs.runningStateEnabledBeforeFinalSegment = nil
+end
+
+-- 终局空中冲刺：物理步前禁用 Running，否则 Humanoid 会因高沿轴速在 Physics 步内切回 Running。
+function RunwaySession.ApplyRunwayHumanoidFinalSegmentStateGate(humanoid: Humanoid)
+	-- 宝箱反弹结束等待/开箱：恢复 Running 门闸，勿与站立姿态抢 Physics
+	if Refs.chestRewardWaitPose == true or Refs.chestBounceActive == true then
+		RunwaySession.RestoreRunningStateAfterFinalSegment(humanoid)
+		return
+	end
+	local inFinalSegment = RunwaySession.IsRunwayFinalAirbornePhase() or RunwaySession.IsRunwayFinalLandingSlidePhase()
+	if not inFinalSegment then
+		RunwaySession.RestoreRunningStateAfterFinalSegment(humanoid)
+		return
+	end
+	if Refs.runningStateEnabledBeforeFinalSegment == nil then
+		Refs.runningStateEnabledBeforeFinalSegment = humanoid:GetStateEnabled(Enum.HumanoidStateType.Running)
+	end
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, false)
+end
+
+function RunwaySession.SyncRunwayFinalSegmentLocomotionPrePhysics(humanoid: Humanoid, hrp: BasePart?)
+	if Refs.chestRewardWaitPose == true then
+		RunwaySession.ApplyRunwayHumanoidFinalSegmentStateGate(humanoid)
+		if hrp ~= nil then
+			local forwardWait = NormalizeRunwayForward(localState.runwayForward)
+			RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoid, hrp, forwardWait)
+		end
+		return
+	end
+	if Refs.chestBounceActive == true then
+		RunwaySession.ApplyRunwayHumanoidFinalSegmentStateGate(humanoid)
+		return
+	end
+	RunwaySession.ApplyRunwayHumanoidFinalSegmentStateGate(humanoid)
+	if RunwaySession.IsRunwayFinalAirbornePhase() then
+		RunwaySession.EnsureHumanoidFreefallState(humanoid)
+	end
+	if RunwaySession.IsRunwayFinalLandingSlidePhase() then
+		RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoid)
+	end
+end
+
 function RunwaySession.ApplyRunwayHumanoidJumpState(humanoid: Humanoid?, runwayLocomotionActive: boolean)
 	if not runwayLocomotionActive then
 		if humanoid ~= nil then
@@ -374,6 +427,7 @@ function RunwaySession.ApplyRunwayHumanoidJumpState(humanoid: Humanoid?, runwayL
 			)
 		end
 		Refs.jumpStateEnabledBeforeRunway = nil
+		RunwaySession.RestoreRunningStateAfterFinalSegment(humanoid)
 		return
 	end
 	if humanoid == nil then
@@ -555,22 +609,11 @@ function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt
 		localState.jumpSpeedCumulativeRatingBonus
 	)
 	local forwardSpeed = defaultMinAlong
-	if localState.phase == Ph.AutoRun and localState.takeoffCount == 0 then
-		-- 首段自动跑保持恒定前推，避免判地边界抖动时在 0 与目标速之间跳变造成“抽回”体感。
+	if localState.takeoffCount == 0 then
+		-- 首段 AutoRun / BeginLine 窗（含 JumpWindow 漂移）统一使用 FIRST_TAKEOFF_AUTORUN_SPEED。
 		forwardSpeed = cfg.FIRST_TAKEOFF_AUTORUN_SPEED
 	elseif localState.phase == Ph.Airborne and localState.takeoffCount <= cfg.N_TOTAL_JUMPS then
-		if RunwaySession.IsRunwayScriptedGrounded(humanoid) then
-			local _, minAlongGrounded = GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(
-				math.max(1, localState.takeoffCount),
-				localState.jumpSpeedCumulativeRatingBonus
-			)
-			forwardSpeed = minAlongGrounded
-			if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
-				localState.finalDashAlongExtra = 0
-			end
-		elseif localState.takeoffCount < cfg.N_TOTAL_JUMPS then
-			forwardSpeed = RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, localState.takeoffCount)
-		else
+		if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
 			local base = RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, localState.takeoffCount)
 			local capExtra = math.max(0, cfg.DASH_MAX_SPEED - base)
 			if localState.dashHeld and localState.fuel > 0 then
@@ -587,20 +630,15 @@ function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt
 			end
 			forwardSpeed = math.min(base + localState.finalDashAlongExtra, cfg.DASH_MAX_SPEED)
 			localState.finalDashAlongExtra = math.max(0, forwardSpeed - base)
+		else
+			-- Airborne 全程走跳跃水平 lerp，不因落地窗口内判地切回 minAlongGrounded（会触发 run 并覆盖起跳冲量）。
+			forwardSpeed = RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, localState.takeoffCount)
 		end
 	end
 	hrp.AssemblyLinearVelocity = fwdH * forwardSpeed + Vector3.new(0, vy, 0) + perpH * perpDamp
 end
 
-function RunwaySession.ApplyJumpWindowWalkPhysics(humanoid: Humanoid, hrp: BasePart, forward: Vector3)
-	local walkSpd = cfg.JUMP_WINDOW_WALK_SPEED
-	if humanoid.WalkSpeed ~= walkSpd then
-		humanoid.WalkSpeed = walkSpd
-	end
-	local fh = Vector3.new(forward.X, 0, forward.Z)
-	if fh.Magnitude > 1e-4 then
-		humanoid:Move(fh.Unit, false)
-	end
+function RunwaySession.ApplyJumpWindowWalkPhysics(_humanoid: Humanoid, hrp: BasePart, _forward: Vector3)
 	local v = hrp.AssemblyLinearVelocity
 	local vy = RunwaySession.GetBoostedVerticalY(v.Y)
 	hrp.AssemblyLinearVelocity = Vector3.new(v.X, vy, v.Z)
@@ -1126,7 +1164,7 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 		end
 		RunwaySession.EnsurePlatformStandForFinalLandSlide(humanoidOpt)
 		if humanoidOpt ~= nil then
-			humanoidOpt:ChangeState(Enum.HumanoidStateType.Physics)
+			RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoidOpt)
 		end
 	else
 		localState.finalLandSubPhase = 1
@@ -1153,80 +1191,206 @@ end
 -- WindowDriftPhysicsActive: (humanoid: Humanoid, nowClock: number) -> boolean
 -- GetEffectivePhysicsPhase: (humanoid: Humanoid, nowClock: number) -> number
 
-function RunwaySession.ApplyRunwayLocomotionAnimation(humanoid: Humanoid, forward: Vector3, nowClock: number)
+local RUNWAY_LOCOMOTION_RUN = "run"
+local RUNWAY_LOCOMOTION_WALK = "walk"
+local RUNWAY_LOCOMOTION_FREEFALL = "freefall"
+local RUNWAY_LOCOMOTION_NONE = "none"
+local RUNWAY_GROUNDED_ALONG_CORRECT_THRESHOLD = 2.5
+
+function RunwaySession.IsRunwayFinalAirbornePhase(): boolean
+	return localState.phase == Ph.Airborne and localState.takeoffCount >= cfg.N_TOTAL_JUMPS
+end
+
+function RunwaySession.IsRunwayFinalLandingSlidePhase(): boolean
+	return localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindFinalLanding
+end
+
+function RunwaySession.ResolveRunwayLocomotionMode(humanoid: Humanoid, nowClock: number): string
+	if not RunwaySession.IsRunwayActivePhase(localState.phase) then
+		return RUNWAY_LOCOMOTION_NONE
+	end
+	-- 终局跳全程禁用 run/walk（含冲刺贴地误判）；Slide 由 Physics 姿态接管
+	if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
+		if localState.phase == Ph.Airborne then
+			return RUNWAY_LOCOMOTION_FREEFALL
+		end
+		if RunwaySession.IsRunwayFinalLandingSlidePhase() then
+			return RUNWAY_LOCOMOTION_NONE
+		end
+	end
+	if
+		localState.phase == Ph.Slide
+		and localState.runwaySlideKind == SlideKindFinalLanding
+		and (localState.finalLandSubPhase == 1 or localState.finalLandSubPhase == 2)
+	then
+		return RUNWAY_LOCOMOTION_NONE
+	end
+	if Refs.chestRewardWaitPose == true or Refs.chestPostRewardExitCleanup == true then
+		return RUNWAY_LOCOMOTION_NONE
+	end
+	local grounded = RunwaySession.IsRunwayScriptedGrounded(humanoid)
+	if localState.phase == Ph.Airborne then
+		if not grounded then
+			return RUNWAY_LOCOMOTION_FREEFALL
+		end
+		if RunwaySession.ChainHudActive(nowClock) and RunwaySession.WindowDriftPhysicsActive(humanoid, nowClock) then
+			return RUNWAY_LOCOMOTION_WALK
+		end
+		if RunwaySession.ChainHudActive(nowClock) then
+			return RUNWAY_LOCOMOTION_RUN
+		end
+		return RUNWAY_LOCOMOTION_FREEFALL
+	end
+	if localState.phase == Ph.JumpWindow then
+		if grounded and RunwaySession.WindowDriftPhysicsActive(humanoid, nowClock) then
+			return RUNWAY_LOCOMOTION_WALK
+		end
+		if grounded then
+			return RUNWAY_LOCOMOTION_RUN
+		end
+		return RUNWAY_LOCOMOTION_FREEFALL
+	end
+	if localState.phase == Ph.AutoRun and grounded then
+		return RUNWAY_LOCOMOTION_RUN
+	end
+	return RUNWAY_LOCOMOTION_NONE
+end
+
+function RunwaySession.EnsureHumanoidRunningState(humanoid: Humanoid)
+	if not RunwaySession.IsRunwayScriptedGrounded(humanoid) then
+		return
+	end
+	local st = humanoid:GetState()
+	if st == Enum.HumanoidStateType.Running or st == Enum.HumanoidStateType.RunningNoPhysics then
+		return
+	end
+	pcall(function()
+		humanoid:ChangeState(Enum.HumanoidStateType.Running)
+	end)
+end
+
+-- 慢漂无 HumanoidStateType.Walking；用 Running + JUMP_WINDOW_WALK_SPEED + Move(forward)，默认 Animate 会播 walk。
+function RunwaySession.EnsureHumanoidWalkingState(humanoid: Humanoid)
+	RunwaySession.EnsureHumanoidRunningState(humanoid)
+end
+
+function RunwaySession.EnsureHumanoidFreefallState(humanoid: Humanoid)
+	-- 终局跳空中（含冲刺）：强制 Freefall，避免 FloorMaterial/Running 判贴地后仍播 run
+	if not RunwaySession.IsRunwayFinalAirbornePhase() and RunwaySession.IsRunwayScriptedGrounded(humanoid) then
+		return
+	end
+	local st = humanoid:GetState()
+	if st == Enum.HumanoidStateType.Freefall or st == Enum.HumanoidStateType.Jumping then
+		return
+	end
+	pcall(function()
+		humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+	end)
+end
+
+function RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoid: Humanoid)
+	if not RunwaySession.IsRunwayFinalLandingSlidePhase() then
+		return
+	end
+	if Refs.chestRewardWaitPose == true then
+		RunwaySession.RestorePlatformStandAfterFinalLand(humanoid)
+		if humanoid.PlatformStand then
+			humanoid.PlatformStand = false
+		end
+		local stWait = humanoid:GetState()
+		if stWait == Enum.HumanoidStateType.Physics or stWait == Enum.HumanoidStateType.Running then
+			pcall(function()
+				humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+			end)
+		end
+		return
+	end
+	local st = humanoid:GetState()
+	if st == Enum.HumanoidStateType.Physics then
+		return
+	end
+	if
+		st == Enum.HumanoidStateType.Running
+		or st == Enum.HumanoidStateType.RunningNoPhysics
+		or st == Enum.HumanoidStateType.Landed
+		or st == Enum.HumanoidStateType.Freefall
+	then
+		pcall(function()
+			humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+		end)
+	end
+end
+
+function RunwaySession.GetRunwayTargetGroundAlongSpeed(humanoid: Humanoid, nowClock: number): number
+	if localState.takeoffCount == 0 then
+		if localState.phase == Ph.JumpWindow and RunwaySession.WindowDriftPhysicsActive(humanoid, nowClock) then
+			return cfg.JUMP_WINDOW_WALK_SPEED
+		end
+		return cfg.FIRST_TAKEOFF_AUTORUN_SPEED
+	end
+	if
+		(localState.phase == Ph.JumpWindow or RunwaySession.ChainHudActive(nowClock))
+		and RunwaySession.WindowDriftPhysicsActive(humanoid, nowClock)
+	then
+		return cfg.JUMP_WINDOW_WALK_SPEED
+	end
+	local seg = math.max(1, localState.takeoffCount)
+	if localState.phase == Ph.Airborne and localState.jumpHorizLerpStartClock ~= nil then
+		return RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, seg)
+	end
+	local _, minSpd = GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(seg, localState.jumpSpeedCumulativeRatingBonus)
+	return minSpd
+end
+
+function RunwaySession.MaybeCorrectGroundedAlongVelocity(hrp: BasePart, forward: Vector3, humanoid: Humanoid, nowClock: number)
+	local targetAlong = RunwaySession.GetRunwayTargetGroundAlongSpeed(humanoid, nowClock)
+	local v = hrp.AssemblyLinearVelocity
+	local along = ComputeRunwayHorizontalAlongSpeed(v, forward)
+	if math.abs(along - targetAlong) <= RUNWAY_GROUNDED_ALONG_CORRECT_THRESHOLD then
+		return
+	end
+	local fwdH = Vector3.new(forward.X, 0, forward.Z)
+	if fwdH.Magnitude < 1e-4 then
+		return
+	end
+	fwdH = fwdH.Unit
+	local horiz = HorizontalVelocity(v)
+	local perpH = horiz - fwdH * along
+	hrp.AssemblyLinearVelocity = fwdH * targetAlong + Vector3.new(0, v.Y, 0) + perpH
+end
+
+function RunwaySession.ApplyRunwayLocomotionAnimation(humanoid: Humanoid, forward: Vector3, nowClock: number, hrp: BasePart?)
 	if not RunwaySession.IsRunwayActivePhase(localState.phase) then
 		humanoid:Move(Vector3.zero, false)
 		return
 	end
-	if localState.phase == Ph.Slide then
-		if localState.runwaySlideKind == SlideKindFinalLanding then
-			if RunwaySession.IsLittleElfChestRunwayFlowActive() and Refs.chestRewardWaitPose == true then
-				if humanoid:GetState() ~= Enum.HumanoidStateType.Running then
-					humanoid:ChangeState(Enum.HumanoidStateType.Running)
-				end
-				humanoid:Move(Vector3.zero, false)
-				return
-			end
-			if humanoid:GetState() ~= Enum.HumanoidStateType.Physics then
-				humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-			end
-			humanoid:Move(Vector3.zero, false)
-			return
-		end
-		if humanoid:GetState() ~= Enum.HumanoidStateType.FallingDown then
-			humanoid:ChangeState(Enum.HumanoidStateType.FallingDown)
+	local mode = RunwaySession.ResolveRunwayLocomotionMode(humanoid, nowClock)
+	if mode == RUNWAY_LOCOMOTION_NONE then
+		if Refs.chestRewardWaitPose ~= true then
+			RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoid)
 		end
 		humanoid:Move(Vector3.zero, false)
 		return
 	end
-	if localState.phase == Ph.Airborne and localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
-		local forceFreefall = os.clock() < Refs.finalTakeoffForceFreefallUntilClock or not RunwaySession.IsRunwayScriptedGrounded(humanoid)
-		if forceFreefall then
-			local st = humanoid:GetState()
-			if st ~= Enum.HumanoidStateType.Freefall and st ~= Enum.HumanoidStateType.Jumping then
-				humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
-			end
-		end
+	if mode == RUNWAY_LOCOMOTION_FREEFALL then
+		RunwaySession.EnsureHumanoidFreefallState(humanoid)
 		humanoid:Move(Vector3.zero, false)
 		return
 	end
-	local effPhysics = RunwaySession.GetEffectivePhysicsPhase(humanoid, nowClock)
-	if effPhysics == Ph.JumpWindow then
-		local walkSpd = cfg.JUMP_WINDOW_WALK_SPEED
-		if humanoid.WalkSpeed ~= walkSpd then
-			humanoid.WalkSpeed = walkSpd
-		end
-		local fh = Vector3.new(forward.X, 0, forward.Z)
-		if fh.Magnitude > 1e-4 then
-			humanoid:Move(fh.Unit, false)
+	if mode == RUNWAY_LOCOMOTION_WALK then
+		RunwaySession.EnsureHumanoidWalkingState(humanoid)
+		humanoid:Move(forward, false)
+		return
+	end
+	if mode == RUNWAY_LOCOMOTION_RUN then
+		RunwaySession.EnsureHumanoidRunningState(humanoid)
+		humanoid:Move(forward, false)
+		if hrp ~= nil then
+			RunwaySession.MaybeCorrectGroundedAlongVelocity(hrp, forward, humanoid, nowClock)
 		end
 		return
 	end
-	local chainJumpHud = localState.phase == Ph.Airborne and RunwaySession.ChainHudActive(nowClock)
-	local scriptedGrounded = RunwaySession.IsRunwayScriptedGrounded(humanoid)
-	local shouldForceLocomotion = false
-	if localState.phase == Ph.AutoRun then
-		-- 首段自动跑不再因瞬时离地强切 Freefall；速度由 UpdateAutoRunVelocity 统一驱动。
-		shouldForceLocomotion = true
-	elseif localState.phase == Ph.JumpWindow then
-		-- BeginLine 起跳窗整段保持 Humanoid 默认 Running（HumanoidStateType.Running），避免离地/判地抖动时掉 Idle。
-		shouldForceLocomotion = true
-	elseif chainJumpHud then
-		-- 链式起跳窗仅在贴地时保持 Running，避免空中与 Freefall 高频互抢导致状态翻转抖动。
-		shouldForceLocomotion = scriptedGrounded
-	end
-	if shouldForceLocomotion then
-		if humanoid:GetState() ~= Enum.HumanoidStateType.Running then
-			humanoid:ChangeState(Enum.HumanoidStateType.Running)
-		end
-		-- 使用世界前向 Move，避免对象空间 + relativeToCamera=true 在相机/朝向变化时引入反向扰动。
-		local f = Vector3.new(forward.X, 0, forward.Z)
-		if f.Magnitude > 1e-4 then
-			humanoid:Move(f.Unit, false)
-		else
-			humanoid:Move(Vector3.new(0, 0, -1), false)
-		end
-	end
+	humanoid:Move(Vector3.zero, false)
 end
 
 -- 终局跳水平冲刺在 UpdateAutoRunVelocity 内与基底合并；此处仅处理冲刺向上加速度
@@ -1474,6 +1638,10 @@ function RunwaySession.IsRunwayFinalLandPhaseAGeometricTouchdown(humanoid: Human
 end
 
 function RunwaySession.IsRunwayScriptedGrounded(humanoid: Humanoid): boolean
+	-- 任意起跳后短保护期内强制视为离地，避免 FloorMaterial/射线仍判贴地触发 run 与链式误武装。
+	if localState.phase == Ph.Airborne and os.clock() < localState.jumpBoostUntilClock then
+		return false
+	end
 	if
 		localState.phase == Ph.Airborne
 		and localState.takeoffCount >= cfg.N_TOTAL_JUMPS
@@ -1522,8 +1690,8 @@ function RunwaySession.IsRunwayScriptedGrounded(humanoid: Humanoid): boolean
 	if
 		st == Enum.HumanoidStateType.Running
 		or st == Enum.HumanoidStateType.Landed
-		or st == Enum.HumanoidStateType.Physics
 		or st == Enum.HumanoidStateType.GettingUp
+		or (st == Enum.HumanoidStateType.Physics and localState.phase == Ph.Slide)
 	then
 		return true
 	end
@@ -1994,11 +2162,19 @@ function RunwaySession.ApplyRunwayFinalBodyPitch(hrp: BasePart, forward: Vector3
 	if f.Magnitude < 1e-4 then
 		return
 	end
-	local extraDeg = 0
+	local extraDegTarget = 0
 	if localState.dashHeld and localState.fuel > 0 then
-		extraDeg = cfg.RUNWAY_FINAL_DASH_EXTRA_PITCH_DEG
+		extraDegTarget = cfg.RUNWAY_FINAL_DASH_EXTRA_PITCH_DEG
 	end
-	local totalDeg = cfg.RUNWAY_FINAL_PITCH_DEG + extraDeg
+	local pitchRate = cfg.RUNWAY_FINAL_PITCH_SMOOTH_RATE
+	local pitchAlpha: number
+	if pitchRate <= 0 then
+		pitchAlpha = 1
+	else
+		pitchAlpha = 1 - math.exp(-pitchRate * dt)
+	end
+	Refs.finalPitchSmoothedExtraDeg += (extraDegTarget - Refs.finalPitchSmoothedExtraDeg) * pitchAlpha
+	local totalDeg = cfg.RUNWAY_FINAL_PITCH_DEG + Refs.finalPitchSmoothedExtraDeg
 	local axisSign = cfg.RUNWAY_FINAL_PITCH_AXIS_SIGN
 	if math.abs(axisSign) < 1e-6 then
 		axisSign = 1
@@ -2398,11 +2574,28 @@ function RunwaySession.DebugEnsure()
 	Refs.debugTextLabel = t
 end
 
+function RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(humanoid: Humanoid?)
+	if humanoid == nil or humanoid.Parent == nil then
+		return
+	end
+	RunwaySession.RestoreRunningStateAfterFinalSegment(humanoid)
+	RunwaySession.RestorePlatformStandAfterFinalLand(humanoid)
+	if humanoid.PlatformStand then
+		humanoid.PlatformStand = false
+	end
+	RunwaySession.RestoreHumanoidAutoRotateAfterFinalPitch(humanoid)
+	if humanoid:GetState() == Enum.HumanoidStateType.Physics then
+		pcall(function()
+			humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+		end)
+	end
+end
+
 function RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(humanoid: Humanoid?, hrp: BasePart?)
 	if humanoid == nil or humanoid.Parent == nil then
 		return
 	end
-	humanoid.PlatformStand = false
+	RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(humanoid)
 	if hrp ~= nil and hrp.Parent ~= nil then
 		hrp.AssemblyAngularVelocity = Vector3.zero
 		local f = NormalizeRunwayForward(localState.runwayForward)
@@ -2411,9 +2604,6 @@ function RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(humanoid: Humanoid
 			hrp.CFrame = CFrame.lookAt(pos, pos + f, Vector3.yAxis)
 		end
 	end
-	pcall(function()
-		humanoid:ChangeState(Enum.HumanoidStateType.Running)
-	end)
 end
 
 function RunwaySession.ResetLocalRunToIdle()
@@ -2456,9 +2646,8 @@ function RunwaySession.ResetLocalRunToIdle()
 	JumpRunWayFrame.EndSession()
 	-- Humanoid 状态恢复延迟到下一帧，避免 Physics 引擎竞争条件
 	task.defer(function()
-		RunwaySession.RestorePlatformStandAfterFinalLand(humanoid)
+		RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(humanoid)
 		RunwaySession.ClearFinalLandingSlideModuleLocals()
-		RunwaySession.RestoreHumanoidAutoRotateAfterFinalPitch(humanoid)
 		RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(humanoid, hrp)
 		RunwaySession.ClearRunwayFlyingHumanoid(humanoid)
 		RunwaySession.ApplyExpectedWalkSpeedAfterRunway(humanoid)
@@ -2638,31 +2827,24 @@ function RunwaySession.GetEffectivePhysicsPhase(humanoid: Humanoid, nowClock: nu
 		end
 		return Ph.AutoRun
 	end
-	if localState.phase == Ph.Airborne and RunwaySession.ChainHudActive(nowClock) then
-		if RunwaySession.WindowDriftPhysicsActive(humanoid, nowClock) then
+	if localState.phase == Ph.Airborne then
+		if RunwaySession.ChainHudActive(nowClock) and RunwaySession.WindowDriftPhysicsActive(humanoid, nowClock) then
 			return Ph.JumpWindow
 		end
-		return Ph.AutoRun
+		return Ph.Airborne
 	end
 	return localState.phase
 end
 
 function RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid: Humanoid, nowClock: number)
-	-- 宝箱开箱结束、等待服务端收分/回城：保持站立静止
 	if Refs.chestPostRewardExitCleanup == true then
-		if humanoid.WalkSpeed ~= 0 then
-			humanoid.WalkSpeed = 0
-		end
+		RunwaySession.ApplyExpectedWalkSpeedAfterRunway(humanoid)
 		return
 	end
-	-- 宝箱站立等待：WalkSpeed 设为 0，防止 Running 状态下仍被 Humanoid 驱动位移
 	if localState.phase == Ph.Slide and Refs.chestRewardWaitPose == true then
-		if humanoid.WalkSpeed ~= 0 then
-			humanoid.WalkSpeed = 0
-		end
+		RunwaySession.ApplyExpectedWalkSpeedAfterRunway(humanoid)
 		return
 	end
-	-- 终局 Slide 子阶段 A/B：WalkSpeed 设为 0，防止 Humanoid 走路动画与脚本速度写入争抢
 	if
 		localState.phase == Ph.Slide
 		and localState.runwaySlideKind == SlideKindFinalLanding
@@ -2673,18 +2855,45 @@ function RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid: Humanoid, nowClock:
 		end
 		return
 	end
-	local eff = RunwaySession.GetEffectivePhysicsPhase(humanoid, nowClock)
-	if eff == Ph.JumpWindow then
-		local w = cfg.JUMP_WINDOW_WALK_SPEED
-		if humanoid.WalkSpeed ~= w then
-			humanoid.WalkSpeed = w
+	if localState.phase == Ph.Airborne then
+		local locMode = RunwaySession.ResolveRunwayLocomotionMode(humanoid, nowClock)
+		if locMode == RUNWAY_LOCOMOTION_WALK then
+			local wWalk = cfg.JUMP_WINDOW_WALK_SPEED
+			if humanoid.WalkSpeed ~= wWalk then
+				humanoid.WalkSpeed = wWalk
+			end
+			return
 		end
-	else
-		-- 非 JumpWindow 阶段避免 WalkSpeed=0 触发地面刹停，与跑道速度写入争抢导致“抽回”。
-		local w = math.max(cfg.FIRST_TAKEOFF_AUTORUN_SPEED, cfg.JUMP_WINDOW_WALK_SPEED)
-		if humanoid.WalkSpeed ~= w then
-			humanoid.WalkSpeed = w
+		if locMode == RUNWAY_LOCOMOTION_RUN then
+			local wRun = RunwaySession.GetRunwayTargetGroundAlongSpeed(humanoid, nowClock)
+			if humanoid.WalkSpeed ~= wRun then
+				humanoid.WalkSpeed = wRun
+			end
+			return
 		end
+		if humanoid.WalkSpeed ~= 0 then
+			humanoid.WalkSpeed = 0
+		end
+		return
+	end
+	if localState.phase == Ph.JumpWindow and RunwaySession.WindowDriftPhysicsActive(humanoid, nowClock) then
+		local wDrift = cfg.JUMP_WINDOW_WALK_SPEED
+		if humanoid.WalkSpeed ~= wDrift then
+			humanoid.WalkSpeed = wDrift
+		end
+		return
+	end
+	-- AutoRun / 起跳窗触地前段 / 链式窗贴地前段：与沿轴脚本推速对齐，供 Running 动画
+	local w = cfg.FIRST_TAKEOFF_AUTORUN_SPEED
+	if localState.takeoffCount >= 1 then
+		local _, minSpd = GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(
+			math.max(1, localState.takeoffCount),
+			localState.jumpSpeedCumulativeRatingBonus
+		)
+		w = minSpd
+	end
+	if humanoid.WalkSpeed ~= w then
+		humanoid.WalkSpeed = w
 	end
 end
 
@@ -2703,7 +2912,13 @@ function RunwaySession.ApplyLocalPhysics(dt: number)
 	if eff == Ph.AutoRun then
 		RunwaySession.UpdateAutoRunVelocity(hrp, forward, dt, humanoid)
 	elseif eff == Ph.JumpWindow then
-		RunwaySession.ApplyJumpWindowWalkPhysics(humanoid, hrp, forward)
+		if RunwaySession.WindowDriftPhysicsActive(humanoid, nowClock) then
+			RunwaySession.ApplyJumpWindowWalkPhysics(humanoid, hrp, forward)
+		elseif localState.takeoffCount == 0 then
+			RunwaySession.UpdateAutoRunVelocity(hrp, forward, dt, humanoid)
+		else
+			RunwaySession.ApplyJumpWindowWalkPhysics(humanoid, hrp, forward)
+		end
 	elseif localState.phase == Ph.Airborne then
 		RunwaySession.UpdateAutoRunVelocity(hrp, forward, dt, humanoid)
 		if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
@@ -2735,6 +2950,14 @@ function RunwaySession.ApplyLocalPhysics(dt: number)
 end
 
 function RunwaySession.OnPreSimulation(dt: number)
+	if RunwaySession.IsRunwayActivePhase(localState.phase) then
+		local _, humanoidPre, hrpPre = RunwaySession.GetCharacterParts()
+		if humanoidPre ~= nil then
+			local nowClockPre = os.clock()
+			RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoidPre, nowClockPre)
+			RunwaySession.SyncRunwayFinalSegmentLocomotionPrePhysics(humanoidPre, hrpPre)
+		end
+	end
 	RunwaySession.ApplyLocalPhysics(dt)
 end
 
@@ -2747,13 +2970,23 @@ function RunwaySession.OnPostSimulationLocomotion(dt: number)
 		return
 	end
 	local forward = NormalizeRunwayForward(localState.runwayForward)
-	RunwaySession.ApplyRunwayLocomotionAnimation(humanoid, forward, os.clock())
+	local nowClock = os.clock()
+	RunwaySession.ApplyRunwayLocomotionAnimation(humanoid, forward, nowClock, hrp)
+	if hrp ~= nil and localState.phase == Ph.Airborne and localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
+		RunwaySession.EnsureHumanoidAutoRotateOffForFinalPitch(humanoid)
+		RunwaySession.ApplyRunwayFinalBodyPitch(hrp, forward, dt)
+	elseif hrp ~= nil and localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindFinalLanding then
+		if not RunwaySession.IsLittleElfChestRunwayFlowActive() then
+			RunwaySession.EnsureHumanoidAutoRotateOffForFinalPitch(humanoid)
+			RunwaySession.ApplyFinalLandingRenderOrientation(humanoid, hrp, forward, dt, nowClock)
+			RunwaySession.SlideTraceUpdate(humanoid, hrp)
+		end
+	end
 	local isFinalLandingSlide = localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindFinalLanding
 	if RunwaySession.IsLittleElfChestRunwayFlowActive() and Refs.chestRewardWaitPose == true then
 		RunwaySession.RestoreHumanoidAutoRotateAfterFinalPitch(humanoid)
 		if hrp ~= nil then
-			hrp.AssemblyLinearVelocity = Vector3.zero
-			hrp.AssemblyAngularVelocity = Vector3.zero
+			RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoid, hrp, forward)
 		end
 	elseif Refs.chestPostRewardExitCleanup == true and hrp ~= nil then
 		RunwaySession.SnapCharacterHrpToGround(humanoid, hrp, forward)
@@ -2780,11 +3013,7 @@ function RunwaySession.OnJumpRunwayFinalTiltRenderStep(dt: number)
 		return
 	end
 	local forward = NormalizeRunwayForward(localState.runwayForward)
-	local nowClock = os.clock()
-	if localState.phase == Ph.Airborne and localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
-		RunwaySession.EnsureHumanoidAutoRotateOffForFinalPitch(humanoid)
-		RunwaySession.ApplyRunwayFinalBodyPitch(hrp, forward, dt)
-	elseif localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindFinalLanding then
+	if localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindFinalLanding then
 		if RunwaySession.IsLittleElfChestRunwayFlowActive() then
 			RunwaySession.EnsureHumanoidAutoRotateOffForFinalPitch(humanoid)
 			if Refs.chestBounceActive == true then
@@ -2792,10 +3021,6 @@ function RunwaySession.OnJumpRunwayFinalTiltRenderStep(dt: number)
 			else
 				RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoid, hrp, forward)
 			end
-		else
-			RunwaySession.EnsureHumanoidAutoRotateOffForFinalPitch(humanoid)
-			RunwaySession.ApplyFinalLandingRenderOrientation(humanoid, hrp, forward, dt, nowClock)
-			RunwaySession.SlideTraceUpdate(humanoid, hrp)
 		end
 	else
 		return
@@ -2829,7 +3054,7 @@ end
 -- 在 Heartbeat 用 grounded 边沿处理 AutoRun 回贴（takeoffCount==0）
 function RunwaySession.ProcessAirborneLandingHeartbeat(humanoid: Humanoid)
 	if localState.phase ~= Ph.Airborne then
-		prevGroundedHeartbeat = RunwaySession.IsRunwayScriptedGrounded(humanoid)
+		Refs.prevGroundedHeartbeat = RunwaySession.IsRunwayScriptedGrounded(humanoid)
 		return
 	end
 	-- 第 N 跳：缓存坠落竖直速度用于子阶段 A 弹跳计算
@@ -2847,7 +3072,7 @@ function RunwaySession.ProcessAirborneLandingHeartbeat(humanoid: Humanoid)
 	local g = RunwaySession.IsRunwayScriptedGrounded(humanoid)
 	if g and not Refs.prevGroundedHeartbeat then
 		if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
-			RunwaySession.EnterSlidePhase(os.clock(), SlideKindFinalLanding, humanoid)
+			-- 终局跳不在此用 IsRunwayScriptedGrounded 边沿触发 Slide；见下方 RaycastFeet 专用触地。
 		elseif localState.takeoffCount >= 1 then
 			-- 链式：已在 UpdateLocalJumpWindowPrediction 处理
 		else
@@ -2857,7 +3082,7 @@ function RunwaySession.ProcessAirborneLandingHeartbeat(humanoid: Humanoid)
 			localState.tHudStart = nil
 			localState.chainJumpWindowAwaitingGround = false
 		end
-		prevGroundedHeartbeat = g
+		Refs.prevGroundedHeartbeat = g
 		return
 	end
 	-- 第 N 跳：保护期结束后用射线检测实际贴地
@@ -2869,11 +3094,11 @@ function RunwaySession.ProcessAirborneLandingHeartbeat(humanoid: Humanoid)
 		local ok, dist = RunwaySession.RaycastFeet(humanoid)
 		if ok and dist <= humanoid.HipHeight * 1.5 + cfg.RUNWAY_GROUND_RAY_ORIGIN_Y then
 			RunwaySession.EnterSlidePhase(os.clock(), SlideKindFinalLanding, humanoid)
-			prevGroundedHeartbeat = true
+			Refs.prevGroundedHeartbeat = true
 			return
 		end
 	end
-	prevGroundedHeartbeat = g
+	Refs.prevGroundedHeartbeat = g
 end
 
 function RunwaySession.OnBeginLineCharacterContactConfirmed()
@@ -3259,8 +3484,7 @@ function RunwaySession.ApplyLittleElfChestProneBounceOrientation(hrp: BasePart, 
 end
 
 function RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoid: Humanoid, hrp: BasePart, forward: Vector3)
-	RunwaySession.RestorePlatformStandAfterFinalLand(humanoid)
-	RunwaySession.RestoreHumanoidAutoRotateAfterFinalPitch(humanoid)
+	RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(humanoid)
 	local fwdStand: Vector3
 	local chestFwdRef = Refs.chestSlideFwdH
 	if chestFwdRef == nil or chestFwdRef.Magnitude < 1e-4 then
@@ -3276,9 +3500,6 @@ function RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoid: Huma
 	RunwaySession.SnapCharacterHrpToGround(humanoid, hrp, fwdStand)
 	hrp.AssemblyLinearVelocity = Vector3.zero
 	hrp.AssemblyAngularVelocity = Vector3.zero
-	pcall(function()
-		humanoid:ChangeState(Enum.HumanoidStateType.Running)
-	end)
 	humanoid:Move(Vector3.zero, false)
 end
 
@@ -3356,14 +3577,17 @@ function RunwaySession.FinishLittleElfChestRunwayExit()
 		RunwaySession.SnapCharacterHrpToGround(hDelay, hrpDelay, forwardExit)
 		hrpDelay.AssemblyLinearVelocity = Vector3.zero
 		hrpDelay.AssemblyAngularVelocity = Vector3.zero
-		RunwaySession.RestorePlatformStandAfterFinalLand(hDelay)
+		RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(hDelay)
 		RunwaySession.ClearFinalLandingSlideModuleLocals()
-		RunwaySession.RestoreHumanoidAutoRotateAfterFinalPitch(hDelay)
 		RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(hDelay, hrpDelay)
+		RunwaySession.ApplyExpectedWalkSpeedAfterRunway(hDelay)
 		RunwaySession.SlideTraceScheduleDestroyAfterRunwayEnd()
 	end
 	localState.phase = Ph.RunEnded
 	localState.groundedStableTime = 0
+	if localState.controlsDisabled then
+		RunwaySession.SetControlsEnabled(true)
+	end
 	RunwaySession.ClearLittleElfChestRefs()
 	RunwaySession.ScheduleChestExitFinalReportAfterDelay()
 end
@@ -3435,9 +3659,6 @@ function RunwaySession.ProcessLittleElfChestHit(chestModel: Model, fwdH: Vector3
 	localState.slideEndClock = math.huge
 
 	RunwaySession.EnsurePlatformStandForFinalLandSlide(humanoidT)
-	pcall(function()
-		humanoidT:ChangeState(Enum.HumanoidStateType.Physics)
-	end)
 	local bounceFwd = Refs.chestSlideFwdH or fwdH
 	if bounceFwd.Magnitude < 1e-4 then
 		bounceFwd = fwdH
@@ -3640,13 +3861,13 @@ function RunwaySession.UpdateTick(dt: number)
 		local _, humanoidIdle, _ = RunwaySession.GetCharacterParts()
 		RunwaySession.ApplyExpectedWalkSpeedAfterRunway(humanoidIdle)
 		RunwaySession.ApplyRunwayHumanoidJumpState(humanoidIdle, false)
-		prevGroundedHeartbeat = true
+		Refs.prevGroundedHeartbeat = true
 		return
 	end
 	if not localState.controlsDisabled then
 		RunwaySession.SetControlsEnabled(false)
 	end
-	local _character, humanoid, hrp = RunwaySession.GetCharacterParts()
+	local _, humanoid, hrp = RunwaySession.GetCharacterParts()
 	if humanoid == nil or hrp == nil then
 		return
 	end
@@ -3761,9 +3982,12 @@ function RunwaySession.ApplyServerPayload(payload: NetMsg.JumpRunwayStatePayload
 		localState.finalScore = payload.finalScore
 		RunwaySession.ClearJumpBoostIfNeeded(Ph.ScoreLocked)
 		local _, humScore, hrpScore = RunwaySession.GetCharacterParts()
-		RunwaySession.RestorePlatformStandAfterFinalLand(humScore)
-		RunwaySession.RestoreHumanoidAutoRotateAfterFinalPitch(humScore)
+		RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(humScore)
 		RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(humScore, hrpScore)
+		RunwaySession.ApplyExpectedWalkSpeedAfterRunway(humScore)
+		if localState.controlsDisabled then
+			RunwaySession.SetControlsEnabled(true)
+		end
 	end
 end
 
@@ -3918,7 +4142,6 @@ function RunwaySession.JumpApplyTakeoff(
 	inChainWindow: boolean
 ): boolean
 	local vy, gGrav = RunwaySession.JumpComputeSessionVy()
-	humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
 	local forward = NormalizeRunwayForward(localState.runwayForward)
 	local perpTerm = RunwaySession.JumpPerpImpulseTerm(hrp, forward)
 	localState.jumpBoostVy = vy
@@ -3941,11 +4164,15 @@ function RunwaySession.JumpApplyTakeoff(
 	localState.prevPreLand = true
 	localState.prevJumpWindowRayBand = true
 	localState.firstGroundedInWindowClock = nil
+	Refs.prevGroundedHeartbeat = true
+	pcall(function()
+		humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+	end)
 	if CLIENT_DEBUG then
 		lastJumpDebugReason = string.format("applied_impulse_vy=%.2f", vy)
 	end
 	if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
-		finalTakeoffForceFreefallUntilClock = nowClock + math.max(0.12, cfg.RUNWAY_JUMP_BOOST_HOLD_SEC)
+		Refs.finalTakeoffForceFreefallUntilClock = nowClock + math.max(0.12, cfg.RUNWAY_JUMP_BOOST_HOLD_SEC)
 		RunwaySession.DestroyRunwayRing()
 		RunwaySession.EnsureDistanceRecorderFromTemplate(humanoid, hrp)
 	end
@@ -4210,11 +4437,20 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	localState.finalLandProneSlideAlongStart = nil
 	RunwaySession.ClearJumpHorizontalLerp()
 	localState.finalDashAlongExtra = 0
+	Refs.finalPitchSmoothedExtraDeg = 0
 	localState.lastSampleSendClock = 0
 	localState.lastSampleAlong = alongBaseline
 	RunwayNetBridge.FireStartSession(NetMsg, Kind, forward, origin, alongBaseline)
 	localState.lastReportedDashHeld = localState.dashHeld
 	RunwaySession.ApplyRunwayHumanoidJumpState(humanoid, true)
+	humanoid.WalkSpeed = cfg.FIRST_TAKEOFF_AUTORUN_SPEED
+	local fwdH = Vector3.new(forward.X, 0, forward.Z)
+	if fwdH.Magnitude > 1e-4 then
+		fwdH = fwdH.Unit
+	else
+		fwdH = Vector3.new(0, 0, -1)
+	end
+	hrp.AssemblyLinearVelocity = fwdH * cfg.FIRST_TAKEOFF_AUTORUN_SPEED
 	RunwaySession.EnsureRunwayGravityForce(hrp)
 	RunwaySession.UpdateRunwayGravityForce(hrp)
 	RunwaySession.EnsureRunwayRing()
@@ -4224,10 +4460,10 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	localState.prevLocalGroundedForLand = RunwaySession.IsRunwayScriptedGrounded(humanoid)
 	localState.prevPreLand = RunwaySession.IsRunwayPreLanding(humanoid)
 	localState.prevJumpWindowRayBand = RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid)
-	startTriggerActiveInterceptCount = 0
+	Refs.startTriggerActiveInterceptCount = 0
 	Refs.startTriggerActiveLastInterceptClock = nil
-	finalTakeoffForceFreefallUntilClock = 0
-	prevGroundedHeartbeat = localState.prevLocalGroundedForLand
+	Refs.finalTakeoffForceFreefallUntilClock = 0
+	Refs.prevGroundedHeartbeat = localState.prevLocalGroundedForLand
 	RunwayCameraController.Enable(workspace, cfg, hrp, localState.runwayForward, NormalizeRunwayForward)
 	RunwaySession.EnsureJumpRunwayRocketBackpack(character)
 	JumpRunWayFrame.EnsureSession()
