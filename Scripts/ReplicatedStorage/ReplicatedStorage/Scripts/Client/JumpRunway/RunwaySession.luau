@@ -25,6 +25,7 @@ local RunwayCameraController = require(jumpRunwayScripts:WaitForChild("RunwayCam
 local RunwayFxController = require(jumpRunwayScripts:WaitForChild("RunwayFxController"))
 local RunwayUiController = require(jumpRunwayScripts:WaitForChild("RunwayUiController"))
 local RunwayNetBridge = require(jumpRunwayScripts:WaitForChild("RunwayNetBridge"))
+local ChaserClientManager = require(jumpRunwayScripts:WaitForChild("ChaserClientManager"))
 local ChestOpenAnimationManager = require(clientScripts:WaitForChild("ChestOpenAnimationManager"))
 local core = replicatedStorage:WaitForChild("Core")
 local coreClientScripts = core:WaitForChild("Scripts"):WaitForChild("Client")
@@ -53,6 +54,9 @@ local CHEST_HIT_HORIZONTAL_MAX_DIST_STUDS = 14
 local CHEST_REWARD_RESPONSE_TIMEOUT_SEC = 15
 local CHEST_HIT_MIN_SETTLE_AFTER_LAND_SEC = 0.2
 local CHEST_FALL_MAX_HEIGHT_STUDS = 8
+local JumpRunwayLittleElfChestCarryAttr = "JumpRunwayLittleElfChestCarry"
+local StartTriggerCloseEnoughMinStuds = 24
+local StartTriggerRearmOutsideMinSec = 0.2
 
 local Refs: {
 	screenGui: ScreenGui?,
@@ -130,6 +134,10 @@ local Refs: {
 	chestPostRewardExitCleanup: boolean?,
 	chestPostOpenTeleportDelayToken: number,
 	chestBackpackDeliverRequested: boolean?,
+	chestCarryReturnActive: boolean?,
+	startTriggerStartArmed: boolean?,
+	startTriggerPlayerWasInsideVolume: boolean?,
+	startTriggerOutsideVolumeClock: number?,
 	deferredTerminalServerPayload: NetMsg.JumpRunwayStatePayload?,
 } = {
 	lastJumpDebugReason = "",
@@ -175,6 +183,10 @@ local Refs: {
 	chestPostRewardExitCleanup = false,
 	chestPostOpenTeleportDelayToken = 0,
 	chestBackpackDeliverRequested = false,
+	chestCarryReturnActive = false,
+	startTriggerStartArmed = true,
+	startTriggerPlayerWasInsideVolume = false,
+	startTriggerOutsideVolumeClock = nil,
 	deferredTerminalServerPayload = nil,
 }
 
@@ -2638,6 +2650,7 @@ function RunwaySession.ResetLocalRunToIdle()
 	RunwaySession.DestroyRunwayRing()
 	RunwaySession.ClearLittleElfChestRefs()
 	Refs.chestPostRewardExitCleanup = false
+	Refs.chestCarryReturnActive = false
 	Refs.chestPostOpenTeleportDelayToken += 1
 	Refs.deferredTerminalServerPayload = nil
 	RunwaySession.DestroyDistanceRecorder()
@@ -3304,6 +3317,7 @@ function RunwaySession.ClearLittleElfChestRefs()
 	Refs.chestScheduledSpawnPos = nil
 	Refs.chestPredictedPlaceDistance = nil
 	Refs.chestBackpackDeliverRequested = false
+	ChaserClientManager.CleanupChaser()
 end
 
 function RunwaySession.BuildLittleElfChestOpenCFrame(pos: Vector3, _slideFwdH: Vector3, chestModel: Model?): CFrame
@@ -3365,6 +3379,156 @@ function RunwaySession.DestroyLittleElfChestSpawnedModel()
 	Refs.chestSpawnedModel = nil
 end
 
+function RunwaySession.IsLittleElfChestCarryReturnActive(): boolean
+	return Refs.chestCarryReturnActive == true
+end
+
+function RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character: Model): boolean
+	local carrying = character:FindFirstChild("CarryingBrainrot")
+	if carrying == nil then
+		return false
+	end
+	return carrying:GetAttribute(JumpRunwayLittleElfChestCarryAttr) == true
+end
+
+function RunwaySession.IsPlayerInsideStartTriggerVolume(startTrigger: Part, hrp: BasePart): boolean
+	local localPos = startTrigger.CFrame:PointToObjectSpace(hrp.Position)
+	local halfSize = startTrigger.Size * 0.5
+	return math.abs(localPos.X) <= halfSize.X
+		and math.abs(localPos.Y) <= halfSize.Y + 3
+		and math.abs(localPos.Z) <= halfSize.Z
+end
+
+function RunwaySession.IsPlayerCloseEnoughToStartTrigger(startTrigger: Part, hrp: BasePart): boolean
+	return (hrp.Position - startTrigger.Position).Magnitude
+		< math.max(startTrigger.Size.Magnitude * 2, StartTriggerCloseEnoughMinStuds)
+end
+
+function RunwaySession.UpdateStartTriggerReentryState()
+	local startTrigger, _ = RunwaySession.ResolveSceneParts()
+	if startTrigger == nil then
+		return
+	end
+	local character, humanoid, hrp = RunwaySession.GetCharacterParts()
+	if hrp == nil then
+		return
+	end
+
+	local insideNow = RunwaySession.IsPlayerInsideStartTriggerVolume(startTrigger, hrp)
+	local wasInside = Refs.startTriggerPlayerWasInsideVolume == true
+
+	if Refs.startTriggerStartArmed == false then
+		if not insideNow then
+			local outsideClock = Refs.startTriggerOutsideVolumeClock
+			if outsideClock == nil then
+				Refs.startTriggerOutsideVolumeClock = os.clock()
+			elseif os.clock() - outsideClock >= StartTriggerRearmOutsideMinSec then
+				Refs.startTriggerStartArmed = true
+			end
+		else
+			Refs.startTriggerOutsideVolumeClock = nil
+		end
+	end
+
+	local enteredNow = insideNow and not wasInside
+	if enteredNow then
+		if character and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
+			RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger)
+		elseif Refs.chestCarryReturnActive ~= true and Refs.startTriggerStartArmed == true then
+			if humanoid and not RunwaySession.IsRunwayActivePhase(localState.phase) then
+				if RunwaySession.SnapLocalPlayerToRunwayGroundIfAirborne(startTrigger, humanoid, hrp) then
+					RunwaySession.TryStartLocalRun(startTrigger)
+				end
+			end
+		end
+	elseif insideNow and character and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
+		RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger)
+	end
+
+	Refs.startTriggerPlayerWasInsideVolume = insideNow
+end
+
+function RunwaySession.ShouldBlockJumpRunwayStartAtStartTrigger(): boolean
+	if Refs.startTriggerStartArmed == false then
+		return true
+	end
+	local character = localPlayer.Character
+	if character and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
+		return true
+	end
+	return Refs.chestCarryReturnActive == true
+end
+
+function RunwaySession.EnterLittleElfChestCarryReturn()
+	NetMsg.FireRequestJumpRunwayLittleElfChestStartCarry()
+	RunwayCameraController.Disable(workspace, RunwaySession.GetCharacterParts)
+	RunwaySession.DestroyJumpRunwayRocketBackpack()
+	RunwaySession.DestroyRunwayGravityForce()
+	RunwaySession.DestroyRunwayRing()
+	RunwaySession.SlideTraceScheduleDestroyAfterRunwayEnd()
+	local forwardExit = Refs.chestSlideFwdH or NormalizeRunwayForward(localState.runwayForward)
+	if forwardExit.Magnitude < 1e-4 then
+		forwardExit = Vector3.new(0, 0, -1)
+	else
+		forwardExit = Vector3.new(forwardExit.X, 0, forwardExit.Z).Unit
+	end
+	local _, hDelay, hrpDelay = RunwaySession.GetCharacterParts()
+	if hDelay and hrpDelay then
+		RunwaySession.SnapCharacterHrpToGround(hDelay, hrpDelay, forwardExit)
+		hrpDelay.AssemblyLinearVelocity = Vector3.zero
+		hrpDelay.AssemblyAngularVelocity = Vector3.zero
+		RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(hDelay)
+		RunwaySession.ClearFinalLandingSlideModuleLocals()
+		RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(hDelay, hrpDelay)
+		RunwaySession.ApplyExpectedWalkSpeedAfterRunway(hDelay)
+	end
+	localState.phase = Ph.Idle
+	localState.groundedStableTime = 0
+	Refs.deferredTerminalServerPayload = nil
+	Refs.chestPostOpenTeleportDelayToken += 1
+	if localState.controlsDisabled then
+		RunwaySession.SetControlsEnabled(true)
+	end
+	RunwaySession.ClearLittleElfChestRefs()
+	if hDelay then
+		ChaserClientManager.SpawnChaser(hDelay:FindFirstAncestorOfClass("Model") :: Model, forwardExit)
+	end
+	Refs.chestCarryReturnActive = true
+	JumpRunWayFrame.EndSession()
+end
+
+function RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger: Part)
+	if Refs.chestBackpackDeliverRequested == true then
+		return
+	end
+	local character, humanoid, hrp = RunwaySession.GetCharacterParts()
+	if character == nil or humanoid == nil or hrp == nil then
+		return
+	end
+	if not RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
+		return
+	end
+	if not RunwaySession.IsPlayerCloseEnoughToStartTrigger(startTrigger, hrp) then
+		return
+	end
+	Refs.chestBackpackDeliverRequested = true
+	Refs.startTriggerStartArmed = false
+	Refs.startTriggerPlayerWasInsideVolume = true
+	Refs.startTriggerOutsideVolumeClock = nil
+	Refs.chestCarryReturnActive = false
+	ChaserClientManager.StopAndFadeChaser()
+	NetMsg.FireRequestJumpRunwayLittleElfChestGrant()
+	task.delay(1, function()
+		if Refs.chestBackpackDeliverRequested ~= true then
+			return
+		end
+		local retryCharacter = localPlayer.Character
+		if retryCharacter and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(retryCharacter) then
+			Refs.chestBackpackDeliverRequested = false
+		end
+	end)
+end
+
 function RunwaySession.DeliverLittleElfChestRewardToBackpackAfterOpenAnim()
 	if Refs.chestBackpackDeliverRequested == true then
 		return
@@ -3421,8 +3585,7 @@ function RunwaySession.TryPresentLittleElfChestReward()
 			}
 		)
 	end
-	RunwaySession.DeliverLittleElfChestRewardToBackpackAfterOpenAnim()
-	RunwaySession.FinishLittleElfChestRunwayExit()
+	RunwaySession.EnterLittleElfChestCarryReturn()
 end
 
 function RunwaySession.EndChestProneBounceAndWaitForReward()
@@ -4373,6 +4536,9 @@ function RunwaySession.SnapLocalPlayerToRunwayGroundIfAirborne(startTrigger: Par
 end
 
 function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
+	if RunwaySession.ShouldBlockJumpRunwayStartAtStartTrigger() then
+		return false
+	end
 	if RunwaySession.IsRunwayActivePhase(localState.phase) then
 		return false
 	end
@@ -4385,10 +4551,11 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	if character == nil or humanoid == nil or hrp == nil or humanoid.Health <= 0 then
 		return false
 	end
-	local closeEnough = (hrp.Position - startTrigger.Position).Magnitude < math.max(startTrigger.Size.Magnitude * 2, 24)
+	local closeEnough = RunwaySession.IsPlayerCloseEnoughToStartTrigger(startTrigger, hrp)
 	if not closeEnough then
 		return false
 	end
+	Refs.startTriggerStartArmed = false
 	RunwaySession.DestroyDistanceRecorder()
 	RunwaySession.SlideTraceDestroy()
 	local forward = NormalizeRunwayForward(startTrigger.CFrame.RightVector)
@@ -4488,6 +4655,16 @@ function RunwaySession.BindSceneTriggers()
 				if humanoid == nil or hrp == nil then
 					return
 				end
+				if RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(ch) then
+					RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger)
+					return
+				end
+				if Refs.chestCarryReturnActive == true then
+					return
+				end
+				if Refs.startTriggerStartArmed ~= true then
+					return
+				end
 				if RunwaySession.IsRunwayActivePhase(localState.phase) then
 					local localStateAny = localState :: any
 					local prevLogClock = localStateAny._dbgLastStartTouchActiveLogClock
@@ -4546,6 +4723,7 @@ end
 
 function RunwaySession.OnHeartbeat(dt: number)
 	RunwaySession.UpdateTick(dt)
+	RunwaySession.UpdateStartTriggerReentryState()
 	RunwaySession.NetReportDashIfChanged()
 	RunwayFxController.UpdateHeartbeat(RunwaySession.UpdateJetpackFlameDashFx, os.clock())
 	RunwayUiController.Refresh(
@@ -4575,7 +4753,7 @@ end
 
 function RunwaySession.BindRunwayExitOnCharacterDeathOrRemove()
 	local function resetIfRunwayActive()
-		if RunwaySession.IsRunwayActivePhase(localState.phase) then
+		if RunwaySession.IsRunwayActivePhase(localState.phase) or Refs.chestCarryReturnActive == true then
 			RunwaySession.ResetLocalRunToIdle()
 		end
 	end

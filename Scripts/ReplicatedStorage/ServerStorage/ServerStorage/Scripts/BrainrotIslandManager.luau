@@ -239,6 +239,10 @@ function ConvertCarryingToQueue(player: Player)
 		return
 	end
 
+	if carryingBrainrot:GetAttribute("JumpRunwayLittleElfChestCarry") == true then
+		return
+	end
+
 	local configId = tonumber(carryingBrainrot:GetAttribute("ConfigId"))
 	local quality = tonumber(carryingBrainrot:GetAttribute("Quality")) or 1
 	local level = tonumber(carryingBrainrot:GetAttribute("Level")) or 1

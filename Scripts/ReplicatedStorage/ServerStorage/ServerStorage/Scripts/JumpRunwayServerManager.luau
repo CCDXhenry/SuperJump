@@ -54,6 +54,17 @@ type PendingLittleElfChestReward = {
 
 local pendingLittleElfChestRewardMap: { [number]: PendingLittleElfChestReward } = {}
 
+local JumpRunwayLittleElfChestCarryAttr = "JumpRunwayLittleElfChestCarry"
+local StartTriggerCloseEnoughMinStuds = 24
+
+local brainrotCarryingManagerMod: any = nil
+local function GetBrainrotCarryingManager(): any
+	if brainrotCarryingManagerMod == nil then
+		brainrotCarryingManagerMod = require(serverScripts:WaitForChild("BrainrotCarryingManager"))
+	end
+	return brainrotCarryingManagerMod
+end
+
 local Ph = {
 	AutoRun = 1,
 	ScoreLocked = 8,
@@ -471,12 +482,92 @@ local function TryStartSession(player: Player, report: NetMsg.JumpRunwayInputRep
 	return true
 end
 
+local function ClearLittleElfChestPending(player: Player)
+	pendingLittleElfChestRewardMap[player.UserId] = nil
+end
+
+local function ResolveStartTrigger(): Part?
+	local startPoint = workspaceInst:FindFirstChild("StartPoint")
+	local startModel = if startPoint then startPoint:FindFirstChild("StartPointModel") else nil
+	return if startModel then startModel:FindFirstChild("StartTrigger") :: Part? else nil
+end
+
+local function IsPlayerNearStartTrigger(player: Player): boolean
+	local character = player.Character
+	if character == nil then
+		return false
+	end
+	local hrp = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local startTrigger = ResolveStartTrigger()
+	if hrp == nil or startTrigger == nil then
+		return false
+	end
+	local closeEnough = (hrp.Position - startTrigger.Position).Magnitude
+		< math.max(startTrigger.Size.Magnitude * 2, StartTriggerCloseEnoughMinStuds)
+	return closeEnough
+end
+
+local function GetRunwayLittleElfChestCarrying(player: Player): Instance?
+	local character = player.Character
+	if character == nil then
+		return nil
+	end
+	local carrying = character:FindFirstChild("CarryingBrainrot")
+	if carrying == nil then
+		return nil
+	end
+	if carrying:GetAttribute(JumpRunwayLittleElfChestCarryAttr) == true then
+		return carrying
+	end
+	return nil
+end
+
+local function CreateLittleElfChestCarryPart(pending: PendingLittleElfChestReward): BasePart
+	local carryPart = Instance.new("Part")
+	carryPart.Size = Vector3.new(1, 1, 1)
+	carryPart.Transparency = 1
+	carryPart.CanCollide = false
+	carryPart.Anchored = true
+	carryPart.Name = "IslandBrainrot"
+	carryPart:SetAttribute("ConfigId", pending.brainrotId)
+	carryPart:SetAttribute("ItemType", GameConfig.ItemType.Brainrot)
+	carryPart:SetAttribute("Quality", pending.quality)
+	carryPart:SetAttribute("Level", 1)
+	carryPart:SetAttribute("BrainrotUID", httpService:GenerateGUID(false))
+	carryPart:SetAttribute(JumpRunwayLittleElfChestCarryAttr, true)
+	return carryPart
+end
+
+local function EndRunwaySessionWithoutTeleport(player: Player)
+	local st = runMap[player.UserId]
+	if st == nil then
+		ClearPlayerRunAttribute(player)
+		return
+	end
+	local runwayForward = st.runwayForward
+	local runwayOrigin = st.runwayOrigin
+	DisconnectState(player, st)
+	ResetScoreTracking(player.UserId)
+	if NetMsg.JumpRunwayRemotesExist() then
+		NetMsg.FireNotifyJumpRunwayState(player, {
+			phase = Ph.Idle,
+			distance = 0,
+			windowRemainSec = nil,
+			fuel = 0,
+			takeoffCount = 0,
+			ratingTier = nil,
+			finalScore = nil,
+			runwayForward = runwayForward,
+			runwayOrigin = runwayOrigin,
+		})
+	end
+end
+
 local function GrantLittleElfChestPendingToPlayer(player: Player): boolean
 	local pending = pendingLittleElfChestRewardMap[player.UserId]
 	if pending == nil then
 		return false
 	end
-	pendingLittleElfChestRewardMap[player.UserId] = nil
 	local brainrotData = GameConfig.BrainrotIdMap[pending.brainrotId]
 	if not brainrotData then
 		warn("[JumpRunwayServerManager] GrantLittleElfChestPending: brainrotId", pending.brainrotId, "not found")
@@ -498,8 +589,10 @@ local function GrantLittleElfChestPendingToPlayer(player: Player): boolean
 	)
 	if not success then
 		warn("[JumpRunwayServerManager] GrantLittleElfChestPending: AddItem failed for", player.Name)
+		return false
 	end
-	return success
+	pendingLittleElfChestRewardMap[player.UserId] = nil
+	return true
 end
 
 local function HandleLittleElfChestReward(player: Player, chestConfigId: number)
@@ -559,8 +652,59 @@ local function HandleLittleElfChestReward(player: Player, chestConfigId: number)
 	NetMsg.FireNotifyJumpRunwayLittleElfChestReward(player, brainrotId, chestConfigId, 1)
 end
 
+local function HandleLittleElfChestStartCarry(player: Player)
+	local pending = pendingLittleElfChestRewardMap[player.UserId]
+	if pending == nil then
+		return
+	end
+	if GetRunwayLittleElfChestCarrying(player) ~= nil then
+		return
+	end
+	local character = player.Character
+	if character == nil then
+		return
+	end
+	local carryPart = CreateLittleElfChestCarryPart(pending)
+	carryPart.Parent = workspaceInst
+	local carry = GetBrainrotCarryingManager().StartCarrying(player, carryPart)
+	if carry == nil then
+		if carryPart.Parent then
+			carryPart:Destroy()
+		end
+		warn("[JumpRunwayServerManager] HandleLittleElfChestStartCarry failed for", player.Name)
+	end
+end
+
 local function HandleLittleElfChestGrant(player: Player)
-	GrantLittleElfChestPendingToPlayer(player)
+	if pendingLittleElfChestRewardMap[player.UserId] == nil then
+		return
+	end
+	if GetRunwayLittleElfChestCarrying(player) == nil then
+		return
+	end
+	if not IsPlayerNearStartTrigger(player) then
+		return
+	end
+	local success = GrantLittleElfChestPendingToPlayer(player)
+	if not success then
+		return
+	end
+	GetBrainrotCarryingManager().StopCarrying(player)
+	EndRunwaySessionWithoutTeleport(player)
+end
+
+local function BindLittleElfChestDeathHandler(player: Player)
+	player.CharacterAdded:Connect(function(_character: Model)
+		local humanoid = _character:WaitForChild("Humanoid", 15) :: Humanoid?
+		if humanoid == nil then
+			return
+		end
+		humanoid.Died:Connect(function()
+			if pendingLittleElfChestRewardMap[player.UserId] ~= nil then
+				ClearLittleElfChestPending(player)
+			end
+		end)
+	end)
 end
 
 local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayInputReport)
@@ -640,11 +784,18 @@ function JumpRunwayServerManager.Init()
 	NetMsg.ConnectRequestJumpRunwayLittleElfChestReward(function(player: Player, chestConfigId: number)
 		HandleLittleElfChestReward(player, chestConfigId)
 	end)
+	NetMsg.ConnectRequestJumpRunwayLittleElfChestStartCarry(function(player: Player)
+		HandleLittleElfChestStartCarry(player)
+	end)
 	NetMsg.ConnectRequestJumpRunwayLittleElfChestGrant(function(player: Player)
 		HandleLittleElfChestGrant(player)
 	end)
+	for _, player in ipairs(players:GetPlayers()) do
+		BindLittleElfChestDeathHandler(player)
+	end
+	players.PlayerAdded:Connect(BindLittleElfChestDeathHandler)
 	players.PlayerRemoving:Connect(function(player)
-		GrantLittleElfChestPendingToPlayer(player)
+		ClearLittleElfChestPending(player)
 		local st = runMap[player.UserId]
 		if st then
 			local fwd = st.runwayForward

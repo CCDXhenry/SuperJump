@@ -112,6 +112,8 @@ local requestJumpRunwayLittleElfChestRewardEvent: RemoteEvent? =
 	remoteEventsFolder:FindFirstChild("RequestJumpRunwayLittleElfChestReward") :: RemoteEvent?
 local requestJumpRunwayLittleElfChestGrantEvent: RemoteEvent? =
 	remoteEventsFolder:FindFirstChild("RequestJumpRunwayLittleElfChestGrant") :: RemoteEvent?
+local requestJumpRunwayLittleElfChestStartCarryEvent: RemoteEvent? =
+	remoteEventsFolder:FindFirstChild("RequestJumpRunwayLittleElfChestStartCarry") :: RemoteEvent?
 local notifyJumpRunwayLittleElfChestRewardEvent: RemoteEvent? =
 	remoteEventsFolder:FindFirstChild("NotifyJumpRunwayLittleElfChestReward") :: RemoteEvent?
 
@@ -682,7 +684,7 @@ local function WarnJumpRunwayLittleElfChestRemotesMissingOnce()
 	end
 	warnedJumpRunwayLittleElfChestRemotesOnce = true
 	warn(
-		"[NetMsg] RemoteEvents missing (RequestJumpRunwayLittleElfChestReward / RequestJumpRunwayLittleElfChestGrant / NotifyJumpRunwayLittleElfChestReward). "
+		"[NetMsg] RemoteEvents missing (RequestJumpRunwayLittleElfChestReward / RequestJumpRunwayLittleElfChestGrant / RequestJumpRunwayLittleElfChestStartCarry / NotifyJumpRunwayLittleElfChestReward). "
 			.. "Create them under ReplicatedStorage.RemoteEvents."
 	)
 end
@@ -709,7 +711,26 @@ function NetMsg.ConnectRequestJumpRunwayLittleElfChestReward(callback: (player: 
 	end)
 end
 
--- 客户端开箱动画播完后请求服务端将 pending brainrot 入背包（非服务端通知）
+-- 客户端开箱动画播完后请求服务端创建头顶携带态 brainrot
+function NetMsg.FireRequestJumpRunwayLittleElfChestStartCarry()
+	if requestJumpRunwayLittleElfChestStartCarryEvent == nil then
+		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
+		return
+	end
+	requestJumpRunwayLittleElfChestStartCarryEvent:FireServer()
+end
+
+function NetMsg.ConnectRequestJumpRunwayLittleElfChestStartCarry(callback: (player: Player) -> ())
+	if requestJumpRunwayLittleElfChestStartCarryEvent == nil then
+		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
+		return
+	end
+	requestJumpRunwayLittleElfChestStartCarryEvent.OnServerEvent:Connect(function(player: Player)
+		callback(player)
+	end)
+end
+
+-- 客户端跑回 StartTrigger 后请求服务端将 pending brainrot 入背包
 function NetMsg.FireRequestJumpRunwayLittleElfChestGrant()
 	if requestJumpRunwayLittleElfChestGrantEvent == nil then
 		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
