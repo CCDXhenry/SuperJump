@@ -37,6 +37,23 @@ type RunState = {
 local cfg = GameConfig.JumpRunway
 local SERVER_DEBUG = cfg.DEBUG == true
 
+-- 惰性引用 BrainrotQueueManager，避免静态循环依赖
+local brainrotQueueManagerMod: any = nil
+local function GetBrainrotQueueManager(): any
+	if brainrotQueueManagerMod == nil then
+		brainrotQueueManagerMod = require(serverScripts:WaitForChild("BrainrotQueueManager"))
+	end
+	return brainrotQueueManagerMod
+end
+
+type PendingLittleElfChestReward = {
+	brainrotId: number,
+	chestConfigId: number,
+	quality: number,
+}
+
+local pendingLittleElfChestRewardMap: { [number]: PendingLittleElfChestReward } = {}
+
 local Ph = {
 	AutoRun = 1,
 	ScoreLocked = 8,
@@ -454,6 +471,98 @@ local function TryStartSession(player: Player, report: NetMsg.JumpRunwayInputRep
 	return true
 end
 
+local function GrantLittleElfChestPendingToPlayer(player: Player): boolean
+	local pending = pendingLittleElfChestRewardMap[player.UserId]
+	if pending == nil then
+		return false
+	end
+	pendingLittleElfChestRewardMap[player.UserId] = nil
+	local brainrotData = GameConfig.BrainrotIdMap[pending.brainrotId]
+	if not brainrotData then
+		warn("[JumpRunwayServerManager] GrantLittleElfChestPending: brainrotId", pending.brainrotId, "not found")
+		return false
+	end
+	local success = GetBrainrotQueueManager().AddItem(
+		player,
+		pending.brainrotId,
+		pending.quality,
+		1,
+		true,
+		nil,
+		false,
+		nil,
+		nil,
+		nil,
+		GameConfig.ModelGetSource.LittleElfChest,
+		pending.chestConfigId
+	)
+	if not success then
+		warn("[JumpRunwayServerManager] GrantLittleElfChestPending: AddItem failed for", player.Name)
+	end
+	return success
+end
+
+local function HandleLittleElfChestReward(player: Player, chestConfigId: number)
+	-- 不检查 runMap：可能玩家跑道已结束但宝箱撞击滞后，仍应发放奖励
+	local character = player.Character
+	if character == nil then
+		return
+	end
+	local existingPending = pendingLittleElfChestRewardMap[player.UserId]
+	if existingPending ~= nil and existingPending.chestConfigId == chestConfigId then
+		NetMsg.FireNotifyJumpRunwayLittleElfChestReward(
+			player,
+			existingPending.brainrotId,
+			existingPending.chestConfigId,
+			1
+		)
+		return
+	end
+	local rewardPool = GameConfig.LittleElfChestRewardPoolMap[chestConfigId]
+	if not rewardPool or #rewardPool == 0 then
+		warn("[JumpRunwayServerManager] HandleLittleElfChestReward: no reward pool for chestConfigId", chestConfigId)
+		return
+	end
+	-- 按 weight 做加权随机选取一个条目
+	local totalWeight = 0
+	for _, entry in ipairs(rewardPool) do
+		totalWeight += entry.weight
+	end
+	if totalWeight <= 0 then
+		return
+	end
+	local roll = math.random(1, totalWeight)
+	local cumulative = 0
+	local chosenEntry = nil
+	for _, entry in ipairs(rewardPool) do
+		cumulative += entry.weight
+		if roll <= cumulative then
+			chosenEntry = entry
+			break
+		end
+	end
+	if not chosenEntry then
+		return
+	end
+	local brainrotId = chosenEntry.itemId
+	local brainrotData = GameConfig.BrainrotIdMap[brainrotId]
+	if not brainrotData then
+		warn("[JumpRunwayServerManager] HandleLittleElfChestReward: brainrotId", brainrotId, "not found in BrainrotIdMap")
+		return
+	end
+	-- 服务端只 Notify 一次：Roll 结果缓存，入背包由客户端开箱动画结束后再请求
+	pendingLittleElfChestRewardMap[player.UserId] = {
+		brainrotId = brainrotId,
+		chestConfigId = chestConfigId,
+		quality = brainrotData.quality,
+	}
+	NetMsg.FireNotifyJumpRunwayLittleElfChestReward(player, brainrotId, chestConfigId, 1)
+end
+
+local function HandleLittleElfChestGrant(player: Player)
+	GrantLittleElfChestPendingToPlayer(player)
+end
+
 local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayInputReport)
 	local report = NormalizeJumpRunwayInputReport(rawPayload :: any)
 	if report == nil then
@@ -528,7 +637,14 @@ function JumpRunwayServerManager.Init()
 	end
 	initDone = true
 	NetMsg.ConnectRequestJumpRunwayInput(OnJumpRunwayReport)
+	NetMsg.ConnectRequestJumpRunwayLittleElfChestReward(function(player: Player, chestConfigId: number)
+		HandleLittleElfChestReward(player, chestConfigId)
+	end)
+	NetMsg.ConnectRequestJumpRunwayLittleElfChestGrant(function(player: Player)
+		HandleLittleElfChestGrant(player)
+	end)
 	players.PlayerRemoving:Connect(function(player)
+		GrantLittleElfChestPendingToPlayer(player)
 		local st = runMap[player.UserId]
 		if st then
 			local fwd = st.runwayForward

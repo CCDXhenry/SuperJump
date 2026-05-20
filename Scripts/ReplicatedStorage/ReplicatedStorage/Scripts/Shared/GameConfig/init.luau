@@ -12,6 +12,8 @@ local ChestDataModule = require(script:WaitForChild("ChestData"))
 local ChestWorkbenchDataModule = require(script:WaitForChild("ChestWorkbenchData"))
 local ChestWorkbenchUpgradeDataModule = require(script:WaitForChild("ChestWorkbenchUpgradeData"))
 local ChestRewardPoolDataModule = require(script:WaitForChild("ChestRewardPoolData"))
+local LittleElfChestDataModule = require(script:WaitForChild("LittleElfChestData"))
+local LittleElfChestRewardPoolDataModule = require(script:WaitForChild("LittleElfChestRewardPoolData"))
 
 GameConfig.GameVersion = "1.0.0"
 GameConfig.ABTestVersion = "1.0.0"
@@ -383,10 +385,28 @@ for chestKey, chestRow in pairs(ChestDataModule) do
 end
 GameConfig.MaxChestId = maxChestId
 
--- 兼容旧名：LittleElfChest* 与 Chest* 同数据或同枚举值；新代码请用 ItemType.Chest、RewardType.Chest、ChestIdMap 等。
-GameConfig.LittleElfChests = ChestDataModule
-GameConfig.LittleElfChestIdMap = GameConfig.ChestIdMap
-GameConfig.LittleElfChestNameMap = GameConfig.ChestNameMap
+-- 独立数据：小精灵宝箱（JumpRunway 终局奖励用）
+GameConfig.LittleElfChests = LittleElfChestDataModule
+GameConfig.LittleElfChestIdMap = {} :: { [number]: ChestConfigData }
+GameConfig.LittleElfChestNameMap = {} :: { [string]: ChestConfigData }
+
+for leChestKey, leChestRow in pairs(LittleElfChestDataModule) do
+	if type(leChestKey) == "number" and leChestRow and type(leChestRow) == "table" then
+		local cfg = leChestRow :: ChestConfigData
+		GameConfig.LittleElfChestIdMap[cfg.id] = cfg
+		GameConfig.LittleElfChestNameMap[cfg.resourceName] = cfg
+	end
+end
+
+GameConfig.LittleElfChestRewardPoolMap = {} :: { [number]: { ChestRewardPoolEntry } }
+for _, poolRow in pairs(LittleElfChestRewardPoolDataModule) do
+	local entry = poolRow :: ChestRewardPoolEntry
+	local chestTier = entry.id
+	if not GameConfig.LittleElfChestRewardPoolMap[chestTier] then
+		GameConfig.LittleElfChestRewardPoolMap[chestTier] = {}
+	end
+	table.insert(GameConfig.LittleElfChestRewardPoolMap[chestTier], entry)
+end
 
 export type ChestRewardPoolEntry = {
 	id: number,
@@ -407,7 +427,6 @@ for _, poolRow in pairs(ChestRewardPoolDataModule) do
 	end
 	table.insert(GameConfig.ChestRewardPoolMap[chestTier], entry)
 end
-GameConfig.LittleElfChestRewardPoolMap = GameConfig.ChestRewardPoolMap
 
 export type ChestWorkbenchRow = {
 	id: number,
@@ -621,9 +640,9 @@ GameConfig.JumpRunwayDesigner = {
 	JUMP_SPEED_MAX_TO_MIN_DELTA = 10,
 	-- [1]=Perfect,[2]=Ok,[3]=Late 每次起跳累加 bonus；↑ 踩点好则全程更快
 	JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER = {
-		[1] = 50,
-		[2] = 30,
-		[3] = 10,
+		[1] = 20,
+		[2] = 10,
+		[3] = 5,
 	},
 
 	-- ═══════════════════════════════════════
@@ -644,21 +663,21 @@ GameConfig.JumpRunwayDesigner = {
 	-- —— ④ 终局冲刺 Dash ——
 	-- ═══════════════════════════════════════
 	-- 冲刺沿轴加速度；↑ 加速更快
-	DASH_ACCEL = 50,
+	DASH_ACCEL = 10,
 	-- 冲刺顶速；↑ 冲刺更快
-	DASH_MAX_SPEED = 220,
+	DASH_MAX_SPEED = 100,
 	-- 冲刺燃料上限(s)；↑ 可冲更久
 	DASH_FUEL_MAX = 2.5,
 	-- 冲刺向上线加速度；↑ 抬头爬升更强
-	DASH_UPWARD_ACCEL = 22.5,
+	DASH_UPWARD_ACCEL = 12,
 	-- 冲刺最高竖直速度；↑ 可飞更高
 	DASH_UPWARD_VY_MAX = 75,
 	-- 松冲刺后额外沿轴速衰减率；↑ 松键收速更快
 	FINAL_DASH_ALONG_EXTRA_DECEL_PER_SEC = 0.8,
 	-- 终局基础俯仰(度)；↑ 身体更前倾
-	RUNWAY_FINAL_PITCH_DEG = 90,
+	RUNWAY_FINAL_PITCH_DEG = 60,
 	-- 按住冲刺额外俯仰(度)；↑ 冲刺时更扎头
-	RUNWAY_FINAL_DASH_EXTRA_PITCH_DEG = 60,
+	RUNWAY_FINAL_DASH_EXTRA_PITCH_DEG = 50,
 
 	-- ═══════════════════════════════════════
 	-- —— ⑤ 终局落地（翻滚 + 趴滑）——
@@ -673,9 +692,9 @@ GameConfig.JumpRunwayDesigner = {
 	-- 子阶段 A：触地沿轴速低于此值则进趴滑（不再弹飞）
 	RUNWAY_FINAL_LAND_PHASE_A_MIN_ALONG_SPEED = 60,
 	-- 子阶段 A：第 n 次弹飞沿轴速 = 触地沿轴 × retain^n（n=1 即首次落地已折减）
-	RUNWAY_FINAL_LAND_PHASE_A_ALONG_RETAIN_PER_BOUNCE = 0.82,
+	RUNWAY_FINAL_LAND_PHASE_A_ALONG_RETAIN_PER_BOUNCE = 0.8,
 	-- 子阶段 A：第 n 次弹飞竖直速 = |触地 vy| × retain^n
-	RUNWAY_FINAL_LAND_PHASE_A_VY_RETAIN_PER_BOUNCE = 0.55,
+	RUNWAY_FINAL_LAND_PHASE_A_VY_RETAIN_PER_BOUNCE = 0.4,
 	-- 子阶段 A：折减后竖直弹起初速下限（studs/s）
 	RUNWAY_FINAL_LAND_PHASE_A_MIN_POP_VY = 10,
 	-- 终局落地触地检测：脚下射线距离阈值（stud）；实际落地距离小于此值判定触地
@@ -692,6 +711,22 @@ GameConfig.JumpRunwayDesigner = {
 	RUNWAY_CAMERA_SMOOTH_SPEED = 3,
 	-- 玩法摄像机 FOV；↑ 视野更广
 	RUNWAY_CAMERA_FOV = 60,
+
+	-- ═══════════════════════════════════════
+	-- —— ⑦ 终局小精灵宝箱 ——
+	-- ═══════════════════════════════════════
+	-- 小精灵宝箱的配置 ID（对应 LittleElfChestData 中的 id）
+	RUNWAY_CHEST_CONFIG_ID = 1,
+	-- 宝箱生成在玩家前方多远（stud）
+	RUNWAY_CHEST_SPAWN_AHEAD_STUDS = 3,
+	-- 子阶段 B 结束前多少秒生成宝箱
+	RUNWAY_CHEST_SPAWN_BEFORE_END_SEC = 4,
+	-- 玩家撞击宝箱后向后反弹速度（studs/s）wdsa
+	RUNWAY_CHEST_BOUNCE_BACK_SPEED = 12,
+	-- 撞击后保持趴姿反弹时长，之后站立等待开箱动画（秒）
+	RUNWAY_CHEST_BOUNCE_DELAY_SEC = 0.5,
+	-- 开箱动画结束后、触发回城传送前的等待时长（秒）
+	RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC = 0.5,
 }
 
 local jumpRunwayDesigner = GameConfig.JumpRunwayDesigner
@@ -912,6 +947,14 @@ GameConfig.JumpRunway = {
 	RUNWAY_CAMERA_LOOK_HEIGHT = 0,
 	RUNWAY_CAMERA_SMOOTH_SPEED = jumpRunwayDesigner.RUNWAY_CAMERA_SMOOTH_SPEED,
 	RUNWAY_CAMERA_FOV = jumpRunwayDesigner.RUNWAY_CAMERA_FOV,
+
+	-- —— 终局小精灵宝箱 ——
+	RUNWAY_CHEST_CONFIG_ID = jumpRunwayDesigner.RUNWAY_CHEST_CONFIG_ID,
+	RUNWAY_CHEST_SPAWN_AHEAD_STUDS = jumpRunwayDesigner.RUNWAY_CHEST_SPAWN_AHEAD_STUDS,
+	RUNWAY_CHEST_SPAWN_BEFORE_END_SEC = jumpRunwayDesigner.RUNWAY_CHEST_SPAWN_BEFORE_END_SEC,
+	RUNWAY_CHEST_BOUNCE_BACK_SPEED = jumpRunwayDesigner.RUNWAY_CHEST_BOUNCE_BACK_SPEED,
+	RUNWAY_CHEST_BOUNCE_DELAY_SEC = jumpRunwayDesigner.RUNWAY_CHEST_BOUNCE_DELAY_SEC,
+	RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC = jumpRunwayDesigner.RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC,
 }
 
 --- 跑道单段跳跃水平限速：max = JUMP_SPEED_INITIAL_MAX + cumulativeRatingBonus（clamp 至 ANTI_CHEAT_MAX_ALONG_SPEED）；min = max - JUMP_SPEED_MAX_TO_MIN_DELTA。

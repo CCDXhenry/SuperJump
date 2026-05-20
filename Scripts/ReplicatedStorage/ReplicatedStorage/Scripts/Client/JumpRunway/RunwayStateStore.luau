@@ -56,6 +56,7 @@ export type RunwayStateStoreShape = {
 	finalLandPronePrefallStartClock: number,
 	finalLandProneSlideAlongStart: number?,
 	finalLandCachedLandingVy: number?,
+	finalLandCachedLandingAlong: number?,
 }
 
 function RunwayStateStore.CreateDefault(phases: any, slideKindStandard: string): RunwayStateStoreShape
@@ -113,6 +114,7 @@ function RunwayStateStore.CreateDefault(phases: any, slideKindStandard: string):
 		finalLandPronePrefallStartClock = 0,
 		finalLandProneSlideAlongStart = nil,
 		finalLandCachedLandingVy = nil,
+		finalLandCachedLandingAlong = nil,
 	}
 end
 
@@ -161,6 +163,7 @@ function RunwayStateStore.ResetForIdle(localState: RunwayStateStoreShape, phases
 	localState.finalLandPronePrefallStartClock = 0
 	localState.finalLandProneSlideAlongStart = nil
 	localState.finalLandCachedLandingVy = nil
+	localState.finalLandCachedLandingAlong = nil
 	localState.finalDashAlongExtra = 0
 	localState.lastSampleSendClock = 0
 	localState.lastSampleAlong = 0

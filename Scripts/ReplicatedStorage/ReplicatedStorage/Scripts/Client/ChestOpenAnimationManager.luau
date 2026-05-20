@@ -22,9 +22,10 @@ local ModelBillboardOffsetTool = require(clientScripts:WaitForChild("ModelBillbo
 
 local actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
 local modelsFolderForChests = replicatedStorage:WaitForChild("Models")
-local actualChests = modelsFolderForChests:FindFirstChild(GameConfig.FactoryChestsFolderName)
-	or modelsFolderForChests:FindFirstChild("LittleElfChests")
+local factoryChestsFolder = modelsFolderForChests:FindFirstChild(GameConfig.FactoryChestsFolderName)
 	or modelsFolderForChests:WaitForChild(GameConfig.FactoryChestsFolderName)
+local littleElfChestsFolder = modelsFolderForChests:FindFirstChild("LittleElfChests")
+local actualChests = factoryChestsFolder
 local uiFolder = replicatedStorage:WaitForChild("UI")
 local brainrotInfoUIParams = uiFolder:WaitForChild("BrainrotInfoUI") :: BillboardGui
 local BILLBOARD_TRACKED_ATTR = "BillboardTracked"
@@ -41,6 +42,7 @@ end
 local RandomCount = 10
 local TinyScale = 0.02
 local ChestThrowForwardDistance = 1.0
+local RunwayChestBrainrotLeftYawRad = math.rad(90)
 
 local playingUidMap: { [string]: boolean } = {}
 
@@ -252,18 +254,99 @@ local function CreateAnchoredModelFromConfig(folder: Folder, resourceName: strin
 	return model, root
 end
 
-local function PlayInWorld(uid: string, chestConfigId: number, chestLevel: number, finalBrainrotId: number, originCFrame: CFrame)
-	local chestConfig = GameConfig.ChestIdMap[chestConfigId]
-	local rewardPool = GameConfig.ChestRewardPoolMap[chestConfigId]
-	if not chestConfig or not rewardPool or #rewardPool == 0 then
+type ResolvedChestOpenContext = {
+	chestConfig: any,
+	rewardPool: { any },
+	chestFolder: Folder,
+}
+
+local function ResolveChestConfigAndPool(chestConfigId: number): ResolvedChestOpenContext?
+	local littleElfConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
+	if littleElfConfig ~= nil and littleElfChestsFolder ~= nil then
+		local littleElfPool = GameConfig.LittleElfChestRewardPoolMap[chestConfigId]
+		if littleElfPool ~= nil and #littleElfPool > 0 then
+			return {
+				chestConfig = littleElfConfig,
+				rewardPool = littleElfPool,
+				chestFolder = littleElfChestsFolder,
+			}
+		end
+	end
+	local factoryConfig = GameConfig.ChestIdMap[chestConfigId]
+	if factoryConfig ~= nil then
+		local factoryPool = GameConfig.ChestRewardPoolMap[chestConfigId]
+		if factoryPool ~= nil and #factoryPool > 0 then
+			return {
+				chestConfig = factoryConfig,
+				rewardPool = factoryPool,
+				chestFolder = factoryChestsFolder,
+			}
+		end
+	end
+	return nil
+end
+
+type PlayInWorldOptions = {
+	existingChestModel: Model?,
+	lockFacing: boolean?,
+}
+
+local function PrepareExistingChestForOpenAnim(chestModel: Model, container: Instance, throwCFrame: CFrame): BasePart?
+	chestModel.Name = "WorldChestModel"
+	local root = chestModel.PrimaryPart or chestModel:FindFirstChild("RootPart") or chestModel:FindFirstChildWhichIsA("BasePart")
+	if root == nil or not root:IsA("BasePart") then
+		return nil
+	end
+	for _, part in ipairs(chestModel:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+			part.Massless = true
+		end
+	end
+	pcall(function()
+		chestModel:ScaleTo(1)
+	end)
+	chestModel:PivotTo(throwCFrame)
+	chestModel.Parent = container
+	return root
+end
+
+local function PlayInWorld(
+	uid: string,
+	chestConfigId: number,
+	chestLevel: number,
+	finalBrainrotId: number,
+	originCFrame: CFrame,
+	options: PlayInWorldOptions?
+)
+	local resolved = ResolveChestConfigAndPool(chestConfigId)
+	if not resolved then
+		warn(LogPrefix, "PlayInWorld: no chest config/pool for id", chestConfigId)
 		return
 	end
+	local chestConfig = resolved.chestConfig
+	local rewardPool = resolved.rewardPool
+	local chestModelsFolder = resolved.chestFolder
 	local container = Instance.new("Folder")
 	container.Name = "OpenChestAnim_" .. uid
 	container.Parent = workspace
 
 	local throwCFrame = originCFrame * CFrame.new(0, 0, -ChestThrowForwardDistance)
-	local chestModel, chestRoot = CreateAnchoredModelFromConfig(actualChests, chestConfig.resourceName, container, "WorldChestModel", throwCFrame)
+	local lockFacing = options ~= nil and options.lockFacing == true
+	local existingChestModel = if options ~= nil then options.existingChestModel else nil
+
+	local chestModel: Model?
+	local chestRoot: BasePart?
+	if existingChestModel ~= nil and existingChestModel.Parent ~= nil then
+		chestRoot = PrepareExistingChestForOpenAnim(existingChestModel, container, throwCFrame)
+		chestModel = if chestRoot ~= nil then existingChestModel else nil
+	end
+	if chestModel == nil or chestRoot == nil then
+		chestModel, chestRoot = CreateAnchoredModelFromConfig(chestModelsFolder, chestConfig.resourceName, container, "WorldChestModel", throwCFrame)
+	end
 	if not chestModel or not chestRoot then
 		container:Destroy()
 		return
@@ -272,7 +355,7 @@ local function PlayInWorld(uid: string, chestConfigId: number, chestLevel: numbe
 	local yDriver = Instance.new("NumberValue")
 	yDriver.Value = 0
 	local yawDriver = Instance.new("NumberValue")
-	yawDriver.Value = math.rad(math.random(-120, 120))
+	yawDriver.Value = if lockFacing then 0 else math.rad(math.random(-120, 120))
 
 	local function UpdateChestPivot()
 		if chestModel and chestModel.Parent then
@@ -284,9 +367,11 @@ local function PlayInWorld(uid: string, chestConfigId: number, chestLevel: numbe
 	local yawConn = yawDriver:GetPropertyChangedSignal("Value"):Connect(UpdateChestPivot)
 	UpdateChestPivot()
 
-	TweenPropertyNoWait(yawDriver, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Value = yawDriver.Value + math.rad(math.random(-120, 120)),
-	})
+	if not lockFacing then
+		TweenPropertyNoWait(yawDriver, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Value = yawDriver.Value + math.rad(math.random(-120, 120)),
+		})
+	end
 	TweenProperty(yDriver, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = -0.2 })
 
 	TweenModelScale(chestModel, 1, 0.85, 0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -341,7 +426,15 @@ local function PlayInWorld(uid: string, chestConfigId: number, chestLevel: numbe
 			displayModel = nil
 			displayRoot = nil
 		end
-		displayModel, displayRoot = CreateAnchoredModelFromConfig(actualModels, brainrotData.resourceName, container, "WorldBrainrotModel", throwCFrame * CFrame.new(0, 1.2, 0))
+		displayModel, displayRoot = CreateAnchoredModelFromConfig(
+			actualModels,
+			brainrotData.resourceName,
+			container,
+			"WorldBrainrotModel",
+			throwCFrame
+				* CFrame.new(0, 1.2, 0)
+				* (if lockFacing then CFrame.Angles(0, RunwayChestBrainrotLeftYawRad, 0) else CFrame.identity)
+		)
 		if not displayModel or not displayRoot then
 			return
 		end
@@ -376,6 +469,27 @@ local function PlayInWorld(uid: string, chestConfigId: number, chestLevel: numbe
 	end
 end
 
+function ChestOpenAnimationManager.PlayInWorldAndWait(
+	uid: string,
+	chestConfigId: number,
+	chestLevel: number,
+	finalBrainrotId: number,
+	originCFrame: CFrame,
+	options: PlayInWorldOptions?
+)
+	if playingUidMap[uid] then
+		return
+	end
+	playingUidMap[uid] = true
+	local ok, err = pcall(function()
+		PlayInWorld(uid, chestConfigId, chestLevel, finalBrainrotId, originCFrame, options)
+	end)
+	if not ok then
+		warn(LogPrefix, "PlayInWorldAndWait failed:", err)
+	end
+	playingUidMap[uid] = nil
+end
+
 function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId: number, chestLevel: number, finalBrainrotId: number, fallbackCFrame: CFrame?)
 	if playingUidMap[uid] then
 		return
@@ -390,11 +504,11 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 			return
 		end
 
-		local chestConfig = GameConfig.ChestIdMap[chestConfigId]
-		local rewardPool = GameConfig.ChestRewardPoolMap[chestConfigId]
-		if not chestConfig or not rewardPool or #rewardPool == 0 then
+		local resolved = ResolveChestConfigAndPool(chestConfigId)
+		if not resolved then
 			return
 		end
+		local rewardPool = resolved.rewardPool
 
 		local chestModel = tool:FindFirstChild("VisualModel")
 		local handle = tool:FindFirstChild("Handle")

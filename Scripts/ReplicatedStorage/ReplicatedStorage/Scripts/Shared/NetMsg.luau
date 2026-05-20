@@ -107,6 +107,14 @@ local notifyWorkbenchSlotsUpdateEvent: RemoteEvent? = remoteEventsFolder:FindFir
 local notifyJumpRunwayStateEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyJumpRunwayState") :: RemoteEvent?
 local requestJumpRunwayInputEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestJumpRunwayInput") :: RemoteEvent?
 
+-- JumpRunway LittleElfChest：请求/通知小精灵宝箱奖励
+local requestJumpRunwayLittleElfChestRewardEvent: RemoteEvent? =
+	remoteEventsFolder:FindFirstChild("RequestJumpRunwayLittleElfChestReward") :: RemoteEvent?
+local requestJumpRunwayLittleElfChestGrantEvent: RemoteEvent? =
+	remoteEventsFolder:FindFirstChild("RequestJumpRunwayLittleElfChestGrant") :: RemoteEvent?
+local notifyJumpRunwayLittleElfChestRewardEvent: RemoteEvent? =
+	remoteEventsFolder:FindFirstChild("NotifyJumpRunwayLittleElfChestReward") :: RemoteEvent?
+
 --客户端请求设置背景音乐音量
 function NetMsg.FireRequestSetBGMVolume(volume: number)
 	requestSetBGMVolumeEvent:FireServer(volume)
@@ -662,6 +670,79 @@ end
 
 function NetMsg.JumpRunwayRemotesExist(): boolean
 	return notifyJumpRunwayStateEvent ~= nil and requestJumpRunwayInputEvent ~= nil
+end
+
+-- JumpRunway LittleElfChest Reward
+-- 在 Studio 的 ReplicatedStorage.RemoteEvents 下创建 `RequestJumpRunwayLittleElfChestReward`、`NotifyJumpRunwayLittleElfChestReward`
+local warnedJumpRunwayLittleElfChestRemotesOnce = false
+
+local function WarnJumpRunwayLittleElfChestRemotesMissingOnce()
+	if warnedJumpRunwayLittleElfChestRemotesOnce then
+		return
+	end
+	warnedJumpRunwayLittleElfChestRemotesOnce = true
+	warn(
+		"[NetMsg] RemoteEvents missing (RequestJumpRunwayLittleElfChestReward / RequestJumpRunwayLittleElfChestGrant / NotifyJumpRunwayLittleElfChestReward). "
+			.. "Create them under ReplicatedStorage.RemoteEvents."
+	)
+end
+
+-- 客户端上报撞击：服务端 Roll 并 FireNotifyJumpRunwayLittleElfChestReward（仅此一次下行通知）
+function NetMsg.FireRequestJumpRunwayLittleElfChestReward(chestConfigId: number)
+	if requestJumpRunwayLittleElfChestRewardEvent == nil then
+		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
+		return
+	end
+	requestJumpRunwayLittleElfChestRewardEvent:FireServer(chestConfigId)
+end
+
+function NetMsg.ConnectRequestJumpRunwayLittleElfChestReward(callback: (player: Player, chestConfigId: number) -> ())
+	if requestJumpRunwayLittleElfChestRewardEvent == nil then
+		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
+		return
+	end
+	requestJumpRunwayLittleElfChestRewardEvent.OnServerEvent:Connect(function(player: Player, payload: any)
+		if typeof(payload) ~= "number" then
+			return
+		end
+		callback(player, payload :: number)
+	end)
+end
+
+-- 客户端开箱动画播完后请求服务端将 pending brainrot 入背包（非服务端通知）
+function NetMsg.FireRequestJumpRunwayLittleElfChestGrant()
+	if requestJumpRunwayLittleElfChestGrantEvent == nil then
+		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
+		return
+	end
+	requestJumpRunwayLittleElfChestGrantEvent:FireServer()
+end
+
+function NetMsg.ConnectRequestJumpRunwayLittleElfChestGrant(callback: (player: Player) -> ())
+	if requestJumpRunwayLittleElfChestGrantEvent == nil then
+		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
+		return
+	end
+	requestJumpRunwayLittleElfChestGrantEvent.OnServerEvent:Connect(function(player: Player)
+		callback(player)
+	end)
+end
+
+-- 服务端通知客户端 JumpRunway 小精灵宝箱开箱奖励结果
+function NetMsg.FireNotifyJumpRunwayLittleElfChestReward(player: Player, brainrotId: number, chestConfigId: number, chestLevel: number)
+	if notifyJumpRunwayLittleElfChestRewardEvent == nil then
+		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
+		return
+	end
+	notifyJumpRunwayLittleElfChestRewardEvent:FireClient(player, brainrotId, chestConfigId, chestLevel)
+end
+
+function NetMsg.ConnectNotifyJumpRunwayLittleElfChestReward(callback: (brainrotId: number, chestConfigId: number, chestLevel: number) -> ())
+	if notifyJumpRunwayLittleElfChestRewardEvent == nil then
+		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
+		return
+	end
+	notifyJumpRunwayLittleElfChestRewardEvent.OnClientEvent:Connect(callback)
 end
 
 return NetMsg
