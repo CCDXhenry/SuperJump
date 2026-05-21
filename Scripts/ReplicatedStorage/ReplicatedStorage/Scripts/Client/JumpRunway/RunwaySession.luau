@@ -41,6 +41,7 @@ local Ph = RunwayConstants.Ph
 local Kind = RunwayConstants.Kind
 local SlideKindStandard = RunwayConstants.SlideKindStandard
 local SlideKindFinalLanding = RunwayConstants.SlideKindFinalLanding
+local SlideKindMiss = RunwayConstants.SlideKindMiss
 local RunwayCameraRenderStepName = RunwayConstants.RunwayCameraRenderStepName
 local RunwayFinalTiltRenderStepName = RunwayConstants.RunwayFinalTiltRenderStepName
 local RunwayRingTemplateName = RunwayConstants.RunwayRingTemplateName
@@ -135,6 +136,7 @@ local Refs: {
 	chestPostOpenTeleportDelayToken: number,
 	chestBackpackDeliverRequested: boolean?,
 	chestCarryReturnActive: boolean?,
+	missAbortSentForThisRun: boolean?,
 	startTriggerStartArmed: boolean?,
 	startTriggerPlayerWasInsideVolume: boolean?,
 	startTriggerOutsideVolumeClock: number?,
@@ -188,6 +190,7 @@ local Refs: {
 	startTriggerPlayerWasInsideVolume = false,
 	startTriggerOutsideVolumeClock = nil,
 	deferredTerminalServerPayload = nil,
+	missAbortSentForThisRun = nil,
 }
 
 local localState: RunwayLocalState = RunwayStateStore.CreateDefault(Ph, SlideKindStandard)
@@ -458,6 +461,8 @@ function RunwaySession.GetRunwayEffectiveGravityScale(): number
 				local ga = cfg.RUNWAY_FINAL_LAND_PHASE_A_EFFECTIVE_GRAVITY_SCALE
 				return (typeof(ga) == "number" and ga == ga and ga > 0) and ga or cfg.RUNWAY_SESSION_EFFECTIVE_GRAVITY_SCALE
 			end
+			return cfg.RUNWAY_SESSION_EFFECTIVE_GRAVITY_SCALE
+		elseif localState.runwaySlideKind == SlideKindMiss then
 			return cfg.RUNWAY_SESSION_EFFECTIVE_GRAVITY_SCALE
 		end
 		return cfg.RUNWAY_SLIDE_EFFECTIVE_GRAVITY_SCALE
@@ -1062,16 +1067,19 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 	hrp.AssemblyLinearVelocity = fwdH * alongSpd + Vector3.new(0, vyPhaseA, 0) + perpH * perpMulFrame
 end
 
-function RunwaySession.ApplyFinalLandingRenderOrientation(_humanoid: Humanoid, hrp: BasePart, forward: Vector3, dt: number, _nowClock: number)
+function RunwaySession.ApplyFinalLandingRenderOrientation(_humanoid: Humanoid, hrp: BasePart, forward: Vector3, dt: number, _nowClock: number, proneOffsetOverride: number?)
 	local pos = hrp.Position
 	local linVel = hrp.AssemblyLinearVelocity
 	if Refs.finalLandTumbleStartHrpCf == nil then
 		Refs.finalLandTumbleStartHrpCf = hrp.CFrame
 	end
 	if localState.finalLandSubPhase == 2 then
-		local proneOffset = cfg.RUNWAY_FINAL_LAND_PRONE_GROUND_OFFSET
+		local proneOffset = proneOffsetOverride
 		if typeof(proneOffset) ~= "number" or proneOffset ~= proneOffset then
-			proneOffset = 0
+			proneOffset = cfg.RUNWAY_FINAL_LAND_PRONE_GROUND_OFFSET
+			if typeof(proneOffset) ~= "number" or proneOffset ~= proneOffset then
+				proneOffset = 0
+			end
 		end
 		local pronePos = Vector3.new(pos.X, pos.Y - proneOffset, pos.Z)
 		local proneLocked = RunwaySession.BuildProneRunwayCFrame(pronePos, forward)
@@ -1178,6 +1186,52 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 		if humanoidOpt ~= nil then
 			RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoidOpt)
 		end
+	elseif slideKind == SlideKindMiss then
+		localState.jumpBoostVy = nil
+		localState.jumpBoostUntilClock = 0
+		localState.finalLandSubPhase = 2
+		localState.finalLandPronePhaseStartClock = nowClock
+		localState.finalLandPhaseAPopCount = 0
+		localState.finalLandProneSlideAlongSpeedStart = 0
+		localState.finalLandTumbleImpulseApplied = false
+		localState.finalLandLockedTumbleAlong = 0
+		localState.finalLandTumblePrevPopVy = 0
+		localState.finalLandTumblePredAirTimeSec = 0
+		localState.finalLandTumbleAirAccumSec = 0
+		localState.finalLandTumbleLeftGround = false
+		localState.finalLandTumbleUseAirClock = false
+		RunwaySession.ClearFinalLandingSlideModuleLocals()
+		localState.finalLandTumbleRollAngleRad = 0
+		localState.finalLandProneBStage = 1
+		localState.finalLandPronePrefallStartClock = 0
+		localState.finalLandProneSlideAlongStart = nil
+		localState.finalLandCachedLandingAlong = nil
+		-- 用当前段最大水平速度（JUMP_SPEED_INITIAL_MAX + 累计起跳评级 bonus）作为滑行起始速度
+		local _, maxSpdForSeg = GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(
+			math.max(1, localState.takeoffCount),
+			localState.jumpSpeedCumulativeRatingBonus
+		)
+		local alongSpd = math.max(0, maxSpdForSeg)
+		localState.finalLandProneSlideAlongSpeedStart = alongSpd
+		-- 立即贴地，避免从空中下沉
+		if humanoidOpt ~= nil then
+			local _chSnap, _humSnap, hrpSnap = RunwaySession.GetCharacterParts()
+			if hrpSnap ~= nil then
+				local fwdSnap = NormalizeRunwayForward(localState.runwayForward)
+				RunwaySession.SnapCharacterHrpToGround(humanoidOpt, hrpSnap, fwdSnap)
+			end
+		end
+		RunwaySession.EnsurePlatformStandForFinalLandSlide(humanoidOpt)
+		if humanoidOpt ~= nil then
+			RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoidOpt)
+		end
+		-- 计算制动停止时长
+		local brakeK = cfg.RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP
+		if typeof(brakeK) ~= "number" or brakeK ~= brakeK or brakeK <= 0 then
+			brakeK = 1.6
+		end
+		local _, tSlideStop = RunwaySession.ComputePhaseBSlideStopDistance(alongSpd, brakeK)
+		localState.slideEndClock = nowClock + math.max(0.3, tSlideStop)
 	else
 		localState.finalLandSubPhase = 1
 		localState.finalLandPronePhaseStartClock = 0
@@ -1911,7 +1965,7 @@ function RunwaySession.SlideTraceUpdate(humanoid: Humanoid, hrp: BasePart)
 	end
 	local shouldTraces =
 		localState.phase == Ph.Slide
-		and localState.runwaySlideKind == SlideKindFinalLanding
+		and (localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss)
 		and localState.finalLandSubPhase == 2
 		and localState.finalLandProneBStage >= 1
 	if not shouldTraces then
@@ -2653,12 +2707,16 @@ function RunwaySession.ResetLocalRunToIdle()
 	Refs.chestCarryReturnActive = false
 	Refs.chestPostOpenTeleportDelayToken += 1
 	Refs.deferredTerminalServerPayload = nil
+	Refs.missAbortSentForThisRun = nil
 	RunwaySession.DestroyDistanceRecorder()
 	RunwaySession.SlideTraceScheduleDestroyAfterRunwayEnd()
 	RunwayUiController.Destroy(RunwaySession.HudDestroy, RunwaySession.DebugDestroy)
 	JumpRunWayFrame.EndSession()
 	-- Humanoid 状态恢复延迟到下一帧，避免 Physics 引擎竞争条件
 	task.defer(function()
+		if RunwaySession.IsRunwayActivePhase(localState.phase) and localState.phase ~= Ph.RunEnded then
+			return
+		end
 		RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(humanoid)
 		RunwaySession.ClearFinalLandingSlideModuleLocals()
 		RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(humanoid, hrp)
@@ -2815,7 +2873,7 @@ function RunwaySession.UpdateLocalJumpWindowPrediction(humanoid: Humanoid, nowCl
 	if localState.predictJumpWindowUntil ~= nil and nowClock >= (localState.predictJumpWindowUntil :: number) then
 		if localState.phase == Ph.Airborne and localState.takeoffCount >= 1 and localState.takeoffCount < cfg.N_TOTAL_JUMPS then
 			JumpRunWayFrame.ShowMiss()
-			RunwaySession.EnterSlidePhase(nowClock, SlideKindStandard, nil)
+			RunwaySession.EnterSlidePhase(nowClock, SlideKindMiss, humanoid)
 		end
 		localState.predictJumpWindowUntil = nil
 		localState.chainJumpWindowAwaitingGround = false
@@ -2860,7 +2918,7 @@ function RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid: Humanoid, nowClock:
 	end
 	if
 		localState.phase == Ph.Slide
-		and localState.runwaySlideKind == SlideKindFinalLanding
+		and (localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss)
 		and (localState.finalLandSubPhase == 1 or localState.finalLandSubPhase == 2)
 	then
 		if humanoid.WalkSpeed ~= 0 then
@@ -2938,7 +2996,7 @@ function RunwaySession.ApplyLocalPhysics(dt: number)
 			RunwaySession.UpdateDashVerticalOnly(hrp, dt)
 		end
 	elseif localState.phase == Ph.Slide then
-		if localState.runwaySlideKind == SlideKindFinalLanding then
+		if localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss then
 			RunwaySession.ApplyFinalLandingSlidePhysics(hrp, forward, dt, nowClock, humanoid)
 		else
 			RunwaySession.UpdateSlideVelocity(hrp, forward, nowClock)
@@ -2994,6 +3052,13 @@ function RunwaySession.OnPostSimulationLocomotion(dt: number)
 			RunwaySession.ApplyFinalLandingRenderOrientation(humanoid, hrp, forward, dt, nowClock)
 			RunwaySession.SlideTraceUpdate(humanoid, hrp)
 		end
+	elseif hrp ~= nil and localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindMiss then
+		if not RunwaySession.IsLittleElfChestRunwayFlowActive() then
+			RunwaySession.EnsureHumanoidAutoRotateOffForFinalPitch(humanoid)
+			-- miss 滑行：趴姿但不压地面偏移
+			RunwaySession.ApplyFinalLandingRenderOrientation(humanoid, hrp, forward, dt, nowClock, 0)
+			RunwaySession.SlideTraceUpdate(humanoid, hrp)
+		end
 	end
 	local isFinalLandingSlide = localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindFinalLanding
 	if RunwaySession.IsLittleElfChestRunwayFlowActive() and Refs.chestRewardWaitPose == true then
@@ -3026,7 +3091,7 @@ function RunwaySession.OnJumpRunwayFinalTiltRenderStep(dt: number)
 		return
 	end
 	local forward = NormalizeRunwayForward(localState.runwayForward)
-	if localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindFinalLanding then
+	if localState.phase == Ph.Slide and (localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss) then
 		if RunwaySession.IsLittleElfChestRunwayFlowActive() then
 			RunwaySession.EnsureHumanoidAutoRotateOffForFinalPitch(humanoid)
 			if Refs.chestBounceActive == true then
@@ -3060,7 +3125,8 @@ function RunwaySession.ProcessJumpWindowTimeout(nowClock: number)
 	if localState.lineJumpWindowExpireAt ~= nil and nowClock >= (localState.lineJumpWindowExpireAt :: number) then
 		localState.lineWindowConsumed = true
 		JumpRunWayFrame.ShowMiss()
-		RunwaySession.EnterSlidePhase(nowClock, SlideKindStandard, nil)
+		local _character, humanoidTimeout, _hrpTimeout = RunwaySession.GetCharacterParts()
+		RunwaySession.EnterSlidePhase(nowClock, SlideKindMiss, humanoidTimeout)
 	end
 end
 
@@ -4081,19 +4147,43 @@ function RunwaySession.UpdateTick(dt: number)
 	then
 		RunwaySession.TryLittleElfChestProximityHit(hrp)
 	end
-	if localState.phase == Ph.Slide and nowClock >= localState.slideEndClock and RunwaySession.IsRunwayScriptedGrounded(humanoid) then
-		if RunwaySession.ShouldBlockFinalLandingSlideEndForChest() then
-			return
-		end
+	if localState.phase == Ph.Slide and nowClock >= localState.slideEndClock then
 		if localState.runwaySlideKind == SlideKindFinalLanding then
+			if not RunwaySession.IsRunwayScriptedGrounded(humanoid) then
+				return
+			end
+			if RunwaySession.ShouldBlockFinalLandingSlideEndForChest() then
+				return
+			end
 			RunwaySession.RestorePlatformStandAfterFinalLand(humanoid)
 			RunwaySession.ClearFinalLandingSlideModuleLocals()
 			RunwaySession.RestoreHumanoidAutoRotateAfterFinalPitch(humanoid)
 			RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(humanoid, hrp)
 			RunwaySession.SlideTraceScheduleDestroyAfterRunwayEnd()
+		elseif localState.runwaySlideKind == SlideKindMiss then
+			RunwaySession.RestorePlatformStandAfterFinalLand(humanoid)
+			RunwaySession.ClearFinalLandingSlideModuleLocals()
+			RunwaySession.RestoreHumanoidAutoRotateAfterFinalPitch(humanoid)
+			RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(humanoid, hrp)
+			-- 发送 Abort 让服务端清理 run 状态
+			if NetMsg.JumpRunwayRemotesExist() and not localState.finalSent and Refs.missAbortSentForThisRun ~= true then
+				Refs.missAbortSentForThisRun = true
+				NetMsg.FireRequestJumpRunwayInput({
+					kind = Kind.Abort,
+					clientClock = os.clock(),
+					clientPhase = localState.phase,
+				})
+				localState.finalSent = true
+			end
+			RunwaySession.SlideTraceDestroy()
+			RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(humanoid)
+			RunwaySession.ClearRunwayFlyingHumanoid(humanoid)
+			if localState.controlsDisabled then
+				RunwaySession.SetControlsEnabled(true)
+			end
+			RunwaySession.ResetLocalRunToIdle()
+			return
 		end
-		localState.phase = Ph.RunEnded
-		localState.groundedStableTime = 0
 	end
 end
 
@@ -4132,6 +4222,15 @@ function RunwaySession.ApplyServerPayload(payload: NetMsg.JumpRunwayStatePayload
 		return
 	end
 	if payload.phase == Ph.Idle or payload.phase == Ph.Cleaning then
+		if localState.phase == Ph.Idle then
+			-- 已经清理过了，忽略服务端延迟消息
+			return
+		end
+		-- 如果当前已经是新 Run 的活跃阶段（非 RunEnded），说明玩家已重新开始，
+		-- 忽略服务端延迟通知，避免误杀新 Run
+		if RunwaySession.IsRunwayActivePhase(localState.phase) and localState.phase ~= Ph.RunEnded then
+			return
+		end
 		RunwaySession.ResetLocalRunToIdle()
 		if payload.runwayForward.Magnitude > 1e-4 then
 			localState.runwayForward = NormalizeRunwayForward(payload.runwayForward)
@@ -4666,48 +4765,53 @@ function RunwaySession.BindSceneTriggers()
 					return
 				end
 				if RunwaySession.IsRunwayActivePhase(localState.phase) then
-					local localStateAny = localState :: any
-					local prevLogClock = localStateAny._dbgLastStartTouchActiveLogClock
-					local nowLogClock = os.clock()
-					local secSinceLastIntercept: number? = nil
-					if CLIENT_DEBUG then
-						if Refs.startTriggerActiveLastInterceptClock ~= nil then
-							secSinceLastIntercept = nowLogClock - (Refs.startTriggerActiveLastInterceptClock :: number)
-						end
-						Refs.startTriggerActiveLastInterceptClock = nowLogClock
-						Refs.startTriggerActiveInterceptCount += 1
-					end
-					if type(prevLogClock) ~= "number" or (nowLogClock - (prevLogClock :: number)) >= 0.2 then
-						localStateAny._dbgLastStartTouchActiveLogClock = nowLogClock
-						local debugData: { [string]: any } = {
-							phase = localState.phase,
-							takeoffCount = localState.takeoffCount,
-							hrpY = hrp.Position.Y,
-						}
+					if localState.phase == Ph.RunEnded then
+						-- RunEnded 状态下允许重新开始新 run：先清理再启动
+						RunwaySession.ResetLocalRunToIdle()
+					else
+						local localStateAny = localState :: any
+						local prevLogClock = localStateAny._dbgLastStartTouchActiveLogClock
+						local nowLogClock = os.clock()
+						local secSinceLastIntercept: number? = nil
 						if CLIENT_DEBUG then
-							debugData.touchInterceptCount = Refs.startTriggerActiveInterceptCount
-							if secSinceLastIntercept ~= nil then
-								debugData.secSinceLastIntercept = secSinceLastIntercept
+							if Refs.startTriggerActiveLastInterceptClock ~= nil then
+								secSinceLastIntercept = nowLogClock - (Refs.startTriggerActiveLastInterceptClock :: number)
+							end
+							Refs.startTriggerActiveLastInterceptClock = nowLogClock
+							Refs.startTriggerActiveInterceptCount += 1
+						end
+						if type(prevLogClock) ~= "number" or (nowLogClock - (prevLogClock :: number)) >= 0.2 then
+							localStateAny._dbgLastStartTouchActiveLogClock = nowLogClock
+							local debugData: { [string]: any } = {
+								phase = localState.phase,
+								takeoffCount = localState.takeoffCount,
+								hrpY = hrp.Position.Y,
+							}
+							if CLIENT_DEBUG then
+								debugData.touchInterceptCount = Refs.startTriggerActiveInterceptCount
+								if secSinceLastIntercept ~= nil then
+									debugData.secSinceLastIntercept = secSinceLastIntercept
+								end
+							end
+							local _dbgOkTouch, _dbgEncodedTouch = pcall(function()
+								return game:GetService("HttpService"):JSONEncode({
+									sessionId = "6f8203",
+									runId = "runway_pullback_probe_3",
+									hypothesisId = "C11",
+									location = "RunwaySession:BindSceneTriggers",
+									message = "start_trigger_touched_while_runway_active",
+									data = debugData,
+									timestamp = DateTime.now().UnixTimestampMillis,
+								})
+							end)
+							if _dbgOkTouch then
+								-- #region agent log
+								warn("[DBG6f8203] " .. (_dbgEncodedTouch :: string))
+								-- #endregion
 							end
 						end
-						local _dbgOkTouch, _dbgEncodedTouch = pcall(function()
-							return game:GetService("HttpService"):JSONEncode({
-								sessionId = "6f8203",
-								runId = "runway_pullback_probe_3",
-								hypothesisId = "C11",
-								location = "RunwaySession:BindSceneTriggers",
-								message = "start_trigger_touched_while_runway_active",
-								data = debugData,
-								timestamp = DateTime.now().UnixTimestampMillis,
-							})
-						end)
-						if _dbgOkTouch then
-							-- #region agent log
-							warn("[DBG6f8203] " .. (_dbgEncodedTouch :: string))
-							-- #endregion
-						end
+						return
 					end
-					return
 				end
 				if not RunwaySession.SnapLocalPlayerToRunwayGroundIfAirborne(startTrigger, humanoid, hrp) then
 					return

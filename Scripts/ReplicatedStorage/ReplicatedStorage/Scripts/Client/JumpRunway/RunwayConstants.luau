@@ -18,10 +18,12 @@ RunwayConstants.Kind = {
 	Sample = 2,
 	Final = 3,
 	Start = 4,
+	Abort = 5,
 }
 
 RunwayConstants.SlideKindStandard = "standard"
 RunwayConstants.SlideKindFinalLanding = "finalLanding"
+RunwayConstants.SlideKindMiss = "miss"
 RunwayConstants.RunwaySlideTraceDestroyAfterEndSec = 5
 RunwayConstants.RunwayCameraRenderStepName = "JumpRunwayCamera"
 RunwayConstants.RunwayFinalTiltRenderStepName = "JumpRunwayFinalBodyTilt"

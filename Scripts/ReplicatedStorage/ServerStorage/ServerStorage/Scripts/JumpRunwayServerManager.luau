@@ -77,6 +77,7 @@ local Kind = {
 	Sample = 2,
 	Final = 3,
 	Start = 4,
+	Abort = 5,
 }
 
 local runMap: { [number]: RunState } = {}
@@ -178,6 +179,8 @@ local function NormalizeJumpRunwayInputReport(raw: any): NetMsg.JumpRunwayInputR
 			kindN = 3
 		elseif ks == "start" then
 			kindN = 4
+		elseif ks == "abort" then
+			kindN = 5
 		end
 	end
 	if kindN == nil then
@@ -246,12 +249,6 @@ local function TeleportPlayerToHomeSlot(player: Player): boolean
 	if hrp == nil then
 		return false
 	end
-	-- #region agent log
-	DebugEmit("H3", "JumpRunwayServerManager:TeleportPlayerToHomeSlot", "server_teleport_home_slot", {
-		playerUserId = player.UserId,
-		jumpRunwayActive = player:GetAttribute("JumpRunwayActive") == true,
-	})
-	-- #endregion
 	hrp.CFrame = spawnLocation.CFrame * CFrame.new(0, 3, 0)
 	return true
 end
@@ -335,12 +332,9 @@ end
 local function BeginCleaning(player: Player, st: RunState)
 	local runwayForward = st.runwayForward
 	local runwayOrigin = st.runwayOrigin
+	TeleportPlayerToHomeSlot(player)
 	NotifyJumpRunway(player, Ph.Cleaning, maxAlongByUserId[player.UserId] or 0, nil, runwayForward, runwayOrigin, true)
-	-- 先退出跑道会话（含清理 JumpRunwayActive），再执行清场传送，避免跑道中状态与传送并发造成回抽体感。
 	DisconnectState(player, st)
-	if not TeleportPlayerToHomeSlot(player) then
-		warn("[JumpRunwayServerManager] Teleport to home slot failed; check PlayersHome / TeleportPoint / SpawnLocation.")
-	end
 	ResetScoreTracking(player.UserId)
 	if NetMsg.JumpRunwayRemotesExist() then
 		NetMsg.FireNotifyJumpRunwayState(player, {
@@ -771,6 +765,17 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 		end
 	elseif kind == Kind.Final then
 		LockScoreAndTeleport(player, st, nowClock)
+	elseif kind == Kind.Abort then
+		-- 验证 Abort 属于当前 run：需要 lastSampleClock 存在，且 Abort 的 clientClock 不应远大于最后一个 Sample 时钟
+		if st.lastSampleClock ~= nil and report.clientClock ~= nil then
+			if report.clientClock <= st.lastSampleClock + 1 then
+				BeginCleaning(player, st)
+			end
+		elseif st.lastSampleClock == nil and report.clientPhase == Ph.Slide then
+			-- 没有 Sample 但 clientPhase 是 Slide，可能旧 run 已开始但还没发 Sample 就 miss 了
+			-- 这时无法区分新旧 run，保守处理：只执行一次 BeginCleaning
+			BeginCleaning(player, st)
+		end
 	end
 	-- kind Input：客户端权威下服端不解析起跳，可忽略
 end
