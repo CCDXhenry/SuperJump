@@ -29,13 +29,9 @@ type RunState = {
 	notifyDistQ: number,
 	diedConn: RBXScriptConnection?,
 	antiCheatRejectCount: number,
-	debugLastRawAlong: number?,
-	debugLastParsedAlong: number?,
-	debugSampleAlongNilWarns: number,
 }
 
 local cfg = GameConfig.JumpRunway
-local SERVER_DEBUG = cfg.DEBUG == true
 
 -- 惰性引用 BrainrotQueueManager，避免静态循环依赖
 local brainrotQueueManagerMod: any = nil
@@ -85,37 +81,6 @@ local maxAlongByUserId: { [number]: number } = {}
 local playerFinalScore: { [number]: number } = {}
 local initDone: boolean = false
 local warnedRemotesOnce: boolean = false
-local DebugRunId = "runway_pullback_probe_1"
-
-local function DebugEmit(hypothesisId: string, location: string, message: string, data: { [string]: any }?)
-	local payload = {
-		sessionId = "6f8203",
-		runId = DebugRunId,
-		hypothesisId = hypothesisId,
-		location = location,
-		message = message,
-		data = data or {},
-		timestamp = DateTime.now().UnixTimestampMillis,
-	}
-	pcall(function()
-		httpService:RequestAsync({
-			Url = "http://127.0.0.1:7477/ingest/d880235d-ec65-4b2d-88e2-c8b819ceca93",
-			Method = "POST",
-			Compress = Enum.HttpCompression.None,
-			Headers = {
-				["Content-Type"] = "application/json",
-				["X-Debug-Session-Id"] = "6f8203",
-			},
-			Body = httpService:JSONEncode(payload),
-		})
-	end)
-	local okEncode, encoded = pcall(function()
-		return httpService:JSONEncode(payload)
-	end)
-	if okEncode then
-		warn("[DBG6f8203] " .. encoded)
-	end
-end
 
 local function CoerceNumber(n: any): number?
 	if typeof(n) == "number" then
@@ -305,17 +270,6 @@ local function NotifyJumpRunway(
 		st.lastNotifyClock = nowClock
 		st.notifyDistQ = distQ
 	end
-	if phase ~= Ph.AutoRun then
-		-- #region agent log
-		DebugEmit("H1", "JumpRunwayServerManager:NotifyJumpRunway", "non_autorun_phase_notify", {
-			playerUserId = player.UserId,
-			phase = phase,
-			force = force,
-			dist = dist,
-			hasRunState = st ~= nil,
-		})
-		-- #endregion
-	end
 	NetMsg.FireNotifyJumpRunwayState(player, {
 		phase = phase,
 		distance = dist,
@@ -364,12 +318,6 @@ end
 
 local function IngestSample(player: Player, st: RunState, report: NetMsg.JumpRunwayInputReport, nowClock: number): boolean
 	if report.sampleAlong == nil then
-		if SERVER_DEBUG then
-			st.debugSampleAlongNilWarns += 1
-			if st.debugSampleAlongNilWarns <= 3 then
-				warn(string.format("[JumpRunwayDBG] %s Sample without along (warn #%d)", player.Name, st.debugSampleAlongNilWarns))
-			end
-		end
 		return false
 	end
 	local sampleAlong = report.sampleAlong :: number
@@ -441,9 +389,6 @@ local function TryStartSession(player: Player, report: NetMsg.JumpRunwayInputRep
 		notifyDistQ = -1,
 		diedConn = nil,
 		antiCheatRejectCount = 0,
-		debugLastRawAlong = nil,
-		debugLastParsedAlong = nil,
-		debugSampleAlongNilWarns = 0,
 	}
 	runMap[player.UserId] = st
 	ResetScoreTracking(player.UserId)
@@ -704,9 +649,6 @@ end
 local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayInputReport)
 	local report = NormalizeJumpRunwayInputReport(rawPayload :: any)
 	if report == nil then
-		if SERVER_DEBUG then
-			warn(string.format("[JumpRunwayDBG] %s dropped JumpRunwayInput: could not normalize payload", player.Name))
-		end
 		return
 	end
 	local nowClock = os.clock()
@@ -718,28 +660,6 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 	local st = runMap[player.UserId]
 	if st == nil then
 		return
-	end
-	if kind == Kind.Sample and report.clientPhase ~= nil and ((report.clientPhase :: number) == Ph.Idle or (report.clientPhase :: number) == Ph.Cleaning) then
-		-- #region agent log
-		DebugEmit("H4", "JumpRunwayServerManager:OnJumpRunwayReport", "client_phase_regressed_to_idle_or_cleaning", {
-			playerUserId = player.UserId,
-			clientPhase = report.clientPhase,
-			maxAlong = maxAlongByUserId[player.UserId] or 0,
-		})
-		-- #endregion
-	end
-	if SERVER_DEBUG and report.kind == Kind.Sample then
-		local inner = UnwrapReportTable(rawPayload :: any)
-		if inner ~= nil then
-			local ra = CoerceNumber(inner.sampleAlong)
-			if ra == nil then
-				ra = CoerceNumber(inner.along)
-			end
-			st.debugLastRawAlong = ra
-		else
-			st.debugLastRawAlong = nil
-		end
-		st.debugLastParsedAlong = report.sampleAlong
 	end
 	if kind == Kind.Sample then
 		local ok = IngestSample(player, st, report, nowClock)
@@ -753,15 +673,6 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 				st.runwayOrigin,
 				false
 			)
-		else
-			-- #region agent log
-			DebugEmit("H5", "JumpRunwayServerManager:OnJumpRunwayReport", "sample_rejected", {
-				playerUserId = player.UserId,
-				clientPhase = report.clientPhase,
-				rejectCount = st.antiCheatRejectCount,
-				lastSampleAlong = st.lastSampleAlong,
-			})
-			-- #endregion
 		end
 	elseif kind == Kind.Final then
 		LockScoreAndTeleport(player, st, nowClock)

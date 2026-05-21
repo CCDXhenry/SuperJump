@@ -19,11 +19,11 @@ local HomeClientManager = require(clientScripts:FindFirstChild("HomeClientManage
 local ShopClientManager = require(clientScripts:WaitForChild("ShopClientManager"))
 local PlayerInteractClientManager = require(clientScripts:WaitForChild("PlayerInteractClientManager"))
 local BrainrotClientManager = require(clientScripts:WaitForChild("BrainrotClientManager"))
-local ChestWorkbenchClientManager = require(clientScripts:WaitForChild("ChestWorkbenchClientManager"))
+--local ChestWorkbenchClientManager = require(clientScripts:WaitForChild("ChestWorkbenchClientManager"))
 local GuideManager = require(clientScripts:WaitForChild("GuideManager"))
 local JumpRunwayClientManager = require(clientScripts:WaitForChild("JumpRunwayClientManager"))
 -- JumpRunway：尽早绑定 NotifyJumpRunwayState，避免服务端开局 FireClient 时客户端尚未 OnClientEvent 导致队列耗尽
-JumpRunwayClientManager.Init()
+
 local starterGui: StarterGui = game:GetService("StarterGui")
 local contentProvider: ContentProvider = game:GetService("ContentProvider")
 local modelOriginsFolder: Folder? = replicatedStorage:FindFirstChild("Models") :: Folder?
@@ -66,11 +66,12 @@ local function InitUI()
 	end)
 
 	-- 初始化系统经理
+	JumpRunwayClientManager.Init()
 	HomeClientManager.Init()
 	ShopClientManager.Init()
 	PlayerInteractClientManager.Init()
 	BrainrotClientManager.Init()
-	ChestWorkbenchClientManager.Init()
+	--ChestWorkbenchClientManager.Init()
 	GuideManager.Init()
 	-- JumpRunwayClientManager 已在脚本加载时 Init（见上方），勿仅放在 InitUI 以免晚于服务端推送
 	-- 初始化背包输入控制

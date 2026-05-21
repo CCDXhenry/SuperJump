@@ -31,9 +31,8 @@ local ChestOpenAnimationManager = require(scripts:WaitForChild("Client"):WaitFor
 local islandsFolder = workspace:FindFirstChild("Islands")
 local actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
 local modelsFolderForChests = replicatedStorage:WaitForChild("Models")
-local actualChests = modelsFolderForChests:FindFirstChild(GameConfig.FactoryChestsFolderName)
-	or modelsFolderForChests:FindFirstChild("LittleElfChests")
-	or modelsFolderForChests:WaitForChild(GameConfig.FactoryChestsFolderName)
+local actualChests = modelsFolderForChests:FindFirstChild("LittleElfChests")
+	or modelsFolderForChests:WaitForChild("LittleElfChests")
 local uIFolder = replicatedStorage:WaitForChild("UI")
 local brainrotInfoUIParams = uIFolder:WaitForChild("BrainrotInfoUI") :: BillboardGui
 local chestInfoUIParams = (uIFolder:FindFirstChild("ChestInfoUI") or uIFolder:WaitForChild("LittleElfChestInfoUI")) :: BillboardGui
@@ -74,8 +73,8 @@ local function SetupVisualBrainrot(targetPart: BasePart)
 
 	local data: any
 	local sourceFolder: Folder?
-	if itemType == GameConfig.ItemType.Chest then
-		data = GameConfig.ChestIdMap[configId]
+	if itemType == GameConfig.ItemType.LittleElfChest then
+		data = GameConfig.LittleElfChestIdMap[configId]
 		sourceFolder = actualChests
 	else
 		data = GameConfig.BrainrotIdMap[configId]
@@ -156,8 +155,8 @@ function AttachInfoUIToModel(targetParent: Instance, adornee: BasePart, configId
 
 	local itemType = targetParent:GetAttribute("ItemType") :: number? or GameConfig.ItemType.Brainrot
 	local data: any
-	if itemType == GameConfig.ItemType.Chest then
-		data = GameConfig.ChestIdMap[configId]
+	if itemType == GameConfig.ItemType.LittleElfChest then
+		data = GameConfig.LittleElfChestIdMap[configId]
 	else
 		data = GameConfig.BrainrotIdMap[configId]
 	end
@@ -166,14 +165,14 @@ function AttachInfoUIToModel(targetParent: Instance, adornee: BasePart, configId
 		return
 	end
 
-	local newBrainrotUI = if itemType == GameConfig.ItemType.Chest then chestInfoUIParams:Clone() else brainrotInfoUIParams:Clone()
+	local newBrainrotUI = if itemType == GameConfig.ItemType.LittleElfChest then chestInfoUIParams:Clone() else brainrotInfoUIParams:Clone()
 	newBrainrotUI.Adornee = adornee
-	newBrainrotUI.Name = if itemType == GameConfig.ItemType.Chest then "ChestInfoUI" else "BrainrotInfoUI"
+	newBrainrotUI.Name = if itemType == GameConfig.ItemType.LittleElfChest then "ChestInfoUI" else "BrainrotInfoUI"
 
 	local controller = newBrainrotUI:FindFirstChild("Controller") or newBrainrotUI:FindFirstChild("ControllerFrame")
 	if controller then
 		-- 非工作台槽位上的宝箱（工具/岛屿/携带等）不显示 EXP 条；槽内展示由 ChestWorkbenchClientManager 负责
-		if itemType == GameConfig.ItemType.Chest then
+		if itemType == GameConfig.ItemType.LittleElfChest then
 			local expImage = controller:FindFirstChild("ExpImage")
 			if expImage and expImage:IsA("GuiObject") then
 				expImage.Visible = false
@@ -209,11 +208,11 @@ function AttachInfoUIToModel(targetParent: Instance, adornee: BasePart, configId
 		end
 		if levelText then
 			levelText.Visible = true
-			if itemType == GameConfig.ItemType.Chest then
-				-- 宝箱档位以 ChestData 表 id（与 ConfigId 一致）展示；勿用 Tool 的 Level（脑腐等级体系）
+			if itemType == GameConfig.ItemType.LittleElfChest then
+				-- 宝箱档位以 LittleElfChestData 表 id（与 ConfigId 一致）展示；勿用 Tool 的 Level（脑腐等级体系）
 				local tierStr = tostring(configId)
 				TranslationTool.CustomAutoLocalizeTextLabel(levelText, GameTexts.LevelWithNumber.source, GameTexts.LevelWithNumber.key, { tierStr })
-				local chestQuality = (data :: GameConfig.ChestConfigData).quality
+				local chestQuality = (data :: GameConfig.LittleElfChestConfigData).quality
 				local qCfg = GameConfig.BrainrotQualityConfig[chestQuality]
 				levelText.TextColor3 = if qCfg then qCfg.textColor else Color3.new(1, 1, 1)
 			else
@@ -260,7 +259,7 @@ function AttachInfoUIToModel(targetParent: Instance, adornee: BasePart, configId
 	end
 
 	local offsetY = if visualModel then ModelBillboardOffsetTool.GetVisualOffsetY(visualModel, adornee) else 2
-	if itemType == GameConfig.ItemType.Chest and targetParent:IsA("Tool") then
+	if itemType == GameConfig.ItemType.LittleElfChest and targetParent:IsA("Tool") then
 		local extraY = GameConfig.ChestCarryingChestInfoUIBillboardOffsetY
 		if typeof(extraY) == "number" then
 			offsetY = offsetY + extraY
@@ -397,7 +396,7 @@ local function SetupLocalPlayerToolTracking(character: Model)
 			OnLocalToolEquipped(child :: Tool, character)
 
 			-- 如果是宝箱，监听点击
-			if child:GetAttribute("ItemType") == GameConfig.ItemType.Chest then
+			if child:GetAttribute("ItemType") == GameConfig.ItemType.LittleElfChest then
 				local uid = child:GetAttribute("BrainrotUID") :: string
 				pendingOpenChestToolMap[uid] = child :: Tool
 				local activatedConn: RBXScriptConnection? = nil

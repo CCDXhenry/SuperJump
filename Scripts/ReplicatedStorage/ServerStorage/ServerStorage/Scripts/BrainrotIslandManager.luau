@@ -26,9 +26,8 @@ end
 
 local _actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
 local modelsFolderForChests = replicatedStorage:WaitForChild("Models")
-local _actualChests = modelsFolderForChests:FindFirstChild(GameConfig.FactoryChestsFolderName)
-	or modelsFolderForChests:FindFirstChild("LittleElfChests")
-	or modelsFolderForChests:WaitForChild(GameConfig.FactoryChestsFolderName)
+local _actualChests = modelsFolderForChests:FindFirstChild("LittleElfChests")
+	or modelsFolderForChests:WaitForChild("LittleElfChests")
 local BrainrotCarryingManager = require(serverScripts:FindFirstChild("BrainrotCarryingManager"))
 local AnalyticsTool = require(serverScripts:FindFirstChild("AnalyticsTool"))
 
@@ -285,7 +284,7 @@ function StartCarryingBrainrot(player: Player, randomBrainrot: Instance)
 		local itemType = (randomBrainrot:GetAttribute("ItemType") :: number?) or GameConfig.ItemType.Brainrot
 		local carry = BrainrotCarryingManager.StartCarrying(player, randomBrainrot)
 		if carry then
-			if itemType == GameConfig.ItemType.Brainrot or itemType == GameConfig.ItemType.Chest then
+			if itemType == GameConfig.ItemType.Brainrot or itemType == GameConfig.ItemType.LittleElfChest then
 				AnalyticsTool.LogModelPickUp(player, configId, level, itemType)
 			end
 			randomBrainrot:Destroy()
@@ -321,14 +320,14 @@ function SetupBrainrotInteraction(randomBrainrot: Instance, island: Instance, sp
 			local level = randomBrainrot:GetAttribute("Level") or 1
 			local config: any = nil
 			if itemType == 3 then
-				config = if configId then GameConfig.ChestIdMap[configId] else nil
+				config = if configId then GameConfig.LittleElfChestIdMap[configId] else nil
 			else
 				config = if configId then GameConfig.BrainrotIdMap[configId] else nil
 			end
 
 			local name = if config then config.name_t else randomBrainrot.Name
 			prompt.ActionText = GameTexts.PickUpBrainrot.source
-			local levelStr = if itemType == GameConfig.ItemType.Chest then "???" else tostring(level)
+			local levelStr = if itemType == GameConfig.ItemType.LittleElfChest then "???" else tostring(level)
 			prompt.ObjectText = `{name} (Lv.{levelStr})`
 			prompt.RequiresLineOfSight = false
 			prompt.MaxActivationDistance = 10
@@ -398,7 +397,7 @@ local SpawnSamplingConfig = {
 local function PickWeightedFromIslandPool(pool: { IslandSpawnerEntry }, wantChest: boolean): IslandSpawnerEntry?
 	local totalWeight = 0
 	for _, entry in ipairs(pool) do
-		local isChestEntry = entry.itemType == GameConfig.ItemType.Chest
+		local isChestEntry = entry.itemType == GameConfig.ItemType.LittleElfChest
 		if isChestEntry == wantChest then
 			totalWeight += entry.weight or 0
 		end
@@ -409,7 +408,7 @@ local function PickWeightedFromIslandPool(pool: { IslandSpawnerEntry }, wantChes
 	local rnd = math.random(1, totalWeight)
 	local currentWeight = 0
 	for _, entry in ipairs(pool) do
-		local isChestEntry = entry.itemType == GameConfig.ItemType.Chest
+		local isChestEntry = entry.itemType == GameConfig.ItemType.LittleElfChest
 		if isChestEntry == wantChest then
 			currentWeight += entry.weight or 0
 			if rnd <= currentWeight then
@@ -646,8 +645,8 @@ local function SpawnOneBrainrotInternal(island: Instance, isChest: boolean): Bas
 	if entry then
 		itemType = entry.itemType
 		local configId = entry.itemId
-		if itemType == GameConfig.ItemType.Chest then
-			config = GameConfig.ChestIdMap[configId]
+		if itemType == GameConfig.ItemType.LittleElfChest then
+			config = GameConfig.LittleElfChestIdMap[configId]
 		elseif itemType == GameConfig.ItemType.Brainrot then
 			config = GameConfig.BrainrotIdMap[configId]
 		elseif itemType == GameConfig.ItemType.Coil then
@@ -664,7 +663,7 @@ local function SpawnOneBrainrotInternal(island: Instance, isChest: boolean): Bas
 	randomBrainrot.Transparency = 1
 	randomBrainrot.CanCollide = false
 	randomBrainrot.Anchored = true
-	randomBrainrot.Name = if itemType == GameConfig.ItemType.Chest then "IslandChest" else "IslandBrainrot"
+	randomBrainrot.Name = if itemType == GameConfig.ItemType.LittleElfChest then "IslandChest" else "IslandBrainrot"
 
 	randomBrainrot:SetAttribute("ConfigId", config.id)
 	randomBrainrot:SetAttribute("ItemType", itemType)

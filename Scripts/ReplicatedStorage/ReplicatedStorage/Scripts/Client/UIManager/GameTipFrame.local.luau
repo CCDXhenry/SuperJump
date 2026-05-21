@@ -312,8 +312,8 @@ local function OnRenderStepped(deltaTime: number)
 				if coilData and coilData.iconImageId and coilData.iconImageId ~= "" then
 					ShowAddRewardsTip(coilData.iconImageId, rewardInfo.rewardCount)
 				end
-			elseif rewardInfo.rewardType == GameConfig.RewardType.Chest then
-				local chestData = GameConfig.ChestIdMap[rewardInfo.rewardId]
+			elseif rewardInfo.rewardType == GameConfig.RewardType.LittleElfChest then
+				local chestData = GameConfig.LittleElfChestIdMap[rewardInfo.rewardId]
 				if chestData and chestData.iconImageId and chestData.iconImageId ~= "" then
 					ShowAddRewardsTip(chestData.iconImageId, rewardInfo.rewardCount)
 				end

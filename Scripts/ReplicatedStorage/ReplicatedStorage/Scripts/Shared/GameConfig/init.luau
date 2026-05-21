@@ -1,5 +1,5 @@
 --!strict
--- 工厂玩法精简配置：Brainrot + Chest 工作台；岛屿/铺砖/地震等表已移除，保留占位字段供旧脚本不崩。
+-- 工厂玩法已完全移除：ChestWorkbench / Island / 铺砖/地震等表已删除。
 local GameConfig = {}
 
 local replicatedStorage: ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8,10 +8,6 @@ local coreScripts = core:WaitForChild("Scripts")
 local coreSharedScripts = coreScripts:WaitForChild("Shared")
 local DateTimeExtension = require(coreSharedScripts:FindFirstChild("DateTimeExtension"))
 local BrainrotDataModule = require(script:WaitForChild("BrainrotData"))
-local ChestDataModule = require(script:WaitForChild("ChestData"))
-local ChestWorkbenchDataModule = require(script:WaitForChild("ChestWorkbenchData"))
-local ChestWorkbenchUpgradeDataModule = require(script:WaitForChild("ChestWorkbenchUpgradeData"))
-local ChestRewardPoolDataModule = require(script:WaitForChild("ChestRewardPoolData"))
 local LittleElfChestDataModule = require(script:WaitForChild("LittleElfChestData"))
 local LittleElfChestRewardPoolDataModule = require(script:WaitForChild("LittleElfChestRewardPoolData"))
 
@@ -45,22 +41,17 @@ GameConfig.GuideType = {
 	TutorialBricksShop = 4,
 	TutorialBrainrotPlaceSlot = 5,
 	TutorialBrainrotIslandTeleport = 6,
-	TutorialWorkbench = 7,
-	TutorialChestOpen = 8,
-	TutorialFactoryPlace = 9,
 }
 
 GameConfig.GuideStepKey = {
 	BricksIntroFinished = "BricksIntroFinished",
 	BrainrotPlaceFinished = "BrainrotPlaceFinished",
-	WorkbenchIntroFinished = "WorkbenchIntroFinished",
-	ChestOpenFinished = "ChestOpenFinished",
-	FactoryPlaceFinished = "FactoryPlaceFinished",
 }
 
-GameConfig.GuideWorldAnchorName = {
-	Workbench = "Workbench",
-}
+-- 工厂玩法停用
+-- GameConfig.GuideWorldAnchorName = {
+-- 	Workbench = "Workbench",
+-- }
 
 GameConfig.GuideTextKeyMap = {
 	[GameConfig.GuideType.TutorialBrainrotPickup] = "GuideTutorialBrainrotPickup",
@@ -69,9 +60,6 @@ GameConfig.GuideTextKeyMap = {
 	[GameConfig.GuideType.TutorialBricksLobby] = "GuideTutorialBricksLobby",
 	[GameConfig.GuideType.TutorialBricksShop] = "GuideTutorialBricksShop",
 	[GameConfig.GuideType.TutorialBrainrotIslandTeleport] = "GuideTutorialBrainrotIslandTeleport",
-	[GameConfig.GuideType.TutorialWorkbench] = "GuideTutorialWorkbench",
-	[GameConfig.GuideType.TutorialChestOpen] = "GuideTutorialChestOpen",
-	[GameConfig.GuideType.TutorialFactoryPlace] = "GuideTutorialFactoryPlace",
 }
 
 GameConfig.GuideBricksIntroMinCoin = 50
@@ -103,7 +91,6 @@ GameConfig.RewardType = {
 	Currency = 1,
 	Brainrot = 2,
 	Coil = 3,
-	Chest = 4,
 	LittleElfChest = 4,
 }
 
@@ -121,17 +108,14 @@ GameConfig.SkillType = {
 GameConfig.ItemType = {
 	Brainrot = 1,
 	Coil = 2,
-	Chest = 3,
 	LittleElfChest = 3,
 }
 
 GameConfig.ModelGetSource = {
 	Island = 1,
-	Chest = 2,
 	LittleElfChest = 2,
 	Shop = 3,
 	PlayerGift = 4,
-	Workbench = 5,
 }
 
 GameConfig.EnablePlayerGift = false
@@ -161,7 +145,6 @@ GameConfig.ItemCountChangeReason = {
 	SpendOnUpgradeHome = 2002,
 	SpendOnUpgradeWalkSpeed = 2003,
 	SpendOnUpgradeMaxBricks = 2004,
-	SpendOnWorkbenchUpgrade = 2005,
 }
 
 export type BrainrotData = {
@@ -356,51 +339,32 @@ GameConfig.Coils = {} :: { [number]: CoilData }
 GameConfig.CoilNameMap = {} :: { [string]: CoilData }
 GameConfig.CoilIdMap = {} :: { [number]: CoilData }
 
-export type ChestConfigData = {
+export type LittleElfChestConfigData = {
 	id: number,
-	name_t: string,
 	resourceName: string,
 	iconImageId: string,
+	name_t: string,
 	quality: number,
-	exp: number,
 }
 
-export type ChestItemData = ChestConfigData
-export type LittleElfChestData = ChestConfigData
-
-GameConfig.Chests = ChestDataModule
-GameConfig.ChestIdMap = {} :: { [number]: ChestConfigData }
-GameConfig.ChestNameMap = {} :: { [string]: ChestConfigData }
-
-local maxChestId = 0
-for chestKey, chestRow in pairs(ChestDataModule) do
-	if type(chestKey) == "number" and chestRow and type(chestRow) == "table" then
-		local cfg = chestRow :: ChestConfigData
-		GameConfig.ChestIdMap[cfg.id] = cfg
-		GameConfig.ChestNameMap[cfg.resourceName] = cfg
-		if cfg.id > maxChestId then
-			maxChestId = cfg.id
-		end
-	end
-end
-GameConfig.MaxChestId = maxChestId
+export type LittleElfChestData = LittleElfChestConfigData
 
 -- 独立数据：小精灵宝箱（JumpRunway 终局奖励用）
 GameConfig.LittleElfChests = LittleElfChestDataModule
-GameConfig.LittleElfChestIdMap = {} :: { [number]: ChestConfigData }
-GameConfig.LittleElfChestNameMap = {} :: { [string]: ChestConfigData }
+GameConfig.LittleElfChestIdMap = {} :: { [number]: LittleElfChestConfigData }
+GameConfig.LittleElfChestNameMap = {} :: { [string]: LittleElfChestConfigData }
 
 for leChestKey, leChestRow in pairs(LittleElfChestDataModule) do
 	if type(leChestKey) == "number" and leChestRow and type(leChestRow) == "table" then
-		local cfg = leChestRow :: ChestConfigData
+		local cfg = leChestRow :: LittleElfChestConfigData
 		GameConfig.LittleElfChestIdMap[cfg.id] = cfg
 		GameConfig.LittleElfChestNameMap[cfg.resourceName] = cfg
 	end
 end
 
-GameConfig.LittleElfChestRewardPoolMap = {} :: { [number]: { ChestRewardPoolEntry } }
+GameConfig.LittleElfChestRewardPoolMap = {} :: { [number]: { LittleElfChestRewardPoolEntry } }
 for _, poolRow in pairs(LittleElfChestRewardPoolDataModule) do
-	local entry = poolRow :: ChestRewardPoolEntry
+	local entry = poolRow :: LittleElfChestRewardPoolEntry
 	local chestTier = entry.id
 	if not GameConfig.LittleElfChestRewardPoolMap[chestTier] then
 		GameConfig.LittleElfChestRewardPoolMap[chestTier] = {}
@@ -408,78 +372,14 @@ for _, poolRow in pairs(LittleElfChestRewardPoolDataModule) do
 	table.insert(GameConfig.LittleElfChestRewardPoolMap[chestTier], entry)
 end
 
-export type ChestRewardPoolEntry = {
+export type LittleElfChestRewardPoolEntry = {
 	id: number,
 	itemType: number,
 	itemId: number,
 	weight: number,
 }
 
-export type ChestRewardPoolData = ChestRewardPoolEntry
-export type LittleElfChestRewardPoolData = ChestRewardPoolEntry
-
-GameConfig.ChestRewardPoolMap = {} :: { [number]: { ChestRewardPoolEntry } }
-for _, poolRow in pairs(ChestRewardPoolDataModule) do
-	local entry = poolRow :: ChestRewardPoolEntry
-	local chestTier = entry.id
-	if not GameConfig.ChestRewardPoolMap[chestTier] then
-		GameConfig.ChestRewardPoolMap[chestTier] = {}
-	end
-	table.insert(GameConfig.ChestRewardPoolMap[chestTier], entry)
-end
-
-export type ChestWorkbenchRow = {
-	id: number,
-	type: number,
-	name: string,
-	initialExp: number,
-	initialRate: number,
-}
-
-GameConfig.ChestWorkbenchById = {} :: { [number]: ChestWorkbenchRow }
-for _, w in pairs(ChestWorkbenchDataModule) do
-	local row = w :: ChestWorkbenchRow
-	GameConfig.ChestWorkbenchById[row.id] = row
-end
-
-GameConfig.WorkbenchType = {
-	Manual = 1,
-	Auto = 2,
-	Place = 3,
-}
-
-export type ChestWorkbenchUpgradeRow = {
-	rowId: number,
-	workbenchId: number,
-	upgradeType: number,
-	price: number,
-	increaseValue: number,
-}
-
-GameConfig.ChestWorkbenchUpgradeByRowId = {} :: { [number]: ChestWorkbenchUpgradeRow }
-for rowKey, row in pairs(ChestWorkbenchUpgradeDataModule) do
-	local rk = if type(rowKey) == "number" then rowKey else tonumber(tostring(rowKey)) or 0
-	local r = row :: any
-	local parsed: ChestWorkbenchUpgradeRow = {
-		rowId = rk,
-		workbenchId = r.workbenchId,
-		upgradeType = r.upgradeType,
-		price = r.price,
-		increaseValue = r.increaseValue,
-	}
-	GameConfig.ChestWorkbenchUpgradeByRowId[rk] = parsed
-end
-
-GameConfig.DefaultWorkbenchChestTier = 1
--- 工作台空槽位从无到有生成基础宝箱的间隔（秒）
-GameConfig.ChestWorkbenchSpawnIntervalSeconds = 3
-GameConfig.FactoryChestsFolderName = "FactoryChests"
-GameConfig.ChestWorkbenchCollectionTag = "ChestWorkbench"
-GameConfig.ChestWorkbenchSlotPartName = "ChestSlot"
--- 工作台宝箱 ChestInfoUI（Billboard）在自动高度基础上额外上移的 studs（Y）
-GameConfig.ChestWorkbenchChestInfoUIBillboardOffsetY = 3
--- 玩家手持 Tool 形态的宝箱 ChestInfoUI（Billboard）在自动高度基础上额外上移的 studs（Y）
-GameConfig.ChestCarryingChestInfoUIBillboardOffsetY = 3
+export type LittleElfChestRewardPoolData = LittleElfChestRewardPoolEntry
 
 export type IslandData = {
 	id: number,
@@ -1147,27 +1047,6 @@ export type GuideProgressSaveInfo = {
 	appearedGuideTypeInfo: { [string]: boolean },
 }
 
-export type WorkbenchSlotSave = {
-	configId: number,
-	storedExp: number,
-}
-
-export type SingleWorkbenchSave = {
-	slots: { [number]: WorkbenchSlotSave? },
-}
-
-export type ChestWorkbenchSave = {
-	purchasedWorkbenchUpgradeIds: { [string]: boolean },
-	workbenches: { [string]: SingleWorkbenchSave },
-}
-
-function GameConfig.CreateDefaultChestWorkbenchSave(): ChestWorkbenchSave
-	return {
-		purchasedWorkbenchUpgradeIds = {},
-		workbenches = {},
-	}
-end
-
 export type PlayerSaveInfo = {
 	dataVersion: number,
 	firstEnterTime: number,
@@ -1193,7 +1072,6 @@ export type PlayerSaveInfo = {
 	brainrotQueue: { BrainrotQueueItem },
 	guideProgressInfo: GuideProgressSaveInfo,
 	discoveredIslandIds: { [string]: boolean }?,
-	chestWorkbenchSave: ChestWorkbenchSave,
 }
 
 export type PlayerInfo = PlayerSaveInfo & {
@@ -1260,7 +1138,6 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 			appearedGuideTypeInfo = {},
 		},
 		discoveredIslandIds = {},
-		chestWorkbenchSave = GameConfig.CreateDefaultChestWorkbenchSave(),
 	}
 end
 
@@ -1283,7 +1160,6 @@ export type ClientLocalPlayerSaveInfo = {
 	brainrotQueue: { BrainrotQueueItem },
 	homeSlot: string,
 	guideProgressInfo: GuideProgressSaveInfo,
-	chestWorkbenchSave: ChestWorkbenchSave,
 }
 
 export type ClientLocalPlayerInfo = ClientLocalPlayerSaveInfo & {

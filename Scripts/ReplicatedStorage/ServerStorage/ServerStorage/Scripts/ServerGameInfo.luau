@@ -12,7 +12,6 @@ local DateTimeExtension = require(coreSharedScripts:FindFirstChild("DateTimeExte
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
-local ChestWorkbenchSaveNormalize = require(sharedScripts:FindFirstChild("ChestWorkbenchSaveNormalize"))
 local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
 local players = game:GetService("Players")
 local workspace = game:GetService("Workspace")
@@ -147,16 +146,6 @@ function ServerGameInfo.InitPlayerInfo(
 				appearedGuideTypeInfo = {},
 			},
 		discoveredIslandIds = playerSaveInfo.discoveredIslandIds or {},
-		chestWorkbenchSave = (function(): GameConfig.ChestWorkbenchSave
-			local cws = playerSaveInfo.chestWorkbenchSave
-			if cws == nil then
-				cws = GameConfig.CreateDefaultChestWorkbenchSave()
-				playerSaveInfo.chestWorkbenchSave = cws
-			else
-				ChestWorkbenchSaveNormalize.Apply(cws)
-			end
-			return cws
-		end)(),
 		homeSlot = "",
 
 		-- 初始化瞬态数据
@@ -187,7 +176,6 @@ function ServerGameInfo.InitPlayerInfo(
 		brainrotQueue = playerInfo.brainrotQueue,
 		homeSlot = playerInfo.homeSlot,
 		guideProgressInfo = playerInfo.guideProgressInfo,
-		chestWorkbenchSave = playerInfo.chestWorkbenchSave,
 	}
 	local clientOtherPlayerSaveInfo: GameConfig.ClientOtherPlayerSyncInfo = {
 		homeSlot = playerInfo.homeSlot,
@@ -289,7 +277,6 @@ function ServerGameInfo.CreatePlayerSaveInfoByPlayerInfo(playerInfo: GameConfig.
 		brainrotQueue = playerInfo.brainrotQueue,
 		guideProgressInfo = playerInfo.guideProgressInfo,
 		discoveredIslandIds = playerInfo.discoveredIslandIds,
-		chestWorkbenchSave = playerInfo.chestWorkbenchSave,
 	}
 end
 
@@ -503,19 +490,21 @@ function ServerGameInfo.SetPlayerHomeSlot(player: Player, slotName: string)
 
 	--槽位变更也需要通知客户端家园数据
 	NetMsg.FireNotifyPlayerHomeInfoUpdate(player.UserId, playerInfo.homeSlot, playerInfo.homeInfo)
-	-- 换槽或首次分配后立刻刷新工作台（defer + requireAny，避免与 ChestWorkbenchManager 静态循环依赖）
-	task.defer(function()
-		local ok, mod = pcall(function()
-			return requireAnyForDeferredModules(serverScripts:WaitForChild("ChestWorkbenchManager"))
-		end)
-		if not ok then
-			warn("[ServerGameInfo] ChestWorkbenchManager require/refresh failed:", mod)
-			return
-		end
-		if typeof(mod) == "table" and (mod :: any).NotifyPlayerHomeSlotReady then
-			(mod :: any).NotifyPlayerHomeSlotReady(player)
-		end
-	end)
+	-- 工厂玩法停用，不再刷新工作台（ChestWorkbenchManager.Init 已在 init.legacy 中注释）
+	-- [[
+	--task.defer(function()
+	--	local ok, mod = pcall(function()
+	--		return requireAnyForDeferredModules(serverScripts:WaitForChild("ChestWorkbenchManager"))
+	--	end)
+	--	if not ok then
+	--		warn("[ServerGameInfo] ChestWorkbenchManager require/refresh failed:", mod)
+	--		return
+	--	end
+	--	if typeof(mod) == "table" and (mod :: any).NotifyPlayerHomeSlotReady then
+	--		(mod :: any).NotifyPlayerHomeSlotReady(player)
+	--	end
+	--end)
+	--]]
 	--print("[ServerGameInfo] SetPlayerHomeSlot for", player.Name, "to", slotName)
 end
 

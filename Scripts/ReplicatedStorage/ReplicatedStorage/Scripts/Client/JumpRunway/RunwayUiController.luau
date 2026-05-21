@@ -2,16 +2,12 @@
 
 local RunwayUiController = {}
 
-function RunwayUiController.Refresh(refreshHud: () -> (), refreshDebug: () -> (), clientDebug: boolean)
+function RunwayUiController.Refresh(refreshHud: () -> ())
 	refreshHud()
-	if clientDebug then
-		refreshDebug()
-	end
 end
 
-function RunwayUiController.Destroy(destroyHud: () -> (), destroyDebug: () -> ())
+function RunwayUiController.Destroy(destroyHud: () -> ())
 	destroyHud()
-	destroyDebug()
 end
 
 return RunwayUiController

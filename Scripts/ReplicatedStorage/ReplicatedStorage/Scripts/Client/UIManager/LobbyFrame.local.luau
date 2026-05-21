@@ -13,7 +13,6 @@ local GameConfig = require(sharedScripts_game:FindFirstChild("GameConfig"))
 local NetMsg = require(sharedScripts_game:FindFirstChild("NetMsg"))
 local clientScripts = scripts:WaitForChild("Client")
 local ClientGameInfo = require(clientScripts:FindFirstChild("ClientGameInfo"))
-local ClientGroundZoneState = require(clientScripts:FindFirstChild("ClientGroundZoneState"))
 local uiManagerScript = clientScripts:WaitForChild("UIManager")
 local UIManager = require(uiManagerScript)
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
@@ -98,13 +97,6 @@ local humSpeedConnection: RBXScriptConnection? = nil
 local DecelerationOnImage = GameConfig.DecelerationOnImage
 local DecelerationOffImage = GameConfig.DecelerationOffImage
 local DecelerationButtonShowSpeed = GameConfig.DecelerationButtonShowSpeed
-
-local function RefreshMaxBricksFrame2Visibility()
-	if maxBricksFrame2 == nil then
-		return
-	end
-	maxBricksFrame2.Visible = not ClientGroundZoneState.GetLocalInGroundRefillZone()
-end
 
 local function ResetMaxBricksWarningAnimationForBundle(bundle: MaxBricksWarningAnimBundle)
 	if bundle.growTween ~= nil then
@@ -471,11 +463,6 @@ RefreshView()
 RefreshRebirthDisplay()
 RefreshDecelerationButtonView()
 RefreshRebirthRedPointView()
-RefreshMaxBricksFrame2Visibility()
-
-ClientGroundZoneState.ConnectChanged(function()
-	RefreshMaxBricksFrame2Visibility()
-end)
 
 ClientMsg.ConnectLocalPlayerCurrencyUpdate(OnLocalPlayerCoinCountChanged)
 ClientMsg.ConnectLocalPlayerInfoInit(OnLocalPlayerInfoInit)

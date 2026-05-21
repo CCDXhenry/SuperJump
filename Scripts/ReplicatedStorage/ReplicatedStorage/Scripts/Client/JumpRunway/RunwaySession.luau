@@ -35,7 +35,6 @@ type RunwayLocalState = RunwayStateStore.RunwayStateStoreShape
 
 local localPlayer = players.LocalPlayer
 local cfg = GameConfig.JumpRunway
-local CLIENT_DEBUG = cfg.DEBUG == true
 
 local Ph = RunwayConstants.Ph
 local Kind = RunwayConstants.Kind
@@ -65,11 +64,6 @@ local Refs: {
 	windowLabel: TextLabel?,
 	fuelLabel: TextLabel?,
 	vyLabel: TextLabel?,
-	debugScreenGui: ScreenGui?,
-	debugTextLabel: TextLabel?,
-	lastJumpDebugReason: string,
-	startTriggerActiveInterceptCount: number,
-	startTriggerActiveLastInterceptClock: number?,
 	finalTakeoffForceFreefallUntilClock: number,
 	initDone: boolean,
 	jumpStateEnabledBeforeRunway: boolean?,
@@ -142,8 +136,6 @@ local Refs: {
 	startTriggerOutsideVolumeClock: number?,
 	deferredTerminalServerPayload: NetMsg.JumpRunwayStatePayload?,
 } = {
-	lastJumpDebugReason = "",
-	startTriggerActiveInterceptCount = 0,
 	finalTakeoffForceFreefallUntilClock = 0,
 	initDone = false,
 	ringBaseSizeX = 1,
@@ -1113,27 +1105,6 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 	RunwaySession.SlideTraceDestroy()
 	local phaseBefore = localState.phase
 	localState.phase = Ph.Slide
-	local _dbgOk1, _dbgEncoded1 = pcall(function()
-		return game:GetService("HttpService"):JSONEncode({
-			sessionId = "6f8203",
-			runId = "runway_pullback_probe_3",
-			hypothesisId = "C1",
-			location = "RunwaySession:EnterSlidePhase",
-			message = "client_enter_slide_phase",
-			data = {
-				phaseBefore = phaseBefore,
-				slideKind = slideKind,
-				takeoffCount = localState.takeoffCount,
-				nowClock = nowClock,
-			},
-			timestamp = DateTime.now().UnixTimestampMillis,
-		})
-	end)
-	if _dbgOk1 then
-		-- #region agent log
-		warn("[DBG6f8203] " .. (_dbgEncoded1 :: string))
-		-- #endregion
-	end
 	localState.runwaySlideKind = slideKind
 	RunwaySession.ClearJumpHorizontalLerp()
 	localState.finalDashAlongExtra = 0
@@ -2599,47 +2570,6 @@ function RunwaySession.UpdateDistanceRecorder(humanoid: Humanoid, hrp: BasePart)
 	end
 end
 
-function RunwaySession.DebugDestroy()
-	if Refs.debugScreenGui then
-		Refs.debugScreenGui:Destroy()
-		Refs.debugScreenGui = nil
-		Refs.debugTextLabel = nil
-	end
-end
-
-function RunwaySession.DebugEnsure()
-	if not CLIENT_DEBUG then
-		return
-	end
-	if Refs.debugScreenGui then
-		return
-	end
-	local playerGui = localPlayer:FindFirstChildOfClass("PlayerGui")
-	if playerGui == nil then
-		return
-	end
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "JumpRunwayDebugHud"
-	gui.ResetOnSpawn = false
-	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.DisplayOrder = 95
-	gui.Parent = playerGui
-	Refs.debugScreenGui = gui
-	local t = Instance.new("TextLabel")
-	t.Name = "DebugText"
-	t.BackgroundTransparency = 0.25
-	t.BackgroundColor3 = Color3.fromRGB(10, 24, 40)
-	t.TextColor3 = Color3.fromRGB(220, 245, 255)
-	t.TextSize = 14
-	t.Font = Enum.Font.Code
-	t.TextXAlignment = Enum.TextXAlignment.Left
-	t.TextYAlignment = Enum.TextYAlignment.Top
-	t.Size = UDim2.new(0.42, 0, 0.42, 0)
-	t.Position = UDim2.new(0.02, 0, 0.28, 0)
-	t.Parent = gui
-	Refs.debugTextLabel = t
-end
-
 function RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(humanoid: Humanoid?)
 	if humanoid == nil or humanoid.Parent == nil then
 		return
@@ -2674,33 +2604,12 @@ end
 
 function RunwaySession.ResetLocalRunToIdle()
 	local _, humanoid, hrp = RunwaySession.GetCharacterParts()
-	local _dbgOk2, _dbgEncoded2 = pcall(function()
-		return game:GetService("HttpService"):JSONEncode({
-			sessionId = "6f8203",
-			runId = "runway_pullback_probe_3",
-			hypothesisId = "C3",
-			location = "RunwaySession:ResetLocalRunToIdle",
-			message = "client_reset_to_idle",
-			data = {
-				phaseBefore = localState.phase,
-				hrpY = if hrp ~= nil then hrp.Position.Y else -1,
-				hrpSpeed = if hrp ~= nil then hrp.AssemblyLinearVelocity.Magnitude else -1,
-			},
-			timestamp = DateTime.now().UnixTimestampMillis,
-		})
-	end)
-	if _dbgOk2 then
-		-- #region agent log
-		warn("[DBG6f8203] " .. (_dbgEncoded2 :: string))
-		-- #endregion
-	end
 	-- 先同步清理资源和状态（避免异步延迟导致新一局启动后资源混乱）
 	RunwaySession.DestroyJumpRunwayRocketBackpack()
 	RunwayCameraController.Disable(workspace, GetCharacterParts)
 	RunwaySession.DestroyRunwayGravityForce()
 	RunwayStateStore.ResetForIdle(localState, Ph, SlideKindStandard)
 	RunwaySession.ClearJumpHorizontalLerp()
-	lastJumpDebugReason = ""
 	RunwaySession.DestroyRunwayRing()
 	RunwaySession.ClearLittleElfChestRefs()
 	Refs.chestPostRewardExitCleanup = false
@@ -2710,7 +2619,7 @@ function RunwaySession.ResetLocalRunToIdle()
 	Refs.missAbortSentForThisRun = nil
 	RunwaySession.DestroyDistanceRecorder()
 	RunwaySession.SlideTraceScheduleDestroyAfterRunwayEnd()
-	RunwayUiController.Destroy(RunwaySession.HudDestroy, RunwaySession.DebugDestroy)
+	RunwayUiController.Destroy(RunwaySession.HudDestroy)
 	JumpRunWayFrame.EndSession()
 	-- Humanoid 状态恢复延迟到下一帧，避免 Physics 引擎竞争条件
 	task.defer(function()
@@ -2727,56 +2636,6 @@ function RunwaySession.ResetLocalRunToIdle()
 			RunwaySession.SetControlsEnabled(true)
 		end
 	end)
-end
-
-function RunwaySession.DebugRefreshOverlay()
-	if not CLIENT_DEBUG then
-		return
-	end
-	if not RunwaySession.IsRunwayActivePhase(localState.phase) then
-		RunwaySession.DebugDestroy()
-		return
-	end
-	RunwaySession.DebugEnsure()
-	if Refs.debugTextLabel == nil then
-		return
-	end
-	local _character, humanoid, hrp = RunwaySession.GetCharacterParts()
-	local scrGnd = "n/a"
-	local pre = "n/a"
-	if humanoid ~= nil then
-		scrGnd = tostring(RunwaySession.IsRunwayScriptedGrounded(humanoid))
-		pre = tostring(RunwaySession.IsRunwayPreLanding(humanoid))
-	end
-	local preLandDbg = "n/a"
-	if humanoid ~= nil then
-		local okFeet, dFeet = RunwaySession.RaycastFeet(humanoid)
-		preLandDbg = string.format(
-			"preBase=%s feetD=%s",
-			tostring(localState.preLandRayBaselineStuds),
-			if okFeet then string.format("%.2f", dFeet) else "n/a"
-		)
-	end
-	local velLine = "vel: n/a"
-	if hrp ~= nil then
-		local v = hrp.AssemblyLinearVelocity
-		local fwd = NormalizeRunwayForward(localState.runwayForward)
-		local alongSp = ComputeRunwayHorizontalAlongSpeed(v, fwd)
-		velLine = string.format(
-			"|v|=%.1f  horiz=%.1f  along=%.1f",
-			v.Magnitude,
-			HorizontalVelocity(v).Magnitude,
-			alongSp
-		)
-	end
-	Refs.debugTextLabel.Text = table.concat({
-		string.format("phase=%d  ctrlOff=%s", localState.phase, tostring(localState.controlsDisabled)),
-		velLine,
-		string.format("scrGnd=%s  preLand=%s", scrGnd, pre),
-		preLandDbg,
-		string.format("lineWin=%s  passedLine=%s  jumpedBeforeLine=%s", tostring(localState.lineJumpWindowExpireAt), tostring(localState.passedBeginLineOnce), tostring(localState.jumpedBeforeBeginLine)),
-		string.format("jump: %s", if Refs.lastJumpDebugReason == "" then "(none yet)" else Refs.lastJumpDebugReason),
-	}, "\n")
 end
 
 function RunwaySession.ChainHudActive(nowClock: number): boolean
@@ -4188,30 +4047,6 @@ function RunwaySession.UpdateTick(dt: number)
 end
 
 function RunwaySession.ApplyServerPayload(payload: NetMsg.JumpRunwayStatePayload)
-	if payload.phase == Ph.ScoreLocked or payload.phase == Ph.Cleaning or payload.phase == Ph.Idle then
-		local _cDbg, _hDbg, hrpDbg = RunwaySession.GetCharacterParts()
-		local _dbgOk3, _dbgEncoded3 = pcall(function()
-			return game:GetService("HttpService"):JSONEncode({
-				sessionId = "6f8203",
-				runId = "runway_pullback_probe_3",
-				hypothesisId = "C4",
-				location = "RunwaySession:ApplyServerPayload",
-				message = "client_receive_terminal_phase",
-				data = {
-					payloadPhase = payload.phase,
-					localPhaseBeforeApply = localState.phase,
-					finalScore = payload.finalScore,
-					hrpY = if hrpDbg ~= nil then hrpDbg.Position.Y else -1,
-				},
-				timestamp = DateTime.now().UnixTimestampMillis,
-			})
-		end)
-		if _dbgOk3 then
-			-- #region agent log
-			warn("[DBG6f8203] " .. (_dbgEncoded3 :: string))
-			-- #endregion
-		end
-	end
 	if RunwaySession.IsLittleElfChestRunwayFlowActive() then
 		if payload.phase == Ph.ScoreLocked and payload.finalScore ~= nil then
 			localState.finalScore = payload.finalScore
@@ -4430,9 +4265,6 @@ function RunwaySession.JumpApplyTakeoff(
 	pcall(function()
 		humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
 	end)
-	if CLIENT_DEBUG then
-		lastJumpDebugReason = string.format("applied_impulse_vy=%.2f", vy)
-	end
 	if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
 		Refs.finalTakeoffForceFreefallUntilClock = nowClock + math.max(0.12, cfg.RUNWAY_JUMP_BOOST_HOLD_SEC)
 		RunwaySession.DestroyRunwayRing()
@@ -4444,9 +4276,6 @@ end
 function RunwaySession.JumpTry(): boolean
 	local nowClock = os.clock()
 	if not RunwaySession.IsRunwayActivePhase(localState.phase) then
-		if CLIENT_DEBUG then
-			lastJumpDebugReason = "blocked_not_active_phase"
-		end
 		return false
 	end
 	local inAuto = localState.phase == Ph.AutoRun
@@ -4470,29 +4299,17 @@ function RunwaySession.JumpTry(): boolean
 			)
 		)
 	if not inAuto and not inLineWindow and not inChainWindow then
-		if CLIENT_DEBUG then
-			lastJumpDebugReason = string.format("blocked_phase_%d", localState.phase)
-		end
 		return false
 	end
 	if inAuto and localState.passedBeginLineOnce then
-		if CLIENT_DEBUG then
-			lastJumpDebugReason = "blocked_autorun_after_line_need_window"
-		end
 		return false
 	end
 	local _character, humanoid, hrp = RunwaySession.GetCharacterParts()
 	if humanoid == nil or hrp == nil then
-		if CLIENT_DEBUG then
-			lastJumpDebugReason = "blocked_no_character"
-		end
 		return false
 	end
 	if (inLineWindow or inChainWindow) and not inAuto then
 		if not RunwaySession.IsRunwayScriptedGrounded(humanoid) and not RunwaySession.IsRunwayPreLanding(humanoid) then
-			if CLIENT_DEBUG then
-				lastJumpDebugReason = "blocked_window_not_grounded"
-			end
 			return false
 		end
 	end
@@ -4517,8 +4334,6 @@ function RunwaySession.OnInputBegan(input: InputObject, processed: boolean)
 			if RunwaySession.JumpTry() then
 				RunwaySession.NetReportJump()
 			end
-		elseif CLIENT_DEBUG then
-			lastJumpDebugReason = "ignored_input_not_in_runway_phase"
 		end
 	end
 	-- 冲刺：键盘空格（与起跳同键；终局空由 takeoffCount/fuel 决定是否叠加速）
@@ -4594,27 +4409,6 @@ function RunwaySession.SnapLocalPlayerToRunwayGroundIfAirborne(startTrigger: Par
 	end
 	local targetRootY = groundY + hip
 	local deltaY = targetRootY - hrp.Position.Y
-	local _dbgOkSnap, _dbgEncodedSnap = pcall(function()
-		return game:GetService("HttpService"):JSONEncode({
-			sessionId = "6f8203",
-			runId = "runway_pullback_probe_3",
-			hypothesisId = "C10",
-			location = "RunwaySession:SnapLocalPlayerToRunwayGroundIfAirborne",
-			message = "start_trigger_snap_applied",
-			data = {
-				phase = localState.phase,
-				deltaY = deltaY,
-				feetDist = feetDist,
-				skipFeetCap = skipFeetCap,
-			},
-			timestamp = DateTime.now().UnixTimestampMillis,
-		})
-	end)
-	if _dbgOkSnap then
-		-- #region agent log
-		warn("[DBG6f8203] " .. (_dbgEncodedSnap :: string))
-		-- #endregion
-	end
 	local character = humanoid.Parent
 	if character ~= nil and character:IsA("Model") and math.abs(deltaY) > 1e-4 then
 		character:PivotTo(character:GetPivot() + Vector3.new(0, deltaY, 0))
@@ -4726,8 +4520,6 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	localState.prevLocalGroundedForLand = RunwaySession.IsRunwayScriptedGrounded(humanoid)
 	localState.prevPreLand = RunwaySession.IsRunwayPreLanding(humanoid)
 	localState.prevJumpWindowRayBand = RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid)
-	Refs.startTriggerActiveInterceptCount = 0
-	Refs.startTriggerActiveLastInterceptClock = nil
 	Refs.finalTakeoffForceFreefallUntilClock = 0
 	Refs.prevGroundedHeartbeat = localState.prevLocalGroundedForLand
 	RunwayCameraController.Enable(workspace, cfg, hrp, localState.runwayForward, NormalizeRunwayForward)
@@ -4769,47 +4561,6 @@ function RunwaySession.BindSceneTriggers()
 						-- RunEnded 状态下允许重新开始新 run：先清理再启动
 						RunwaySession.ResetLocalRunToIdle()
 					else
-						local localStateAny = localState :: any
-						local prevLogClock = localStateAny._dbgLastStartTouchActiveLogClock
-						local nowLogClock = os.clock()
-						local secSinceLastIntercept: number? = nil
-						if CLIENT_DEBUG then
-							if Refs.startTriggerActiveLastInterceptClock ~= nil then
-								secSinceLastIntercept = nowLogClock - (Refs.startTriggerActiveLastInterceptClock :: number)
-							end
-							Refs.startTriggerActiveLastInterceptClock = nowLogClock
-							Refs.startTriggerActiveInterceptCount += 1
-						end
-						if type(prevLogClock) ~= "number" or (nowLogClock - (prevLogClock :: number)) >= 0.2 then
-							localStateAny._dbgLastStartTouchActiveLogClock = nowLogClock
-							local debugData: { [string]: any } = {
-								phase = localState.phase,
-								takeoffCount = localState.takeoffCount,
-								hrpY = hrp.Position.Y,
-							}
-							if CLIENT_DEBUG then
-								debugData.touchInterceptCount = Refs.startTriggerActiveInterceptCount
-								if secSinceLastIntercept ~= nil then
-									debugData.secSinceLastIntercept = secSinceLastIntercept
-								end
-							end
-							local _dbgOkTouch, _dbgEncodedTouch = pcall(function()
-								return game:GetService("HttpService"):JSONEncode({
-									sessionId = "6f8203",
-									runId = "runway_pullback_probe_3",
-									hypothesisId = "C11",
-									location = "RunwaySession:BindSceneTriggers",
-									message = "start_trigger_touched_while_runway_active",
-									data = debugData,
-									timestamp = DateTime.now().UnixTimestampMillis,
-								})
-							end)
-							if _dbgOkTouch then
-								-- #region agent log
-								warn("[DBG6f8203] " .. (_dbgEncodedTouch :: string))
-								-- #endregion
-							end
-						end
 						return
 					end
 				end
@@ -4831,9 +4582,7 @@ function RunwaySession.OnHeartbeat(dt: number)
 	RunwaySession.NetReportDashIfChanged()
 	RunwayFxController.UpdateHeartbeat(RunwaySession.UpdateJetpackFlameDashFx, os.clock())
 	RunwayUiController.Refresh(
-		RunwaySession.HudRefresh,
-		RunwaySession.DebugRefreshOverlay,
-		CLIENT_DEBUG
+		RunwaySession.HudRefresh
 	)
 end
 
@@ -4880,11 +4629,8 @@ function RunwaySession.BindRunwayExitOnCharacterDeathOrRemove()
 	localPlayer.CharacterAdded:Connect(bindHumanoidDied)
 end
 
-function RunwaySession.RefreshHudUi(clientDebug: boolean)
+function RunwaySession.RefreshHudUi()
 	RunwaySession.HudRefresh()
-	if clientDebug then
-		RunwaySession.DebugRefreshOverlay()
-	end
 end
 
 function RunwaySession.Init()

@@ -90,8 +90,8 @@ local function GrantShopBundleReward(
 		return
 	end
 
-	if reward.rewardType == GameConfig.RewardType.Chest then
-		local config = GameConfig.ChestIdMap[reward.rewardId]
+	if reward.rewardType == GameConfig.RewardType.LittleElfChest then
+		local config = GameConfig.LittleElfChestIdMap[reward.rewardId]
 		if config then
 			for _ = 1, rewardCount do
 				BrainrotQueueManager.AddItem(
@@ -100,7 +100,7 @@ local function GrantShopBundleReward(
 					config.quality,
 					reward.rewardLv or 1,
 					false,
-					GameConfig.ItemType.Chest,
+					GameConfig.ItemType.LittleElfChest,
 					false, -- 非岛屿流程：允许突破队列上限
 					grantTipKey,
 					grantExpectedCount,

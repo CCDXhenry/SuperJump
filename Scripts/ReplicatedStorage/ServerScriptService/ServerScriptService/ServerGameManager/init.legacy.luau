@@ -13,10 +13,8 @@ AnalyticsTool.SetDataAccess({
 		return ServerGameInfo.GetPlayerInfo(player)
 	end,
 })
+local JumpRunwayServerManager = require(serverScripts:WaitForChild("JumpRunwayServerManager"))
 local PlayerHomeServerManager = require(serverScripts:WaitForChild("PlayerHomeServerManager"))
-local ChestWorkbenchManager = require(serverScripts:WaitForChild("ChestWorkbenchManager"))
--- 工厂玩法不再 require BrainrotIslandManager（岛屿刷怪/地面入队等已停用）。
--- local BrainrotIslandManager = require(serverScripts:WaitForChild("BrainrotIslandManager"))
 local BrainrotHomeManager = require(serverScripts:WaitForChild("BrainrotHomeManager"))
 local PlayerInteractManager = require(serverScripts:FindFirstChild("PlayerInteractManager"))
 local replicatedStorage: ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -228,10 +226,7 @@ print("GameVersion", GameConfig.GameVersion)
 AnalyticsTool.Init()
 PlayerInteractManager.Init()
 PlayerHomeServerManager.Init()
-ChestWorkbenchManager.Init()
--- BrainrotIslandManager.Init()
 BrainrotHomeManager.Init()
-local JumpRunwayServerManager = require(serverScripts:WaitForChild("JumpRunwayServerManager"))
 JumpRunwayServerManager.Init()
 
 players.PlayerAdded:Connect(OnPlayerAdded)

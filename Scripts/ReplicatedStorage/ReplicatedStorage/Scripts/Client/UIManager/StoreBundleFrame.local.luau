@@ -159,8 +159,8 @@ local function setRewardText(textLabel: TextLabel, reward: GameConfig.RewardInfo
 		end
 	end
 
-	if reward.rewardType == GameConfig.RewardType.Chest then
-		local chestData = GameConfig.ChestIdMap[reward.rewardId]
+	if reward.rewardType == GameConfig.RewardType.LittleElfChest then
+		local chestData = GameConfig.LittleElfChestIdMap[reward.rewardId]
 		if chestData then
 			localizeText(textLabel, chestData.name_t)
 			textLabel.TextColor3 = getQualityColor(chestData.quality)
@@ -186,8 +186,8 @@ local function setRewardIcon(iconLabel: ImageLabel, reward: GameConfig.RewardInf
 		iconLabel.Image = if coilData then coilData.iconImageId else ""
 		return
 	end
-	if reward.rewardType == GameConfig.RewardType.Chest then
-		local chestData = GameConfig.ChestIdMap[reward.rewardId]
+	if reward.rewardType == GameConfig.RewardType.LittleElfChest then
+		local chestData = GameConfig.LittleElfChestIdMap[reward.rewardId]
 		iconLabel.Image = if chestData then chestData.iconImageId else ""
 		return
 	end
@@ -209,8 +209,8 @@ local function getRewardDisplayName(reward: GameConfig.RewardInfo): string
 		return if brainrotData then brainrotData.name_t else "Brainrot"
 	end
 
-	if reward.rewardType == GameConfig.RewardType.Chest then
-		local chestData = GameConfig.ChestIdMap[reward.rewardId]
+	if reward.rewardType == GameConfig.RewardType.LittleElfChest then
+		local chestData = GameConfig.LittleElfChestIdMap[reward.rewardId]
 		return if chestData then chestData.name_t else "Chest"
 	end
 
@@ -285,8 +285,8 @@ local function getPoolItemIcon(itemType: number, itemId: number): string
 		local coilData = GameConfig.CoilIdMap[itemId]
 		return if coilData then coilData.iconImageId else ""
 	end
-	if itemType == GameConfig.ItemType.Chest then
-		local chestData = GameConfig.ChestIdMap[itemId]
+	if itemType == GameConfig.ItemType.LittleElfChest then
+		local chestData = GameConfig.LittleElfChestIdMap[itemId]
 		return if chestData then chestData.iconImageId else ""
 	end
 	return ""
@@ -412,14 +412,14 @@ local function createChestBundleFrame(bundleData: GameConfig.ShopBundleData, ind
 
 	local chestReward: GameConfig.RewardInfo? = nil
 	for _, reward in ipairs(bundleData.rewards) do
-		if reward.rewardType == GameConfig.RewardType.Chest and (reward.productIndex or 1) == 1 then
+		if reward.rewardType == GameConfig.RewardType.LittleElfChest and (reward.productIndex or 1) == 1 then
 			chestReward = reward
 			break
 		end
 	end
 	if chestReward == nil then
 		for _, reward in ipairs(bundleData.rewards) do
-			if reward.rewardType == GameConfig.RewardType.Chest then
+			if reward.rewardType == GameConfig.RewardType.LittleElfChest then
 				chestReward = reward
 				break
 			end

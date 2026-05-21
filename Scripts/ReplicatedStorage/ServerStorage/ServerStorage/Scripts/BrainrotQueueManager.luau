@@ -16,15 +16,13 @@ local AnalyticsTool = require(serverScripts:FindFirstChild("AnalyticsTool"))
 
 local actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
 local modelsFolder = replicatedStorage:WaitForChild("Models")
-local actualChests = modelsFolder:FindFirstChild(GameConfig.FactoryChestsFolderName)
+local actualChests = modelsFolder:FindFirstChild("LittleElfChests")
 	or modelsFolder:FindFirstChild("LittleElfChests")
 if not actualChests then
 	warn(
-		"[BrainrotQueueManager] Missing Models."
-			.. GameConfig.FactoryChestsFolderName
-			.. " or legacy LittleElfChests folder — add FactoryChests with ChestData models"
+		"[BrainrotQueueManager] Missing Models.LittleElfChests folder"
 	)
-	actualChests = modelsFolder:WaitForChild(GameConfig.FactoryChestsFolderName)
+	actualChests = modelsFolder:WaitForChild("LittleElfChests")
 end
 local actualCoils = replicatedStorage:WaitForChild("Tools")
 local OpenChestRevealDelay = 5.7
@@ -37,8 +35,8 @@ local function CreateToolForItem(player: Player, item: GameConfig.BrainrotQueueI
 		config = GameConfig.BrainrotIdMap[item.configId]
 	elseif itemType == GameConfig.ItemType.Coil then
 		config = GameConfig.CoilIdMap[item.configId]
-	elseif itemType == GameConfig.ItemType.Chest then
-		config = GameConfig.ChestIdMap[item.configId]
+	elseif itemType == GameConfig.ItemType.LittleElfChest then
+		config = GameConfig.LittleElfChestIdMap[item.configId]
 	end
 
 	if not config then
@@ -120,7 +118,7 @@ local function CreateToolForItem(player: Player, item: GameConfig.BrainrotQueueI
 			warn("[BrainrotQueueManager] Coil Tool not found in ReplicatedStorage.Tools:", config.modelRes)
 			return nil
 		end
-	elseif itemType == GameConfig.ItemType.Chest then
+	elseif itemType == GameConfig.ItemType.LittleElfChest then
 		local chestTemplate = GameConfig.FindResourceTemplateByResourceName(actualChests, config.resourceName)
 		if chestTemplate then
 			tool = Instance.new("Tool")
@@ -368,7 +366,7 @@ function BrainrotQueueManager.OpenChest(player: Player, uid: string)
 	local chestItem: GameConfig.BrainrotQueueItem? = nil
 	local itemIndex: number? = nil
 	for i, item in ipairs(playerInfo.brainrotQueue) do
-		if item.uid == uid and item.itemType == GameConfig.ItemType.Chest then
+		if item.uid == uid and item.itemType == GameConfig.ItemType.LittleElfChest then
 			chestItem = item
 			itemIndex = i
 			break
@@ -380,7 +378,7 @@ function BrainrotQueueManager.OpenChest(player: Player, uid: string)
 		return
 	end
 
-	local chestConfig = GameConfig.ChestIdMap[chestItem.configId]
+	local chestConfig = GameConfig.LittleElfChestIdMap[chestItem.configId]
 	if not chestConfig then return end
 
 	-- 2. 随机获得掉落

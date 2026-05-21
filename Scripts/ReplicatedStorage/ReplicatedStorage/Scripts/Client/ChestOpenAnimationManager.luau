@@ -22,9 +22,9 @@ local ModelBillboardOffsetTool = require(clientScripts:WaitForChild("ModelBillbo
 
 local actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
 local modelsFolderForChests = replicatedStorage:WaitForChild("Models")
-local factoryChestsFolder = modelsFolderForChests:FindFirstChild(GameConfig.FactoryChestsFolderName)
-	or modelsFolderForChests:WaitForChild(GameConfig.FactoryChestsFolderName)
-local littleElfChestsFolder = modelsFolderForChests:FindFirstChild("LittleElfChests")
+local factoryChestsFolder = modelsFolderForChests:FindFirstChild("LittleElfChests")
+	or modelsFolderForChests:WaitForChild("LittleElfChests")
+local littleElfChestsFolder = factoryChestsFolder
 local actualChests = factoryChestsFolder
 local uiFolder = replicatedStorage:WaitForChild("UI")
 local brainrotInfoUIParams = uiFolder:WaitForChild("BrainrotInfoUI") :: BillboardGui
@@ -272,7 +272,7 @@ local function ResolveChestConfigAndPool(chestConfigId: number): ResolvedChestOp
 			}
 		end
 	end
-	local factoryConfig = GameConfig.ChestIdMap[chestConfigId]
+	local factoryConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
 	if factoryConfig ~= nil then
 		local factoryPool = GameConfig.ChestRewardPoolMap[chestConfigId]
 		if factoryPool ~= nil and #factoryPool > 0 then

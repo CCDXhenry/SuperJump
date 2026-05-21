@@ -5,7 +5,6 @@ local replicatedStorage: ReplicatedStorage = game:GetService("ReplicatedStorage"
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
-local ChestWorkbenchSaveNormalize = require(sharedScripts:FindFirstChild("ChestWorkbenchSaveNormalize"))
 local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
 local clientScripts = scripts:WaitForChild("Client")
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
@@ -47,14 +46,6 @@ function ClientGameInfo.InitPlayerInfo(
 		brainrotQueue = localPlayerSaveInfo.brainrotQueue or {},
 		homeSlot = localPlayerSaveInfo.homeSlot,
 		guideProgressInfo = guideProgressInfo,
-		chestWorkbenchSave = (function(): GameConfig.ChestWorkbenchSave
-			local cws = localPlayerSaveInfo.chestWorkbenchSave
-			if cws == nil then
-				return GameConfig.CreateDefaultChestWorkbenchSave()
-			end
-			ChestWorkbenchSaveNormalize.Apply(cws)
-			return cws
-		end)(),
 		currentGuideType = GameConfig.GuideType.None,
 
 		-- 初始化瞬态信息
@@ -334,8 +325,8 @@ function ClientGameInfo.UpdateBrainrotQueue(queue: { GameConfig.BrainrotQueueIte
 					rewardType = GameConfig.RewardType.Brainrot
 				elseif g.itemType == GameConfig.ItemType.Coil then
 					rewardType = GameConfig.RewardType.Coil
-				elseif g.itemType == GameConfig.ItemType.Chest then
-					rewardType = GameConfig.RewardType.Chest
+				elseif g.itemType == GameConfig.ItemType.LittleElfChest then
+					rewardType = GameConfig.RewardType.LittleElfChest
 				end
 
 				if rewardType ~= nil then
