@@ -542,6 +542,38 @@ function RunwaySession.GetExpectedPlayerWalkSpeed(): number
 	return walkSpeedConfig.abilityList[level] or fallback
 end
 
+function RunwaySession.GetExpectedPlayerMaxFuel(): number
+	local fuelConfig = GameConfig.Shop.MaxFuel
+	local fallback = fuelConfig.abilityList[1] or 2.5
+	local info = ClientGameInfo.GetLocalPlayerInfo()
+	if info == nil then
+		return fallback
+	end
+	local level = info.shopInfo.maxFuelLevel or 1
+	local maxLevel = fuelConfig.maxLevel
+	if typeof(level) ~= "number" or level ~= level then
+		level = 1
+	end
+	level = math.clamp(math.floor(level), 1, maxLevel)
+	return fuelConfig.abilityList[level] or fallback
+end
+
+function RunwaySession.GetExpectedPlayerMaxThrustSpeed(): number
+	local thrustConfig = GameConfig.Shop.MaxThrust
+	local fallback = thrustConfig.abilityList[1] or 100
+	local info = ClientGameInfo.GetLocalPlayerInfo()
+	if info == nil then
+		return fallback
+	end
+	local level = info.shopInfo.maxThrustLevel or 1
+	local maxLevel = thrustConfig.maxLevel
+	if typeof(level) ~= "number" or level ~= level then
+		level = 1
+	end
+	level = math.clamp(math.floor(level), 1, maxLevel)
+	return thrustConfig.abilityList[level] or fallback
+end
+
 function RunwaySession.ApplyExpectedWalkSpeedAfterRunway(humanoid: Humanoid?)
 	if humanoid == nil then
 		return
@@ -624,7 +656,8 @@ function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt
 	elseif localState.phase == Ph.Airborne and localState.takeoffCount <= cfg.N_TOTAL_JUMPS then
 		if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
 			local base = RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, localState.takeoffCount)
-			local capExtra = math.max(0, cfg.DASH_MAX_SPEED - base)
+			local playerThrustSpeed = RunwaySession.GetExpectedPlayerMaxThrustSpeed()
+			local capExtra = math.max(0, playerThrustSpeed)
 			if localState.dashHeld and localState.fuel > 0 then
 				localState.finalDashAlongExtra = math.min(
 					localState.finalDashAlongExtra + cfg.DASH_ACCEL * dt,
@@ -637,7 +670,7 @@ function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt
 					localState.finalDashAlongExtra = 0
 				end
 			end
-			forwardSpeed = math.min(base + localState.finalDashAlongExtra, cfg.DASH_MAX_SPEED)
+			forwardSpeed = math.min(base + localState.finalDashAlongExtra, base + playerThrustSpeed)
 			localState.finalDashAlongExtra = math.max(0, forwardSpeed - base)
 		else
 			-- Airborne 全程走跳跃水平 lerp，不因落地窗口内判地切回 minAlongGrounded（会触发 run 并覆盖起跳冲量）。
@@ -4164,7 +4197,7 @@ end
 
 function RunwaySession.JumpGrantDashFuelIfOnFinalSegment()
 	if localState.takeoffCount == cfg.N_TOTAL_JUMPS then
-		localState.fuel = cfg.DASH_FUEL_MAX
+		localState.fuel = RunwaySession.GetExpectedPlayerMaxFuel()
 		localState.finalDashAlongExtra = 0
 	end
 end

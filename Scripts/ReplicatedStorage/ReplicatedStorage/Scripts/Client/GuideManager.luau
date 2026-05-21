@@ -112,10 +112,6 @@ local function HasEquippedBrainrotTool(): boolean
 	return false
 end
 
-local function IsBricksIntroFinished(info: GameConfig.ClientLocalPlayerInfo): boolean
-	return info.guideProgressInfo.guideStepDoneMap[GameConfig.GuideStepKey.BricksIntroFinished] == true
-end
-
 local function IsBrainrotPlaceFinished(info: GameConfig.ClientLocalPlayerInfo): boolean
 	return info.guideProgressInfo.guideStepDoneMap[GameConfig.GuideStepKey.BrainrotPlaceFinished] == true
 end
@@ -365,7 +361,11 @@ local function ResolvePickupBrainrotTarget(): Vector3?
 end
 
 local function ResolveUpgradeShopWorldPosition(): Vector3?
-	local name = GameConfig.GuideWorldAnchorName.UpgradeShop
+	local anchorTable = GameConfig.GuideWorldAnchorName
+	if anchorTable == nil then
+		return nil
+	end
+	local name = anchorTable.UpgradeShop
 	local inst = workspace:FindFirstChild(name)
 	if inst == nil then
 		return nil
@@ -482,16 +482,6 @@ local function ResolveWorldTargetForGuide(guideType: number): Vector3?
 		return ResolvePlacementBoothWorldPosition(info)
 	elseif guideType == GameConfig.GuideType.TutorialBrainrotPickup then
 		return ResolvePickupBrainrotTarget()
-	elseif guideType == GameConfig.GuideType.TutorialBricksLobby then
-		local lobbyInfo = ClientGameInfo.GetLocalPlayerInfo()
-		if lobbyInfo == nil then
-			return nil
-		end
-		local coin = lobbyInfo.currencies["1"] or 0
-		if coin < GameConfig.GuideBricksIntroMinCoin then
-			return ResolveCollectPartWorldPosition(lobbyInfo)
-		end
-		return ResolveUpgradeShopWorldPosition()
 	end
 	return nil
 end
@@ -517,7 +507,6 @@ local function UpdateGuideArrow()
 		or guideType == GameConfig.GuideType.TutorialBrainrotPlace
 		or guideType == GameConfig.GuideType.TutorialBrainrotPlaceSlot
 		or guideType == GameConfig.GuideType.TutorialBrainrotIslandTeleport
-		or guideType == GameConfig.GuideType.TutorialBricksLobby
 	if not needsWorldArrow then
 		guideArrowModel.Parent = nil
 		return

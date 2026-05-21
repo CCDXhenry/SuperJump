@@ -38,7 +38,6 @@ local newImageNumberLabel = newImage:WaitForChild("NumberLabel") :: TextLabel
 local newImageValueLabel = newImage:WaitForChild("ValueLabel") :: TextLabel
 local infoFrame = mainFrame:WaitForChild("InfoFrame") :: Frame
 local speedImage = infoFrame:WaitForChild("SpeedImage") :: ImageLabel
-local bricksImage = infoFrame:WaitForChild("BricksImage") :: ImageLabel
 
 local function getProgressScale(imageLabel: ImageLabel): ImageLabel?
 	local scaleBar = imageLabel:FindFirstChild("ScaleBar")
@@ -66,9 +65,7 @@ local function findProgressLabel(imageLabel: ImageLabel, keyword: string): TextL
 end
 
 local speedTextLabel = findProgressLabel(speedImage, "speed")
-local bricksTextLabel = findProgressLabel(bricksImage, "brick")
 local speedScale = getProgressScale(speedImage)
-local bricksScale = getProgressScale(bricksImage)
 
 local function refreshScaleX(scaleImage: ImageLabel?, percent: number)
 	if not scaleImage then
@@ -105,19 +102,12 @@ local function checkRebirthRequirements(localPlayerInfo: GameConfig.ClientLocalP
 	end
 
 	local currentSpeedLevel = localPlayerInfo.shopInfo.walkSpeedLevel or DefaultRequiredLevel
-	local currentBricksLevel = localPlayerInfo.shopInfo.maxBricksLevel or DefaultRequiredLevel
 	local missingRequirements: { string } = {}
 
 	if currentSpeedLevel < nextRebirthData.speedLv then
 		table.insert(
 			missingRequirements,
 			formatTemplate(GameTexts.SpeedLevelProgress.source, { tostring(currentSpeedLevel), tostring(nextRebirthData.speedLv) })
-		)
-	end
-	if currentBricksLevel < nextRebirthData.brickLv then
-		table.insert(
-			missingRequirements,
-			formatTemplate(GameTexts.BricksLevelProgress.source, { tostring(currentBricksLevel), tostring(nextRebirthData.brickLv) })
 		)
 	end
 
@@ -141,16 +131,13 @@ local function refreshView()
 	end
 
 	local currentSpeedLevel = localPlayerInfo.shopInfo.walkSpeedLevel or DefaultRequiredLevel
-	local currentBricksLevel = localPlayerInfo.shopInfo.maxBricksLevel or DefaultRequiredLevel
 	local currentRebirthLevel = localPlayerInfo.shopInfo.rebirthLevel or 0
 
 	local nextRebirthData = GameConfig.RebirthMap[currentRebirthLevel + 1]
 	local nextRebirthLevel = currentRebirthLevel + 1
 	local requiredSpeedLevel = if nextRebirthData then nextRebirthData.speedLv else currentSpeedLevel
-	local requiredBricksLevel = if nextRebirthData then nextRebirthData.brickLv else currentBricksLevel
 
 	local speedProgress = if nextRebirthData and requiredSpeedLevel > 0 then currentSpeedLevel / requiredSpeedLevel else FullProgress
-	local bricksProgress = if nextRebirthData and requiredBricksLevel > 0 then currentBricksLevel / requiredBricksLevel else FullProgress
 	local currentMultiplier = getRebirthMultiplier(currentRebirthLevel)
 	local nextMultiplier = if nextRebirthData then getRebirthMultiplier(nextRebirthLevel) else currentMultiplier
 
@@ -188,17 +175,7 @@ local function refreshView()
 		)
 	end
 
-	if bricksTextLabel then
-		TranslationTool.CustomAutoLocalizeTextLabel(
-			bricksTextLabel,
-			GameTexts.BricksLevelProgress.source,
-			GameTexts.BricksLevelProgress.key,
-			{ tostring(currentBricksLevel), tostring(requiredBricksLevel) }
-		)
-	end
-
 	refreshScaleX(speedScale, speedProgress)
-	refreshScaleX(bricksScale, bricksProgress)
 end
 
 closeButton.Activated:Connect(function()

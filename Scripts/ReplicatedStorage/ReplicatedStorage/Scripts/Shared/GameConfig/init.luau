@@ -10,6 +10,7 @@ local DateTimeExtension = require(coreSharedScripts:FindFirstChild("DateTimeExte
 local BrainrotDataModule = require(script:WaitForChild("BrainrotData"))
 local LittleElfChestDataModule = require(script:WaitForChild("LittleElfChestData"))
 local LittleElfChestRewardPoolDataModule = require(script:WaitForChild("LittleElfChestRewardPoolData"))
+local UpgradeShopRawData = require(script:WaitForChild("UpgradeShopData"))
 
 GameConfig.GameVersion = "1.0.0"
 GameConfig.ABTestVersion = "1.0.0"
@@ -37,14 +38,11 @@ GameConfig.GuideType = {
 	None = 0,
 	TutorialBrainrotPickup = 1,
 	TutorialBrainrotPlace = 2,
-	TutorialBricksLobby = 3,
-	TutorialBricksShop = 4,
 	TutorialBrainrotPlaceSlot = 5,
 	TutorialBrainrotIslandTeleport = 6,
 }
 
 GameConfig.GuideStepKey = {
-	BricksIntroFinished = "BricksIntroFinished",
 	BrainrotPlaceFinished = "BrainrotPlaceFinished",
 }
 
@@ -57,12 +55,8 @@ GameConfig.GuideTextKeyMap = {
 	[GameConfig.GuideType.TutorialBrainrotPickup] = "GuideTutorialBrainrotPickup",
 	[GameConfig.GuideType.TutorialBrainrotPlace] = "GuideTutorialBrainrotPlace",
 	[GameConfig.GuideType.TutorialBrainrotPlaceSlot] = "GuideTutorialBrainrotPlaceSlot",
-	[GameConfig.GuideType.TutorialBricksLobby] = "GuideTutorialBricksLobby",
-	[GameConfig.GuideType.TutorialBricksShop] = "GuideTutorialBricksShop",
 	[GameConfig.GuideType.TutorialBrainrotIslandTeleport] = "GuideTutorialBrainrotIslandTeleport",
 }
-
-GameConfig.GuideBricksIntroMinCoin = 50
 
 GameConfig.GuideAssetName = {
 	UiFrame = "GuideFrame",
@@ -100,9 +94,33 @@ GameConfig.CurrencyType = {
 
 GameConfig.SkillType = {
 	WalkSpeed = 1,
-	MaxBricks = 2,
-	HomeLevel = 3,
-	RebirthLevel = 4,
+	HomeLevel = 2,
+	RebirthLevel = 3,
+	MaxFuel = 4,
+	MaxThrust = 5,
+}
+
+export type ShopAbilityInfo = {
+	abilityName: string,
+	shopKey: string,
+	levelField: string,
+}
+
+GameConfig.ShopAbilityByType = {} :: { [number]: ShopAbilityInfo }
+GameConfig.ShopAbilityByType[GameConfig.SkillType.WalkSpeed] = {
+	abilityName = "WalkSpeed",
+	shopKey = "WalkSpeed",
+	levelField = "walkSpeedLevel",
+}
+GameConfig.ShopAbilityByType[GameConfig.SkillType.MaxFuel] = {
+	abilityName = "MaxFuel",
+	shopKey = "MaxFuel",
+	levelField = "maxFuelLevel",
+}
+GameConfig.ShopAbilityByType[GameConfig.SkillType.MaxThrust] = {
+	abilityName = "MaxThrust",
+	shopKey = "MaxThrust",
+	levelField = "maxThrustLevel",
 }
 
 GameConfig.ItemType = {
@@ -144,7 +162,8 @@ GameConfig.ItemCountChangeReason = {
 	SpendOnUpgradeBrainrot = 2001,
 	SpendOnUpgradeHome = 2002,
 	SpendOnUpgradeWalkSpeed = 2003,
-	SpendOnUpgradeMaxBricks = 2004,
+	SpendOnUpgradeFuel = 2004,
+	SpendOnUpgradeThrust = 2005,
 }
 
 export type BrainrotData = {
@@ -415,7 +434,6 @@ export type RebirthData = {
 	id: number,
 	count: number,
 	collectMultiple: number,
-	brickLv: number,
 	speedLv: number,
 }
 
@@ -937,7 +955,6 @@ GameConfig.Earthquake = {
 
 GameConfig.Inventory = {
 	InitialModelCapacity = 5,
-	InitialBricksCapacityLevel = 1,
 }
 
 GameConfig.BrainrotRefreshCountdownSeconds = 150
@@ -960,11 +977,67 @@ local function MakeStubShop(skillType: number, name_t: string, ability: number):
 	}
 end
 
+local function BuildShopFromRawData()
+	-- 遍历 UpgradeShopData 原始数据，按 type 分组构建 GameConfig.Shop 条目
+	-- type=1 → WalkSpeed, type=2 → HomeLevel, type=4 → MaxFuel, type=5 → MaxThrust
+	local shopBuilders: { [number]: { abilityList: { [number]: number }, upgradeCostList: { [number]: number }, name_t: string } } = {}
+	for _, entry in ipairs(UpgradeShopRawData) do
+		local t = entry["type"]
+		if t == nil then
+			continue
+		end
+		local lv = entry["lv"]
+		if lv == nil then
+			continue
+		end
+		local builder = shopBuilders[t]
+		if builder == nil then
+			local nameLookup = {
+				[1] = "WalkSpeed",
+				[2] = "HomeLevel",
+				[4] = "MaxFuel",
+				[5] = "MaxThrust",
+			}
+			local name_t = nameLookup[t]
+			if name_t == nil then
+				continue
+			end
+			builder = { abilityList = {}, upgradeCostList = {}, name_t = name_t }
+			shopBuilders[t] = builder
+		end
+		builder.abilityList[lv] = entry["ability"]
+		builder.upgradeCostList[lv] = entry["upgradeCost"]
+	end
+
+	local typeToShopKey = {
+		[1] = "WalkSpeed",
+		[2] = "HomeLevel",
+		[4] = "MaxFuel",
+		[5] = "MaxThrust",
+	}
+	for t, builder in pairs(shopBuilders) do
+		local shopKey = typeToShopKey[t]
+		if shopKey and GameConfig.Shop[shopKey] then
+			local maxLevel = 0
+			for lv in pairs(builder.abilityList) do
+				if lv > maxLevel then
+					maxLevel = lv
+				end
+			end
+			GameConfig.Shop[shopKey].maxLevel = maxLevel
+			GameConfig.Shop[shopKey].abilityList = builder.abilityList
+			GameConfig.Shop[shopKey].upgradeCostList = builder.upgradeCostList
+		end
+	end
+end
+
 GameConfig.Shop = {
 	WalkSpeed = MakeStubShop(GameConfig.SkillType.WalkSpeed, "WalkSpeed", 16),
-	MaxBricks = MakeStubShop(GameConfig.SkillType.MaxBricks, "MaxBricks", 500),
 	HomeLevel = MakeStubShop(GameConfig.SkillType.HomeLevel, "HomeLevel", 1),
+	MaxFuel = MakeStubShop(GameConfig.SkillType.MaxFuel, "MaxFuel", 20),
+	MaxThrust = MakeStubShop(GameConfig.SkillType.MaxThrust, "MaxThrust", 20),
 }
+BuildShopFromRawData()
 
 export type ShopBundleConfigurationData = {
 	id: number,
@@ -995,13 +1068,15 @@ GameConfig.ShopBundleList = {} :: { number }
 
 export type ShopPaidConfig = {
 	WalkSpeed10ProductId: number,
-	MaxBricks10ProductId: number,
+	MaxFuel10ProductId: number,
+	MaxThrust10ProductId: number,
 	BrainrotUpgrade3ProductId: number,
 }
 
 GameConfig.ShopPaid = {
 	WalkSpeed10ProductId = 3567697343,
-	MaxBricks10ProductId = 3567697394,
+	MaxFuel10ProductId = 0,
+	MaxThrust10ProductId = 0,
 	BrainrotUpgrade3ProductId = 3568879048,
 } :: ShopPaidConfig
 
@@ -1038,13 +1113,18 @@ export type BrainrotInventoryInfo = {
 	brainrotUsingNumMax: number,
 }
 
-export type PlayerCarriedInfo = {
-	bricks: number,
-}
+export type PlayerCarriedInfo = {} -- bricks 已废弃
 
 export type GuideProgressSaveInfo = {
 	guideStepDoneMap: { [string]: boolean },
 	appearedGuideTypeInfo: { [string]: boolean },
+}
+
+export type ShopInfo = {
+	walkSpeedLevel: number,
+	maxFuelLevel: number,
+	maxThrustLevel: number,
+	rebirthLevel: number,
 }
 
 export type PlayerSaveInfo = {
@@ -1063,11 +1143,7 @@ export type PlayerSaveInfo = {
 		level: number,
 		placedModels: { [string]: ModelInfo },
 	},
-	shopInfo: {
-		walkSpeedLevel: number,
-		maxBricksLevel: number,
-		rebirthLevel: number,
-	},
+	shopInfo: ShopInfo,
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },
 	guideProgressInfo: GuideProgressSaveInfo,
@@ -1124,7 +1200,8 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 		},
 		shopInfo = {
 			walkSpeedLevel = 1,
-			maxBricksLevel = GameConfig.Inventory.InitialBricksCapacityLevel,
+			maxFuelLevel = 1,
+			maxThrustLevel = 1,
 			rebirthLevel = 0,
 		},
 		brainrotsInfo = {
@@ -1151,11 +1228,7 @@ export type ClientLocalPlayerSaveInfo = {
 		level: number,
 		placedModels: { [string]: ModelInfo },
 	},
-	shopInfo: {
-		walkSpeedLevel: number,
-		maxBricksLevel: number,
-		rebirthLevel: number,
-	},
+	shopInfo: ShopInfo,
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },
 	homeSlot: string,

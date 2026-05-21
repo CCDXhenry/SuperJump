@@ -30,18 +30,8 @@ local mainGuideText: LocalScript = uiManagerScript:FindFirstChild("MainGuideText
 local guideTextScript: LocalScript = mainGuideText:Clone()
 guideTextScript.Parent = guideText
 
-local maxBricksFrame: Frame = lobbyFrame:FindFirstChild("MaxBricksFrame") :: Frame
-local maxBricksText: TextLabel = maxBricksFrame:FindFirstChild("NumberText") :: TextLabel
---[[ LvText hidden in UI
-local maxBricksLvText: TextLabel = maxBricksFrame:FindFirstChild("LvText") :: TextLabel
-]]
-local maxBricksFrame2: Frame? = lobbyFrame:FindFirstChild("MaxBricksFrame2") :: Frame?
-local maxBricksText2: TextLabel? = if maxBricksFrame2 then (maxBricksFrame2:FindFirstChild("NumberText") :: TextLabel?) else nil
 local walkSpeedFrame: Frame = lobbyFrame:FindFirstChild("WalkSpeedFrame") :: Frame
 local walkSpeedText: TextLabel = walkSpeedFrame:FindFirstChild("NumberText") :: TextLabel
---[[ LvText hidden in UI
-local walkSpeedLvText: TextLabel = walkSpeedFrame:FindFirstChild("LvText") :: TextLabel
-]]
 local decelerationButton: ImageButton? = lobbyFrame:FindFirstChild("DecelerationButton") :: ImageButton?
 local decelerationButtonTextLabel: TextLabel? = if decelerationButton then (decelerationButton:FindFirstChild("TextLabel") :: TextLabel?) else nil
 local bottomButtonsFrame = lobbyFrame:FindFirstChild("BottomButtonsFrame")
@@ -51,95 +41,14 @@ local rebirthNumberText: TextLabel? = if rebirthFrame then (rebirthFrame:FindFir
 local storeBundleEntryFrame: Frame? = (lobbyFrame:FindFirstChild("StoreBundleFrame") or (if bottomButtonsFrame then bottomButtonsFrame:FindFirstChild("StoreBundleFrame") else nil)) :: Frame?
 local storeBundleButton: GuiButton? = if storeBundleEntryFrame then (storeBundleEntryFrame:FindFirstChild("Button") :: any) else nil
 
-local maxBricksAddButton: GuiButton? = maxBricksFrame:FindFirstChild("AddButton") :: any
 local walkSpeedAddButton: GuiButton? = walkSpeedFrame:FindFirstChild("AddButton") :: any
 
-local LowBricksThreshold: number = 10
-local LowBricksWarningColor = Color3.fromRGB(255, 70, 70)
-local MaxBricksWarningGrowTweenInfo: TweenInfo = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local MaxBricksWarningShrinkTweenInfo: TweenInfo = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-local MaxBricksWarningPulseScale: number = 1.12
 local defaultWalkSpeedColor = walkSpeedText.TextColor3
-local defaultMaxBricksColor = maxBricksText.TextColor3
-local defaultMaxBricksColor2: Color3? = if maxBricksText2 then maxBricksText2.TextColor3 else nil
-local maxBricksTextScale: UIScale = (maxBricksText:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")) :: UIScale
-if maxBricksTextScale.Parent ~= maxBricksText then
-	maxBricksTextScale.Parent = maxBricksText
-end
-maxBricksTextScale.Scale = 1
-
-type MaxBricksWarningAnimBundle = {
-	scale: UIScale,
-	growTween: Tween?,
-	shrinkTween: Tween?,
-}
-
-local maxBricksWarningPrimary: MaxBricksWarningAnimBundle = {
-	scale = maxBricksTextScale,
-	growTween = nil,
-	shrinkTween = nil,
-}
-local maxBricksWarningSecondary: MaxBricksWarningAnimBundle? = nil
-if maxBricksText2 then
-	local maxBricksText2Scale: UIScale = (maxBricksText2:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")) :: UIScale
-	if maxBricksText2Scale.Parent ~= maxBricksText2 then
-		maxBricksText2Scale.Parent = maxBricksText2
-	end
-	maxBricksText2Scale.Scale = 1
-	maxBricksWarningSecondary = {
-		scale = maxBricksText2Scale,
-		growTween = nil,
-		shrinkTween = nil,
-	}
-end
-local localPlayer = game:GetService("Players").LocalPlayer
 local humSpeedConnection: RBXScriptConnection? = nil
 local DecelerationOnImage = GameConfig.DecelerationOnImage
 local DecelerationOffImage = GameConfig.DecelerationOffImage
 local DecelerationButtonShowSpeed = GameConfig.DecelerationButtonShowSpeed
-
-local function ResetMaxBricksWarningAnimationForBundle(bundle: MaxBricksWarningAnimBundle)
-	if bundle.growTween ~= nil then
-		bundle.growTween:Cancel()
-		bundle.growTween = nil
-	end
-	if bundle.shrinkTween ~= nil then
-		bundle.shrinkTween:Cancel()
-		bundle.shrinkTween = nil
-	end
-	bundle.scale.Scale = 1
-end
-
-local function PlayMaxBricksWarningAnimationForBundle(bundle: MaxBricksWarningAnimBundle)
-	ResetMaxBricksWarningAnimationForBundle(bundle)
-	local growTween = tweenService:Create(bundle.scale, MaxBricksWarningGrowTweenInfo, { Scale = MaxBricksWarningPulseScale })
-	local shrinkTween = tweenService:Create(bundle.scale, MaxBricksWarningShrinkTweenInfo, { Scale = 1 })
-	bundle.growTween = growTween
-	bundle.shrinkTween = shrinkTween
-	local growConnection: RBXScriptConnection? = nil
-	local shrinkConnection: RBXScriptConnection? = nil
-	growConnection = growTween.Completed:Connect(function(playbackState: Enum.PlaybackState)
-		if growConnection ~= nil then
-			growConnection:Disconnect()
-			growConnection = nil
-		end
-		if playbackState ~= Enum.PlaybackState.Completed or bundle.growTween ~= growTween then
-			return
-		end
-		bundle.growTween = nil
-		shrinkConnection = shrinkTween.Completed:Connect(function()
-			if shrinkConnection ~= nil then
-				shrinkConnection:Disconnect()
-				shrinkConnection = nil
-			end
-			if bundle.shrinkTween == shrinkTween then
-				bundle.shrinkTween = nil
-			end
-		end)
-		shrinkTween:Play()
-	end)
-	growTween:Play()
-end
+local localPlayer = game:GetService("Players").LocalPlayer
 
 -- RebirthFrame 红点（感叹号圆圈）
 local rebirthRedPoint: GuiObject? = if rebirthFrame then (rebirthFrame:FindFirstChild("RedPoint") :: GuiObject?) else nil
@@ -165,8 +74,7 @@ local function IsRebirthRedPointConditionMet(): boolean
 	end
 
 	local currentSpeedLevel = localPlayerInfo.shopInfo.walkSpeedLevel or DEFAULT_REBIRTH_REQUIRED_LEVEL
-	local currentBricksLevel = localPlayerInfo.shopInfo.maxBricksLevel or DEFAULT_REBIRTH_REQUIRED_LEVEL
-	return currentSpeedLevel >= nextRebirthData.speedLv and currentBricksLevel >= nextRebirthData.brickLv
+	return currentSpeedLevel >= nextRebirthData.speedLv
 end
 
 local function RefreshRebirthRedPointView()
@@ -222,12 +130,6 @@ local function ToggleDecelerationOn()
 	NetMsg.FireRequestSetDecelerationOn(newDecelerationOn)
 end
 
-if maxBricksAddButton then
-	maxBricksAddButton.Activated:Connect(function()
-		UIManager.OpenWindow(UIManager.WindowId.UpgradeShop)
-	end)
-end
-
 if walkSpeedAddButton then
 	walkSpeedAddButton.Activated:Connect(function()
 		UIManager.OpenWindow(UIManager.WindowId.UpgradeShop)
@@ -272,54 +174,6 @@ local function RefreshCoinCountText()
 	coinCountText.Text = NumberExtension.FormatBigNumberAA(coinAmount)
 end
 
---刷新砖块数量
-local function RefreshBricksDisplay()
-	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
-	if not localPlayerInfo then
-		return
-	end
-	-- Current Bricks
-	local bricksAmount: number = localPlayerInfo.carriedInfo.bricks or 0
-	local bricksStr = NumberExtension.FormatBigNumberAA(bricksAmount)
-
-	-- Max Bricks
-	local maxBricksLevel = localPlayerInfo.shopInfo.maxBricksLevel or 1
-	local maxBricksConfig = GameConfig.Shop.MaxBricks
-	local maxValue = 0
-	if maxBricksConfig then
-		maxValue = maxBricksConfig.abilityList[maxBricksLevel]
-			or maxBricksConfig.abilityList[maxBricksConfig.maxLevel]
-			or maxBricksConfig.abilityList[1]
-	end
-	local maxValueStr = NumberExtension.FormatBigNumberAA(maxValue)
-
-	TranslationTool.CustomAutoLocalizeTextLabel(maxBricksText, GameTexts.BricksCurrentMax.source, GameTexts.BricksCurrentMax.key, { bricksStr, maxValueStr })
-	if maxBricksText2 then
-		TranslationTool.CustomAutoLocalizeTextLabel(
-			maxBricksText2,
-			GameTexts.BricksCurrentMax.source,
-			GameTexts.BricksCurrentMax.key,
-			{ bricksStr, maxValueStr }
-		)
-	end
-	local remainingBricks = bricksAmount
-	if remainingBricks <= LowBricksThreshold then
-		maxBricksText.TextColor3 = LowBricksWarningColor
-		PlayMaxBricksWarningAnimationForBundle(maxBricksWarningPrimary)
-		if maxBricksText2 and maxBricksWarningSecondary and defaultMaxBricksColor2 then
-			maxBricksText2.TextColor3 = LowBricksWarningColor
-			PlayMaxBricksWarningAnimationForBundle(maxBricksWarningSecondary)
-		end
-	else
-		maxBricksText.TextColor3 = defaultMaxBricksColor
-		ResetMaxBricksWarningAnimationForBundle(maxBricksWarningPrimary)
-		if maxBricksText2 and maxBricksWarningSecondary and defaultMaxBricksColor2 then
-			maxBricksText2.TextColor3 = defaultMaxBricksColor2
-			ResetMaxBricksWarningAnimationForBundle(maxBricksWarningSecondary)
-		end
-	end
-end
-
 --刷新升级数值
 local function RefreshUpgradeValues()
 	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
@@ -327,30 +181,8 @@ local function RefreshUpgradeValues()
 		return
 	end
 
-	-- MaxBricks done in RefreshBricksDisplay
-	RefreshBricksDisplay()
-
-	--[[ LvText hidden in UI
-	-- Level text (用于显示“（Lv.10）”)
-	local maxBricksLevel = localPlayerInfo.shopInfo.maxBricksLevel or 1
-	TranslationTool.CustomAutoLocalizeTextLabel(
-		maxBricksLvText,
-		GameTexts.LevelWithFullWidthParentheses.source,
-		GameTexts.LevelWithFullWidthParentheses.key,
-		{ tostring(maxBricksLevel) }
-	)
-	]]
-
 	-- WalkSpeed
 	local walkSpeedLevel = localPlayerInfo.shopInfo.walkSpeedLevel or 1
-	--[[ LvText hidden in UI
-	TranslationTool.CustomAutoLocalizeTextLabel(
-		walkSpeedLvText,
-		GameTexts.LevelWithFullWidthParentheses.source,
-		GameTexts.LevelWithFullWidthParentheses.key,
-		{ tostring(walkSpeedLevel) }
-	)
-	]]
 
 	local isDecelerationOn = localPlayerInfo.settingInfo.decelerationOn == true
 	local targetWalkSpeedLevel = if isDecelerationOn then 1 else walkSpeedLevel
@@ -417,7 +249,6 @@ local function OnLocalPlayerInfoInit()
 	RefreshRebirthDisplay()
 	RefreshDecelerationButtonView()
 	RefreshRebirthRedPointView()
-	RefreshMaxBricksFrame2Visibility()
 end
 
 local function ConnectHumanoid(char: Model)
@@ -438,10 +269,6 @@ if localPlayer.Character then
 	end)
 end
 
-local function OnLocalPlayerCarriedChanged()
-	RefreshBricksDisplay()
-end
-
 local function OnLocalPlayerSkillLevelChanged(skillType: number, level: number)
 	RefreshUpgradeValues()
 	if skillType == GameConfig.SkillType.RebirthLevel then
@@ -451,7 +278,8 @@ local function OnLocalPlayerSkillLevelChanged(skillType: number, level: number)
 
 	if skillType == GameConfig.SkillType.RebirthLevel
 		or skillType == GameConfig.SkillType.WalkSpeed
-		or skillType == GameConfig.SkillType.MaxBricks
+		or skillType == GameConfig.SkillType.MaxFuel
+		or skillType == GameConfig.SkillType.MaxThrust
 	then
 		RefreshRebirthRedPointView()
 	end
@@ -467,4 +295,3 @@ RefreshRebirthRedPointView()
 ClientMsg.ConnectLocalPlayerCurrencyUpdate(OnLocalPlayerCoinCountChanged)
 ClientMsg.ConnectLocalPlayerInfoInit(OnLocalPlayerInfoInit)
 ClientMsg.ConnectLocalPlayerSkillLevelUpdate(OnLocalPlayerSkillLevelChanged)
-ClientMsg.ConnectLocalPlayerCarriedUpdate(OnLocalPlayerCarriedChanged)

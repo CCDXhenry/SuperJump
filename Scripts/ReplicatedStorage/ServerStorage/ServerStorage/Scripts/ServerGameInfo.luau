@@ -22,11 +22,7 @@ local playerInfoMap: { [number]: GameConfig.PlayerInfo } = {}
 local lastBroadcastModelYieldMap: { [number]: { [string]: number } } = {}
 
 -- 存档或历史 bug 可能导致等级 > maxLevel；夹紧并写回，避免 abilityList 取空后回退到 1 级
-type ShopLevelsClampTarget = {
-	walkSpeedLevel: number,
-	maxBricksLevel: number,
-	rebirthLevel: number,
-}
+type ShopLevelsClampTarget = GameConfig.ShopInfo
 
 type HomeLevelClampTarget = {
 	level: number,
@@ -42,11 +38,19 @@ local function ClampShopAndHomeLevelsFromConfig(shopInfo: ShopLevelsClampTarget,
 			changed = true
 		end
 	end
-	local bricksShop = GameConfig.Shop.MaxBricks
-	if bricksShop and bricksShop.maxLevel > 0 then
-		local v = math.clamp(math.floor(shopInfo.maxBricksLevel + 0.5), 1, bricksShop.maxLevel)
-		if v ~= shopInfo.maxBricksLevel then
-			shopInfo.maxBricksLevel = v
+	local fuelShop = GameConfig.Shop.MaxFuel
+	if fuelShop and fuelShop.maxLevel > 0 then
+		local v = math.clamp(math.floor(shopInfo.maxFuelLevel + 0.5), 1, fuelShop.maxLevel)
+		if v ~= shopInfo.maxFuelLevel then
+			shopInfo.maxFuelLevel = v
+			changed = true
+		end
+	end
+	local thrustShop = GameConfig.Shop.MaxThrust
+	if thrustShop and thrustShop.maxLevel > 0 then
+		local v = math.clamp(math.floor(shopInfo.maxThrustLevel + 0.5), 1, thrustShop.maxLevel)
+		if v ~= shopInfo.maxThrustLevel then
+			shopInfo.maxThrustLevel = v
 			changed = true
 		end
 	end
@@ -103,14 +107,6 @@ local function IsPlayerOnWorkspaceGround(player: Player): boolean
 	return workspace:Raycast(rayOrigin, rayDirection, raycastParams) ~= nil
 end
 
-local function SyncCarriedBricksAfterMaxBricksUpgrade(player: Player)
-	if IsPlayerOnWorkspaceGround(player) then
-		ServerGameInfo.SetPlayerBricksToMax(player)
-	else
-		ServerGameInfo.UpdateInventoryBricks(player, 0)
-	end
-end
-
 --初始化玩家信息
 function ServerGameInfo.InitPlayerInfo(
 	player: Player,
@@ -149,9 +145,7 @@ function ServerGameInfo.InitPlayerInfo(
 		homeSlot = "",
 
 		-- 初始化瞬态数据
-		carriedInfo = {
-			bricks = 0,
-		},
+		carriedInfo = {} :: GameConfig.PlayerCarriedInfo,
 		lastArrivedIslandId = 1,
 	}
 	for ownedGamePassIndex: number, ownedGamePassId: number in playerInfo.ownedGamePassList do
@@ -211,16 +205,10 @@ function ServerGameInfo.InitPlayerInfo(
 	local function OnCharacterReady(character: Model)
 		task.wait(0.2)
 		ServerMsg.FireLoadBackpackTools(player)
-		ServerGameInfo.SetPlayerBricksToMax(player)
 		local humanoid = character:WaitForChild("Humanoid", 5) :: Humanoid?
 		if humanoid then
 			humanoid.Died:Connect(function()
-				local totalBricks = ServerGameInfo.GetPlayerMaxBricks(player)
-				local remainingBricks = ServerGameInfo.GetPlayerCarriedBricks(player)
 				local pinfo = ServerGameInfo.GetPlayerInfo(player)
-				local islandId = if pinfo and pinfo.lastArrivedIslandId > 0 then pinfo.lastArrivedIslandId else 1
-				analyticsTool().LogPlayerDeath(player, totalBricks, remainingBricks, islandId)
-				-- 死亡后刷新：与重生/出生点对齐，避免客户端长期保留死前岛屿 id（飞行援助门槛等）
 				if pinfo then
 					pinfo.lastArrivedIslandId = 1
 				end
@@ -280,23 +268,6 @@ function ServerGameInfo.CreatePlayerSaveInfoByPlayerInfo(playerInfo: GameConfig.
 	}
 end
 
-function ServerGameInfo.TryMarkBricksIntroGuideFinished(player: Player, maxBricksLevel: number)
-	if maxBricksLevel < 2 then
-		return
-	end
-	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
-	if playerInfo == nil then
-		return
-	end
-	local key = GameConfig.GuideStepKey.BricksIntroFinished
-	if playerInfo.guideProgressInfo.guideStepDoneMap[key] then
-		return
-	end
-	playerInfo.guideProgressInfo.guideStepDoneMap[key] = true
-	playerInfo.playerInfoChanged = true
-	NetMsg.FireNotifyGuideProgressInfo(player, playerInfo.guideProgressInfo)
-end
-
 --获取玩家重生倍率
 function ServerGameInfo.GetRebirthMultiplier(player: Player): number
 	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
@@ -329,26 +300,24 @@ function ServerGameInfo.ExecuteRebirth(player: Player, isPaid: boolean): boolean
 
 	-- 检查要求
 	local requiredSpeedLv = nextRebirthConfig.speedLv
-	local requiredBrickLv = nextRebirthConfig.brickLv
 
-	if playerInfo.shopInfo.walkSpeedLevel < requiredSpeedLv or playerInfo.shopInfo.maxBricksLevel < requiredBrickLv then
+	if playerInfo.shopInfo.walkSpeedLevel < requiredSpeedLv then
 		print("[ServerGameInfo] ExecuteRebirth failed: requirements not met for", player.Name)
 		return false
 	end
 
-	local brickLevelBeforeRebirth = playerInfo.shopInfo.maxBricksLevel
 	local speedLevelBeforeRebirth = playerInfo.shopInfo.walkSpeedLevel
 
 	if not isPaid then
 		-- 免费重生：重置等级
 		playerInfo.shopInfo.walkSpeedLevel = 1
-		playerInfo.shopInfo.maxBricksLevel = 1
+		playerInfo.shopInfo.maxFuelLevel = 1
+		playerInfo.shopInfo.maxThrustLevel = 1
 		ServerGameInfo.ApplyWalkSpeed(player)
 		-- 同步重置后的等级
 		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.WalkSpeed, 1)
-		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxBricks, 1)
-		-- 按重置后的砖块等级刷新当前砖块数量
-		ServerGameInfo.SetPlayerBricksToMax(player)
+		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxFuel, 1)
+		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxThrust, 1)
 	end
 
 	-- 增加重生等级
@@ -368,7 +337,7 @@ function ServerGameInfo.ExecuteRebirth(player: Player, isPaid: boolean): boolean
 	analyticsTool().LogPlayerRebirth(
 		player,
 		playerInfo.shopInfo.rebirthLevel,
-		brickLevelBeforeRebirth,
+		0,
 		speedLevelBeforeRebirth,
 		if isPaid then 1 else 0
 	)
@@ -806,24 +775,34 @@ function ServerGameInfo.UpdateWalkSpeedLevel(player: Player, levelAdd: number)
 	--print("[ServerGameInfo] UpdateWalkSpeedLevel for", player.Name, "by", levelAdd, "total", playerInfo.shopInfo.walkSpeedLevel)
 end
 
---更新最大砖头等级
-function ServerGameInfo.UpdateMaxBricksLevel(player: Player, levelAdd: number)
+--更新最大燃料等级
+function ServerGameInfo.UpdateMaxFuelLevel(player: Player, levelAdd: number)
 	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
 	if playerInfo == nil then
-		warn("[ServerGameInfo] UpdateMaxBricksLevel failed: playerInfo not found for", player.Name)
+		warn("[ServerGameInfo] UpdateMaxFuelLevel failed: playerInfo not found for", player.Name)
 		return
 	end
-	playerInfo.shopInfo.maxBricksLevel += levelAdd
+	playerInfo.shopInfo.maxFuelLevel += levelAdd
 	playerInfo.playerInfoChanged = true
 
 	-- 通知客户端技能等级变更
-	NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxBricks, playerInfo.shopInfo.maxBricksLevel)
-	-- 同时更新持久化部分 ( inventoryInfo ) -> 保持兼容性或根据需求移除，既然提到弃用则主要同步技能等级
-	NetMsg.FireNotifyPlayerInventoryUpdate(player, playerInfo.inventoryInfo)
+	NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxFuel, playerInfo.shopInfo.maxFuelLevel)
+	print("[ServerGameInfo] UpdateMaxFuelLevel for", player.Name, "by", levelAdd, "total", playerInfo.shopInfo.maxFuelLevel)
+end
 
-	ServerGameInfo.TryMarkBricksIntroGuideFinished(player, playerInfo.shopInfo.maxBricksLevel)
-	SyncCarriedBricksAfterMaxBricksUpgrade(player)
-	print("[ServerGameInfo] UpdateMaxBricksLevel for", player.Name, "by", levelAdd, "total", playerInfo.shopInfo.maxBricksLevel)
+--更新最大推进速度等级
+function ServerGameInfo.UpdateMaxThrustLevel(player: Player, levelAdd: number)
+	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	if playerInfo == nil then
+		warn("[ServerGameInfo] UpdateMaxThrustLevel failed: playerInfo not found for", player.Name)
+		return
+	end
+	playerInfo.shopInfo.maxThrustLevel += levelAdd
+	playerInfo.playerInfoChanged = true
+
+	-- 通知客户端技能等级变更
+	NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxThrust, playerInfo.shopInfo.maxThrustLevel)
+	print("[ServerGameInfo] UpdateMaxThrustLevel for", player.Name, "by", levelAdd, "total", playerInfo.shopInfo.maxThrustLevel)
 end
 
 --统一处理属性升级
@@ -841,8 +820,10 @@ function ServerGameInfo.UpgradeAbility(player: Player, abilityName: string, leve
 	local currentLevel: number = 0
 	if abilityName == "WalkSpeed" then
 		currentLevel = playerInfo.shopInfo.walkSpeedLevel
-	elseif abilityName == "MaxBricks" then
-		currentLevel = playerInfo.shopInfo.maxBricksLevel
+	elseif abilityName == "MaxFuel" then
+		currentLevel = playerInfo.shopInfo.maxFuelLevel
+	elseif abilityName == "MaxThrust" then
+		currentLevel = playerInfo.shopInfo.maxThrustLevel
 	elseif abilityName == "HomeLevel" then
 		currentLevel = playerInfo.homeInfo.level
 	end
@@ -873,7 +854,8 @@ function ServerGameInfo.UpgradeAbility(player: Player, abilityName: string, leve
 	-- 扣除费用
 	local reason = if abilityName == "WalkSpeed"
 		then GameConfig.ItemCountChangeReason.SpendOnUpgradeWalkSpeed
-		elseif abilityName == "MaxBricks" then GameConfig.ItemCountChangeReason.SpendOnUpgradeMaxBricks
+		elseif abilityName == "MaxFuel" then GameConfig.ItemCountChangeReason.SpendOnUpgradeFuel
+		elseif abilityName == "MaxThrust" then GameConfig.ItemCountChangeReason.SpendOnUpgradeThrust
 		else GameConfig.ItemCountChangeReason.SpendOnUpgradeHome
 	ServerGameInfo.UpdatePlayerCurrency(player, currencyType, -totalCost, reason)
 
@@ -883,13 +865,14 @@ function ServerGameInfo.UpgradeAbility(player: Player, abilityName: string, leve
 		-- 应用效果
 		ServerGameInfo.ApplyWalkSpeed(player)
 		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.WalkSpeed, nextLevel)
-	elseif abilityName == "MaxBricks" then
-		playerInfo.shopInfo.maxBricksLevel = nextLevel
+	elseif abilityName == "MaxFuel" then
+		playerInfo.shopInfo.maxFuelLevel = nextLevel
 		-- 通知客户端技能等级变更
-		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxBricks, nextLevel)
-		-- 在 Ground 上则补满背负砖，否则仅触发携带态同步
-		SyncCarriedBricksAfterMaxBricksUpgrade(player)
-		ServerGameInfo.TryMarkBricksIntroGuideFinished(player, nextLevel)
+		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxFuel, nextLevel)
+	elseif abilityName == "MaxThrust" then
+		playerInfo.shopInfo.maxThrustLevel = nextLevel
+		-- 通知客户端技能等级变更
+		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxThrust, nextLevel)
 	elseif abilityName == "HomeLevel" then
 		playerInfo.homeInfo.level = nextLevel
 		-- 家园等级变更通知
@@ -902,8 +885,11 @@ function ServerGameInfo.UpgradeAbility(player: Player, abilityName: string, leve
 	print("[ServerGameInfo] UpgradeAbility for", player.Name, "ability", abilityName, "to level", nextLevel)
 	if abilityName == "HomeLevel" then
 		analyticsTool().LogBaseUpgrade(player, nextLevel)
-	elseif abilityName == "MaxBricks" then
+	elseif abilityName == "MaxFuel" then
 		local upgradeType = if addLevels >= 10 then 2 else 1
+		analyticsTool().LogPlayerUpgrade(player, upgradeType, nextLevel)
+	elseif abilityName == "MaxThrust" then
+		local upgradeType = if addLevels >= 10 then 4 else 3
 		analyticsTool().LogPlayerUpgrade(player, upgradeType, nextLevel)
 	elseif abilityName == "WalkSpeed" then
 		local upgradeType = if addLevels >= 10 then 4 else 3
@@ -927,8 +913,10 @@ function ServerGameInfo.UpgradeAbilityPaid(player: Player, abilityName: string, 
 	local currentLevel: number
 	if abilityName == "WalkSpeed" then
 		currentLevel = playerInfo.shopInfo.walkSpeedLevel
-	elseif abilityName == "MaxBricks" then
-		currentLevel = playerInfo.shopInfo.maxBricksLevel
+	elseif abilityName == "MaxFuel" then
+		currentLevel = playerInfo.shopInfo.maxFuelLevel
+	elseif abilityName == "MaxThrust" then
+		currentLevel = playerInfo.shopInfo.maxThrustLevel
 	elseif abilityName == "HomeLevel" then
 		currentLevel = playerInfo.homeInfo.level
 	else
@@ -957,11 +945,12 @@ function ServerGameInfo.UpgradeAbilityPaid(player: Player, abilityName: string, 
 		playerInfo.shopInfo.walkSpeedLevel = nextLevel
 		ServerGameInfo.ApplyWalkSpeed(player)
 		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.WalkSpeed, nextLevel)
-	elseif abilityName == "MaxBricks" then
-		playerInfo.shopInfo.maxBricksLevel = nextLevel
-		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxBricks, nextLevel)
-		SyncCarriedBricksAfterMaxBricksUpgrade(player)
-		ServerGameInfo.TryMarkBricksIntroGuideFinished(player, nextLevel)
+	elseif abilityName == "MaxFuel" then
+		playerInfo.shopInfo.maxFuelLevel = nextLevel
+		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxFuel, nextLevel)
+	elseif abilityName == "MaxThrust" then
+		playerInfo.shopInfo.maxThrustLevel = nextLevel
+		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxThrust, nextLevel)
 	elseif abilityName == "HomeLevel" then
 		playerInfo.homeInfo.level = nextLevel
 		ServerGameInfo.NotifyPlayerHomeInfoUpdate(player.UserId)
@@ -972,8 +961,11 @@ function ServerGameInfo.UpgradeAbilityPaid(player: Player, abilityName: string, 
 	print("[ServerGameInfo] UpgradeAbilityPaid for", player.Name, "ability", abilityName, "to level", nextLevel)
 	if abilityName == "HomeLevel" then
 		analyticsTool().LogBaseUpgrade(player, nextLevel)
-	elseif abilityName == "MaxBricks" then
+	elseif abilityName == "MaxFuel" then
 		local upgradeType = if upgradedCount >= 10 then 2 else 1
+		analyticsTool().LogPlayerUpgrade(player, upgradeType, nextLevel)
+	elseif abilityName == "MaxThrust" then
+		local upgradeType = if upgradedCount >= 10 then 4 else 3
 		analyticsTool().LogPlayerUpgrade(player, upgradeType, nextLevel)
 	elseif abilityName == "WalkSpeed" then
 		local upgradeType = if upgradedCount >= 10 then 4 else 3
@@ -995,59 +987,6 @@ function ServerGameInfo.UpdateHomeLevel(player: Player, levelAdd: number)
 	--家园等级变更通知
 	ServerGameInfo.NotifyPlayerHomeInfoUpdate(player.UserId)
 	print("[ServerGameInfo] UpdateHomeLevel for", player.Name, "by", levelAdd, "total", playerInfo.homeInfo.level)
-end
-
---更新搬运中的砖头数量 (瞬态)
-function ServerGameInfo.UpdateInventoryBricks(player: Player, amount: number, isSet: boolean?, suppressNotify: boolean?)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
-	if playerInfo == nil then
-		warn("[ServerGameInfo] UpdateInventoryBricks failed: playerInfo not found for", player.Name)
-		return
-	end
-
-	if isSet then
-		playerInfo.carriedInfo.bricks = amount
-	else
-		playerInfo.carriedInfo.bricks += amount
-	end
-
-	-- 同步瞬态信息到客户端
-	if suppressNotify ~= true then
-		NetMsg.FireNotifyPlayerCarriedUpdate(player, playerInfo.carriedInfo)
-	end
-end
-
-function ServerGameInfo.GetPlayerCarriedBricks(player: Player): number
-	local playerInfo: GameConfig.PlayerInfo? = playerInfoMap[player.UserId]
-	if playerInfo == nil then
-		return 0
-	end
-	return playerInfo.carriedInfo.bricks
-end
-
---获取玩家最大砖头数量
-function ServerGameInfo.GetPlayerMaxBricks(player: Player): number
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
-	local config = GameConfig.Shop.MaxBricks
-	if playerInfo == nil then
-		return config.abilityList[config.maxLevel] or config.abilityList[1]
-	end
-	return config.abilityList[playerInfo.shopInfo.maxBricksLevel] or config.abilityList[config.maxLevel] or config.abilityList[1]
-end
-
---将玩家砖头补满 (瞬态)
-function ServerGameInfo.SetPlayerBricksToMax(player: Player)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
-	if playerInfo == nil then
-		return
-	end
-	local maxBricks = ServerGameInfo.GetPlayerMaxBricks(player)
-	playerInfo.carriedInfo.bricks = maxBricks
-
-	-- 同步瞬态层
-	NetMsg.FireNotifyPlayerCarriedUpdate(player, playerInfo.carriedInfo)
-
-	--print("[ServerGameInfo] SetPlayerBricksToMax for", player.Name, "to", maxBricks)
 end
 
 --添加模型到库存

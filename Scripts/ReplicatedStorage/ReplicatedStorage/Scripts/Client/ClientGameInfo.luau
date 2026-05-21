@@ -49,9 +49,7 @@ function ClientGameInfo.InitPlayerInfo(
 		currentGuideType = GameConfig.GuideType.None,
 
 		-- 初始化瞬态信息
-		carriedInfo = {
-			bricks = 0,
-		},
+		carriedInfo = {} :: GameConfig.PlayerCarriedInfo,
 	}
 	if localPlayerInfo == nil then
 		return
@@ -148,7 +146,7 @@ function ClientGameInfo.UpdateCarriedInfo(carriedInfo: GameConfig.PlayerCarriedI
 	if localPlayerInfo then
 		localPlayerInfo.carriedInfo = carriedInfo
 		ClientMsg.FireLocalPlayerCarriedUpdate(carriedInfo)
-		--print("[ClientGameInfo] Carried update received and signal fired:", carriedInfo.bricks)
+		--print("[ClientGameInfo] Carried update received")
 	end
 end
 
@@ -261,8 +259,10 @@ function ClientGameInfo.UpdateSkillLevel(skillType: number, level: number)
 
 	if skillType == GameConfig.SkillType.WalkSpeed then
 		localPlayerInfo.shopInfo.walkSpeedLevel = level
-	elseif skillType == GameConfig.SkillType.MaxBricks then
-		localPlayerInfo.shopInfo.maxBricksLevel = level
+	elseif skillType == GameConfig.SkillType.MaxFuel then
+		localPlayerInfo.shopInfo.maxFuelLevel = level
+	elseif skillType == GameConfig.SkillType.MaxThrust then
+		localPlayerInfo.shopInfo.maxThrustLevel = level
 	elseif skillType == GameConfig.SkillType.RebirthLevel then
 		localPlayerInfo.shopInfo.rebirthLevel = level
 		localPlayerInfo.settingInfo.decelerationOn = false

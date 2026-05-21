@@ -59,8 +59,6 @@ local function MountFingerCloneUnder(target: GuiObject)
 	local clone = fingerImage:Clone()
 	clone.Name = FINGER_CLONE_NAME
 	clone.Visible = true
-	--clone.AnchorPoint = Vector2.new(0.5, 0.5)
-	--clone.Position = UDim2.fromScale(0.5, 0.5)
 	clone.ZIndex = target.ZIndex + FINGER_ZINDEX_BOOST
 	clone.Parent = target
 	fingerImage.Visible = false
@@ -122,34 +120,7 @@ local function FindLobbyBrainrotSlotButton(): GuiButton?
 	return nil
 end
 
-local function FindLobbyAddButton(): GuiButton?
-	if localPlayer == nil then
-		return nil
-	end
-	local playerGui = localPlayer:FindFirstChild("PlayerGui") :: PlayerGui?
-	if playerGui == nil then
-		return nil
-	end
-	local screenGui = playerGui:FindFirstChild("GameScreenGui") :: ScreenGui?
-	if screenGui == nil then
-		return nil
-	end
-	local lobby = screenGui:FindFirstChild("LobbyFrame") :: Frame?
-	if lobby == nil then
-		return nil
-	end
-	local maxBricks = lobby:FindFirstChild("MaxBricksFrame") :: Frame?
-	if maxBricks == nil then
-		return nil
-	end
-	local btn = maxBricks:FindFirstChild("AddButton")
-	if btn and btn:IsA("GuiButton") then
-		return btn
-	end
-	return nil
-end
-
-local function FindUpgradeShopMaxBricksButton(): GuiButton?
+local function FindUpgradeShopFuelButton(): GuiButton?
 	if localPlayer == nil then
 		return nil
 	end
@@ -169,7 +140,7 @@ local function FindUpgradeShopMaxBricksButton(): GuiButton?
 	if scroll == nil then
 		return nil
 	end
-	local row = scroll:FindFirstChild("UpgradeMaxBricksFrame1") :: Frame?
+	local row = scroll:FindFirstChild("UpgradeMaxFuelFrame1") :: Frame?
 	if row == nil then
 		return nil
 	end
@@ -232,42 +203,14 @@ local function RefreshGuideFrame()
 		return
 	end
 
-	if guideType == GameConfig.GuideType.TutorialBricksLobby then
-		local btn = FindLobbyAddButton()
-		if btn == nil or not IsGuiVisibleChain(btn) then
-			guideFrame.Visible = false
-			StopGuideAni()
-			return
-		end
-		MountFingerCloneUnder(btn)
-		guideFrame.Visible = false
-		return
-	end
-
-	if guideType == GameConfig.GuideType.TutorialBricksShop then
-		local btn = FindUpgradeShopMaxBricksButton()
-		if btn == nil or not IsGuiVisibleChain(btn) then
-			guideFrame.Visible = false
-			StopGuideAni()
-			return
-		end
-		MountFingerCloneUnder(btn)
-		guideFrame.Visible = false
-		return
-	end
-
 	guideFrame.Visible = false
 	StopGuideAni()
 end
 
 guideFrame:GetPropertyChangedSignal("Visible"):Connect(function()
 	if not guideFrame.Visible then
-		-- 砖块引导时手指克隆在按钮子级，仅隐藏 guideFrame，不能销毁克隆
 		local t = ClientGameInfo.GetCurrentGuideType()
-		if t == GameConfig.GuideType.TutorialBricksLobby
-			or t == GameConfig.GuideType.TutorialBricksShop
-			or t == GameConfig.GuideType.TutorialBrainrotPlaceSlot
-		then
+		if t == GameConfig.GuideType.TutorialBrainrotPlaceSlot then
 			return
 		end
 		StopGuideAni()
@@ -297,14 +240,7 @@ runService.RenderStepped:Connect(function()
 		return
 	end
 	local t = ClientGameInfo.GetCurrentGuideType()
-	if t == GameConfig.GuideType.TutorialBricksLobby or t == GameConfig.GuideType.TutorialBricksShop then
-		UpdateFingerOnTrackedButton(function()
-			if t == GameConfig.GuideType.TutorialBricksLobby then
-				return FindLobbyAddButton()
-			end
-			return FindUpgradeShopMaxBricksButton()
-		end)
-	elseif t == GameConfig.GuideType.TutorialBrainrotPlaceSlot then
+	if t == GameConfig.GuideType.TutorialBrainrotPlaceSlot then
 		UpdateFingerOnTrackedButton(FindLobbyBrainrotSlotButton)
 	end
 end)

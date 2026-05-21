@@ -25,30 +25,6 @@ local function RefreshGuideText()
 		return
 	end
 
-	if currentGuideType == GameConfig.GuideType.TutorialBricksLobby then
-		local info = ClientGameInfo.GetLocalPlayerInfo()
-		if info == nil then
-			guideText.Visible = false
-			return
-		end
-		local coin = info.currencies["1"] or 0
-		local target = GameConfig.GuideBricksIntroMinCoin
-		guideText.Visible = true
-		if coin < target then
-			local collectEntry = GameTexts.GuideTutorialBricksLobbyCollect
-			TranslationTool.CustomAutoLocalizeTextLabel(
-				guideText,
-				collectEntry.source,
-				collectEntry.key,
-				{ tostring(math.floor(coin)), tostring(target) }
-			)
-		else
-			local lobbyEntry = GameTexts.GuideTutorialBricksLobby
-			TranslationTool.CustomAutoLocalizeTextLabel(guideText, lobbyEntry.source, lobbyEntry.key)
-		end
-		return
-	end
-
 	local textKey = GameConfig.GuideTextKeyMap[currentGuideType]
 	local textConfig = if textKey then (GameTexts[textKey] :: { source: string, key: string }) else nil
 	if textConfig == nil then

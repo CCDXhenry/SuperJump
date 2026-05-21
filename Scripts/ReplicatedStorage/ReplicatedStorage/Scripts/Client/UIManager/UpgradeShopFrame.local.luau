@@ -28,8 +28,10 @@ local scrollingFrame = thisFrame:WaitForChild("ScrollingFrame") :: ScrollingFram
 
 local upgradeWalkSpeedFrame1 = scrollingFrame:WaitForChild("UpgradeWalkSpeedFrame1") :: Frame
 local upgradeWalkSpeedFrame10 = scrollingFrame:WaitForChild("UpgradeWalkSpeedFrame10") :: Frame
-local upgradeMaxBricksFrame1 = scrollingFrame:WaitForChild("UpgradeMaxBricksFrame1") :: Frame
-local upgradeMaxBricksFrame10 = scrollingFrame:WaitForChild("UpgradeMaxBricksFrame10") :: Frame
+local upgradeMaxFuelFrame1 = scrollingFrame:WaitForChild("UpgradeMaxFuelFrame1") :: Frame
+local upgradeMaxFuelFrame10 = scrollingFrame:WaitForChild("UpgradeMaxFuelFrame10") :: Frame
+local upgradeMaxThrustSpeedFrame1 = scrollingFrame:WaitForChild("UpgradeMaxThrustSpeedFrame1") :: Frame
+local upgradeMaxThrustSpeedFrame10 = scrollingFrame:WaitForChild("UpgradeMaxThrustSpeedFrame10") :: Frame
 local uiListLayout = scrollingFrame:WaitForChild("UIListLayout") :: UIListLayout
 
 closeButton.Activated:Connect(function()
@@ -40,20 +42,26 @@ local UpgradeSuccessTipColor = Color3.fromRGB(80, 255, 120)
 
 local warnedMissingAbilityList: { [string]: boolean } = {}
 
+-- 按 skillType 映射对应的 GameTexts
+local ABILITY_TIP_TEXTS: { [number]: { source: string, key: string } } = {
+	[GameConfig.SkillType.WalkSpeed] = GameTexts.UpgradeSpeedLevelIncreased,
+	[GameConfig.SkillType.MaxFuel] = GameTexts.UpgradeFuelLevelIncreased,
+	[GameConfig.SkillType.MaxThrust] = GameTexts.UpgradeThrustLevelIncreased,
+}
+
+local ABILITY_VALUE_TEXTS: { [number]: { source: string, key: string } } = {
+	[GameConfig.SkillType.WalkSpeed] = GameTexts.SpeedWithNumber,
+	[GameConfig.SkillType.MaxFuel] = GameTexts.FuelWithNumber,
+	[GameConfig.SkillType.MaxThrust] = GameTexts.ThrustWithNumber,
+}
+
 local function showUpgradeTip(skillType: number, level: number)
-	if skillType == GameConfig.SkillType.WalkSpeed then
+	local tipText = ABILITY_TIP_TEXTS[skillType]
+	if tipText then
 		ClientMsg.FireShowGameTip(
-			GameTexts.UpgradeSpeedLevelIncreased.source,
+			tipText.source,
 			GameConfig.GameTipTweenType.FlyUp,
-			GameTexts.UpgradeSpeedLevelIncreased.key,
-			{ tostring(level) },
-			UpgradeSuccessTipColor
-		)
-	elseif skillType == GameConfig.SkillType.MaxBricks then
-		ClientMsg.FireShowGameTip(
-			GameTexts.UpgradeBricksLevelIncreased.source,
-			GameConfig.GameTipTweenType.FlyUp,
-			GameTexts.UpgradeBricksLevelIncreased.key,
+			tipText.key,
 			{ tostring(level) },
 			UpgradeSuccessTipColor
 		)
@@ -63,7 +71,7 @@ end
 local function getCostAndLimit(abilityName: string, currentLevel: number, levelAdd: number)
 	local shopData = GameConfig.Shop[abilityName]
 	local totalCost = 0
-	local nextLevel = currentLevel
+	local nextLevel = currentLevel or 1
 	for i = 1, levelAdd do
 		local cost = shopData.upgradeCostList[nextLevel]
 		if not cost then
@@ -81,23 +89,20 @@ local function refreshFrame(frame: Frame, skillType: number, levelAdd: number)
 		return
 	end
 
-	local abilityName, currentLevel
-	if skillType == GameConfig.SkillType.WalkSpeed then
-		abilityName = "WalkSpeed"
-		currentLevel = playerInfo.shopInfo.walkSpeedLevel
-	elseif skillType == GameConfig.SkillType.MaxBricks then
-		abilityName = "MaxBricks"
-		currentLevel = playerInfo.shopInfo.maxBricksLevel
-	else
+	local abilityInfo = GameConfig.ShopAbilityByType[skillType]
+	if not abilityInfo then
 		return
 	end
+
+	local abilityName = abilityInfo.abilityName
+	local currentLevel = (playerInfo.shopInfo :: any)[abilityInfo.levelField] or 1
 
 	local oldNumberLabel = frame:WaitForChild("OldNumberLabel") :: TextLabel
 	local newNumberLabel = frame:WaitForChild("NewNumberLabel") :: TextLabel
 	local imageButton = frame:WaitForChild("ImageButton") :: ImageButton
 	local textLabel = imageButton:WaitForChild("TextLabel") :: TextLabel
 
-	local shopData = GameConfig.Shop[abilityName]
+	local shopData = GameConfig.Shop[abilityInfo.shopKey]
 
 	local maxLevel = shopData.maxLevel
 	if typeof(currentLevel) ~= "number" or currentLevel ~= currentLevel then
@@ -112,10 +117,9 @@ local function refreshFrame(frame: Frame, skillType: number, levelAdd: number)
 	end
 	local currentValueStr = NumberExtension.FormatBigNumberAA(currentValue)
 
-	if abilityName == "WalkSpeed" then
-		TranslationTool.CustomAutoLocalizeTextLabel(oldNumberLabel, GameTexts.SpeedWithNumber.source, GameTexts.SpeedWithNumber.key, { currentValueStr })
-	else
-		TranslationTool.CustomAutoLocalizeTextLabel(oldNumberLabel, GameTexts.BricksWithNumber.source, GameTexts.BricksWithNumber.key, { currentValueStr })
+	local valueText = ABILITY_VALUE_TEXTS[skillType]
+	if valueText then
+		TranslationTool.CustomAutoLocalizeTextLabel(oldNumberLabel, valueText.source, valueText.key, { currentValueStr })
 	end
 
 	local canUpgrade, totalCost, targetLevel = getCostAndLimit(abilityName, currentLevel, levelAdd)
@@ -123,10 +127,8 @@ local function refreshFrame(frame: Frame, skillType: number, levelAdd: number)
 	if canUpgrade and nextValue ~= nil then
 		local nextValueStr = NumberExtension.FormatBigNumberAA(nextValue)
 
-		if abilityName == "WalkSpeed" then
-			TranslationTool.CustomAutoLocalizeTextLabel(newNumberLabel, GameTexts.SpeedWithNumber.source, GameTexts.SpeedWithNumber.key, { nextValueStr })
-		else
-			TranslationTool.CustomAutoLocalizeTextLabel(newNumberLabel, GameTexts.BricksWithNumber.source, GameTexts.BricksWithNumber.key, { nextValueStr })
+		if valueText then
+			TranslationTool.CustomAutoLocalizeTextLabel(newNumberLabel, valueText.source, valueText.key, { nextValueStr })
 		end
 
 		TranslationTool.CustomAutoLocalizeTextLabel(textLabel, NumberExtension.FormatBigNumberAA(totalCost))
@@ -134,7 +136,6 @@ local function refreshFrame(frame: Frame, skillType: number, levelAdd: number)
 		local currentCoin = playerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
 		if currentCoin >= totalCost then
 			imageButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-			-- Could tint green or restore normal color
 		else
 			imageButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
 		end
@@ -155,8 +156,10 @@ end
 local function refreshAll()
 	refreshFrame(upgradeWalkSpeedFrame1, GameConfig.SkillType.WalkSpeed, 1)
 	refreshFrame(upgradeWalkSpeedFrame10, GameConfig.SkillType.WalkSpeed, 10)
-	refreshFrame(upgradeMaxBricksFrame1, GameConfig.SkillType.MaxBricks, 1)
-	refreshFrame(upgradeMaxBricksFrame10, GameConfig.SkillType.MaxBricks, 10)
+	refreshFrame(upgradeMaxFuelFrame1, GameConfig.SkillType.MaxFuel, 1)
+	refreshFrame(upgradeMaxFuelFrame10, GameConfig.SkillType.MaxFuel, 10)
+	refreshFrame(upgradeMaxThrustSpeedFrame1, GameConfig.SkillType.MaxThrust, 1)
+	refreshFrame(upgradeMaxThrustSpeedFrame10, GameConfig.SkillType.MaxThrust, 10)
 end
 
 local function updateCanvas()
@@ -174,8 +177,13 @@ local function bindButton(frame: Frame, skillType: number, levelAdd: number)
 			return
 		end
 
-		local abilityName = if skillType == GameConfig.SkillType.WalkSpeed then "WalkSpeed" else "MaxBricks"
-		local currentLevel = if abilityName == "WalkSpeed" then playerInfo.shopInfo.walkSpeedLevel else playerInfo.shopInfo.maxBricksLevel
+		local abilityInfo = GameConfig.ShopAbilityByType[skillType]
+		if not abilityInfo then
+			return
+		end
+
+		local abilityName = abilityInfo.abilityName
+		local currentLevel = (playerInfo.shopInfo :: any)[abilityInfo.levelField] or 1
 		local canUpgrade, totalCost = getCostAndLimit(abilityName, currentLevel, levelAdd)
 
 		if canUpgrade then
@@ -206,7 +214,6 @@ local function getMaxUpgradeableSteps(abilityName: string, currentLevel: number,
 end
 
 local function bindPaymentButton(frame: Frame, skillType: number, levelAdd: number, productId: number)
-	-- PaymentButton 由 UI 侧新增；这里绑定其点击事件并触发内购
 	local paymentButton = frame:WaitForChild("PaymentButton") :: any
 	paymentButton.Activated:Connect(function()
 		local playerInfo = ClientGameInfo.GetLocalPlayerInfo()
@@ -214,16 +221,13 @@ local function bindPaymentButton(frame: Frame, skillType: number, levelAdd: numb
 			return
 		end
 
-		local abilityName, currentLevel
-		if skillType == GameConfig.SkillType.WalkSpeed then
-			abilityName = "WalkSpeed"
-			currentLevel = playerInfo.shopInfo.walkSpeedLevel
-		elseif skillType == GameConfig.SkillType.MaxBricks then
-			abilityName = "MaxBricks"
-			currentLevel = playerInfo.shopInfo.maxBricksLevel
-		else
+		local abilityInfo = GameConfig.ShopAbilityByType[skillType]
+		if not abilityInfo then
 			return
 		end
+
+		local abilityName = abilityInfo.abilityName
+		local currentLevel = (playerInfo.shopInfo :: any)[abilityInfo.levelField] or 1
 
 		local maxSteps = getMaxUpgradeableSteps(abilityName, currentLevel, levelAdd)
 		if maxSteps <= 0 then
@@ -246,11 +250,14 @@ end
 
 bindButton(upgradeWalkSpeedFrame1, GameConfig.SkillType.WalkSpeed, 1)
 bindButton(upgradeWalkSpeedFrame10, GameConfig.SkillType.WalkSpeed, 10)
-bindButton(upgradeMaxBricksFrame1, GameConfig.SkillType.MaxBricks, 1)
-bindButton(upgradeMaxBricksFrame10, GameConfig.SkillType.MaxBricks, 10)
+bindButton(upgradeMaxFuelFrame1, GameConfig.SkillType.MaxFuel, 1)
+bindButton(upgradeMaxFuelFrame10, GameConfig.SkillType.MaxFuel, 10)
+bindButton(upgradeMaxThrustSpeedFrame1, GameConfig.SkillType.MaxThrust, 1)
+bindButton(upgradeMaxThrustSpeedFrame10, GameConfig.SkillType.MaxThrust, 10)
 
 bindPaymentButton(upgradeWalkSpeedFrame10, GameConfig.SkillType.WalkSpeed, 10, GameConfig.ShopPaid.WalkSpeed10ProductId)
-bindPaymentButton(upgradeMaxBricksFrame10, GameConfig.SkillType.MaxBricks, 10, GameConfig.ShopPaid.MaxBricks10ProductId)
+bindPaymentButton(upgradeMaxFuelFrame10, GameConfig.SkillType.MaxFuel, 10, GameConfig.ShopPaid.MaxFuel10ProductId)
+bindPaymentButton(upgradeMaxThrustSpeedFrame10, GameConfig.SkillType.MaxThrust, 10, GameConfig.ShopPaid.MaxThrust10ProductId)
 
 local function OnCloseWindow(windowId: string)
 	if windowId == thisFrame:GetAttribute("WindowId") then
@@ -261,7 +268,7 @@ end
 
 ClientMsg.ConnectLocalPlayerSkillLevelUpdate(function(skillType, level)
 	refreshAll()
-	if skillType == GameConfig.SkillType.WalkSpeed or skillType == GameConfig.SkillType.MaxBricks then
+	if ABILITY_TIP_TEXTS[skillType] then
 		showUpgradeTip(skillType, level)
 	end
 end)

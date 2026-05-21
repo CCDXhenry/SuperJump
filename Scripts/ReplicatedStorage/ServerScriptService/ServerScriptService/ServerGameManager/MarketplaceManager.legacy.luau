@@ -202,8 +202,12 @@ local function ProcessReceipt(receiptInfo: GameConfig.ReceiptInfo): Enum.Product
 		ServerGameInfo.UpgradeAbilityPaid(player, "WalkSpeed", 10)
 		AnalyticsTool.AddProductPurchaseEvent(player, receiptInfo)
 		return Enum.ProductPurchaseDecision.PurchaseGranted
-	elseif receiptInfo.ProductId == GameConfig.ShopPaid.MaxBricks10ProductId then
-		ServerGameInfo.UpgradeAbilityPaid(player, "MaxBricks", 10)
+	elseif receiptInfo.ProductId == GameConfig.ShopPaid.MaxFuel10ProductId then
+		ServerGameInfo.UpgradeAbilityPaid(player, "MaxFuel", 10)
+		AnalyticsTool.AddProductPurchaseEvent(player, receiptInfo)
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	elseif receiptInfo.ProductId == GameConfig.ShopPaid.MaxThrust10ProductId then
+		ServerGameInfo.UpgradeAbilityPaid(player, "MaxThrust", 10)
 		AnalyticsTool.AddProductPurchaseEvent(player, receiptInfo)
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	elseif receiptInfo.ProductId == GameConfig.ShopPaid.BrainrotUpgrade3ProductId then
