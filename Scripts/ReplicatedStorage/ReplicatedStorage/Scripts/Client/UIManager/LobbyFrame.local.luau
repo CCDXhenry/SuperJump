@@ -32,6 +32,10 @@ guideTextScript.Parent = guideText
 
 local walkSpeedFrame: Frame = lobbyFrame:FindFirstChild("WalkSpeedFrame") :: Frame
 local walkSpeedText: TextLabel = walkSpeedFrame:FindFirstChild("NumberText") :: TextLabel
+local maxFuelFrame: Frame = lobbyFrame:FindFirstChild("MaxFuelFrame") :: Frame
+local maxFuelText: TextLabel = maxFuelFrame:FindFirstChild("NumberText") :: TextLabel
+local maxThrustFrame: Frame = lobbyFrame:FindFirstChild("MaxThrustFrame") :: Frame
+local maxThrustText: TextLabel = maxThrustFrame:FindFirstChild("NumberText") :: TextLabel
 local decelerationButton: ImageButton? = lobbyFrame:FindFirstChild("DecelerationButton") :: ImageButton?
 local decelerationButtonTextLabel: TextLabel? = if decelerationButton then (decelerationButton:FindFirstChild("TextLabel") :: TextLabel?) else nil
 local bottomButtonsFrame = lobbyFrame:FindFirstChild("BottomButtonsFrame")
@@ -42,6 +46,8 @@ local storeBundleEntryFrame: Frame? = (lobbyFrame:FindFirstChild("StoreBundleFra
 local storeBundleButton: GuiButton? = if storeBundleEntryFrame then (storeBundleEntryFrame:FindFirstChild("Button") :: any) else nil
 
 local walkSpeedAddButton: GuiButton? = walkSpeedFrame:FindFirstChild("AddButton") :: any
+local maxFuelAddButton: GuiButton? = maxFuelFrame:FindFirstChild("AddButton") :: any
+local maxThrustAddButton: GuiButton? = maxThrustFrame:FindFirstChild("AddButton") :: any
 
 local defaultWalkSpeedColor = walkSpeedText.TextColor3
 local humSpeedConnection: RBXScriptConnection? = nil
@@ -136,6 +142,18 @@ if walkSpeedAddButton then
 	end)
 end
 
+if maxFuelAddButton then
+	maxFuelAddButton.Activated:Connect(function()
+		UIManager.OpenWindow(UIManager.WindowId.UpgradeShop)
+	end)
+end
+
+if maxThrustAddButton then
+	maxThrustAddButton.Activated:Connect(function()
+		UIManager.OpenWindow(UIManager.WindowId.UpgradeShop)
+	end)
+end
+
 if rebirthButton then
 	rebirthButton.Activated:Connect(function()
 		UIManager.OpenWindow(UIManager.WindowId.Rebirth)
@@ -219,6 +237,28 @@ local function RefreshUpgradeValues()
 		walkSpeedText.TextColor3 = defaultWalkSpeedColor
 	end
 	RefreshDecelerationButtonVisible(levelSpeed)
+
+	-- MaxFuel
+	local fuelLevel = localPlayerInfo.shopInfo.maxFuelLevel or 1
+	local fuelConfig = GameConfig.Shop.MaxFuel
+	local maxFuelValue = 0
+	if fuelConfig then
+		maxFuelValue = fuelConfig.abilityList[fuelLevel]
+			or fuelConfig.abilityList[fuelConfig.maxLevel]
+			or fuelConfig.abilityList[1]
+	end
+	maxFuelText.Text = string.format("%.0fs/%.0fs", maxFuelValue, maxFuelValue)
+
+	-- MaxThrust
+	local thrustLevel = localPlayerInfo.shopInfo.maxThrustLevel or 1
+	local thrustConfig = GameConfig.Shop.MaxThrust
+	local maxThrustValue = 0
+	if thrustConfig then
+		maxThrustValue = thrustConfig.abilityList[thrustLevel]
+			or thrustConfig.abilityList[thrustConfig.maxLevel]
+			or thrustConfig.abilityList[1]
+	end
+	maxThrustText.Text = string.format("+%s", NumberExtension.FormatBigNumberAA(maxThrustValue))
 end
 
 local function RefreshView()

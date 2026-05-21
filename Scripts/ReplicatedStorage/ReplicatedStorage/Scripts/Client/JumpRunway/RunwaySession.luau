@@ -360,7 +360,8 @@ function RunwaySession.HudRefresh()
 	end
 	if Refs.fuelLabel then
 		if localState.fuel > 0.001 then
-			Refs.fuelLabel.Text = string.format("Dash fuel  %.2f", localState.fuel)
+			local maxFuel = RunwaySession.GetExpectedPlayerMaxFuel()
+			Refs.fuelLabel.Text = string.format("Dash fuel  %.1f/%.0f", localState.fuel, maxFuel)
 			Refs.fuelLabel.Visible = true
 		else
 			Refs.fuelLabel.Visible = false
@@ -556,6 +557,10 @@ function RunwaySession.GetExpectedPlayerMaxFuel(): number
 	end
 	level = math.clamp(math.floor(level), 1, maxLevel)
 	return fuelConfig.abilityList[level] or fallback
+end
+
+function RunwaySession.GetCurrentFuel(): number
+	return localState.fuel
 end
 
 function RunwaySession.GetExpectedPlayerMaxThrustSpeed(): number
