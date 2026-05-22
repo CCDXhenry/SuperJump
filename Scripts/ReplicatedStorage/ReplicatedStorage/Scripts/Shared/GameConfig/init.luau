@@ -12,6 +12,7 @@ local LittleElfChestDataModule = require(script:WaitForChild("LittleElfChestData
 local LittleElfChestRewardPoolDataModule = require(script:WaitForChild("LittleElfChestRewardPoolData"))
 local UpgradeShopRawData = require(script:WaitForChild("UpgradeShopData"))
 local ExEquipDataModule = require(script:WaitForChild("ExEquipData"))
+local MonsterDataModule = require(script:WaitForChild("MonsterData"))
 
 GameConfig.GameVersion = "1.0.0"
 GameConfig.ABTestVersion = "1.0.0"
@@ -382,6 +383,7 @@ export type LittleElfChestConfigData = {
 	iconImageId: string,
 	name_t: string,
 	quality: number,
+	distance: number,
 }
 
 export type LittleElfChestData = LittleElfChestConfigData
@@ -441,6 +443,29 @@ GameConfig.ExEquipDataMap = {} :: { [number]: ExEquipData }
 for _, data in ExEquipDataModule do
 	GameConfig.ExEquipDataMap[data.id] = data :: ExEquipData
 end
+
+export type MonsterData = {
+	id: number,
+	resourceName: string,
+	distance: number,
+	name_t: string,
+	moveSpeed: number,
+}
+
+GameConfig.Monsters = MonsterDataModule
+GameConfig.MonsterIdMap = {} :: { [number]: MonsterData }
+GameConfig.MonsterDistanceList = {} :: { MonsterData }
+
+for _, data in pairs(MonsterDataModule) do
+	if type(data) == "table" and type(data.id) == "number" then
+		local cfgData = data :: MonsterData
+		GameConfig.MonsterIdMap[cfgData.id] = cfgData
+		table.insert(GameConfig.MonsterDistanceList, cfgData)
+	end
+end
+table.sort(GameConfig.MonsterDistanceList, function(a: MonsterData, b: MonsterData): boolean
+	return a.distance < b.distance
+end)
 
 export type IslandData = {
 	id: number,
@@ -947,6 +972,46 @@ function GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(_segmentIndex: number
 	end
 	local minSpd = math.max(0, maxSpd - delta)
 	return maxSpd, minSpd
+end
+
+-- 根据玩家移动距离获取对应的小精灵宝箱配置（取 distance <= 当前距离的最大 distance 条目）
+function GameConfig.GetLittleElfChestByDistance(distance: number): LittleElfChestConfigData?
+	local chests = GameConfig.LittleElfChests
+	if typeof(chests) ~= "table" then
+		return nil
+	end
+	local best: LittleElfChestConfigData? = nil
+	for _, row in pairs(chests) do
+		if type(row) == "table" and type(row.distance) == "number" and row.distance <= distance then
+			if best == nil or row.distance > best.distance then
+				best = row :: LittleElfChestConfigData
+			end
+		end
+	end
+	return best
+end
+
+-- 根据玩家移动距离获取对应的怪物配置（取 distance <= 当前距离的最大 distance 条目）
+function GameConfig.GetMonsterByDistance(distance: number): MonsterData?
+	local list = GameConfig.MonsterDistanceList
+	if typeof(list) ~= "table" or #list == 0 then
+		return nil
+	end
+	-- 二分查找最后一个 distance <= 当前距离的条目
+	local lo = 1
+	local hi = #list
+	local best: MonsterData? = nil
+	while lo <= hi do
+		local mid = math.floor((lo + hi) / 2)
+		local entry = list[mid]
+		if entry.distance <= distance then
+			best = entry
+			lo = mid + 1
+		else
+			hi = mid - 1
+		end
+	end
+	return best
 end
 
 GameConfig.UpgradeHomeInfoUIDistanceLimit = 40

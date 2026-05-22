@@ -1,0 +1,51 @@
+return {
+	[1] = {
+		["resourceName"] = "Chaser",
+		["id"] = 1,
+		["distance"] = 200,
+		["name_t"] = "Chaser",
+		["moveSpeed"] = 16,
+	},
+	[2] = {
+		["resourceName"] = "Chaser",
+		["id"] = 2,
+		["distance"] = 500,
+		["name_t"] = "Chaser",
+		["moveSpeed"] = 30,
+	},
+	[3] = {
+		["resourceName"] = "Chaser",
+		["id"] = 3,
+		["distance"] = 1000,
+		["name_t"] = "Chaser",
+		["moveSpeed"] = 50,
+	},
+	[4] = {
+		["resourceName"] = "Chaser",
+		["id"] = 4,
+		["distance"] = 1500,
+		["name_t"] = "Chaser",
+		["moveSpeed"] = 80,
+	},
+	[5] = {
+		["resourceName"] = "Chaser",
+		["id"] = 5,
+		["distance"] = 2000,
+		["name_t"] = "Chaser",
+		["moveSpeed"] = 100,
+	},
+	[6] = {
+		["resourceName"] = "Chaser",
+		["id"] = 6,
+		["distance"] = 2500,
+		["name_t"] = "Chaser",
+		["moveSpeed"] = 120,
+	},
+	[7] = {
+		["resourceName"] = "Chaser",
+		["id"] = 7,
+		["distance"] = 3000,
+		["name_t"] = "Chaser",
+		["moveSpeed"] = 150,
+	},
+}

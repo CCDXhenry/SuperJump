@@ -124,12 +124,14 @@ local Refs: {
 	chestRewardPresentationStarted: boolean?,
 	chestBounceAlongSpeed: number?,
 	chestLandClock: number?,
+	chestDynamicConfigId: number?,
 	chestScheduledSpawnPos: Vector3?,
 	chestPredictedPlaceDistance: number?,
 	chestPostRewardExitCleanup: boolean?,
 	chestPostOpenTeleportDelayToken: number,
 	chestBackpackDeliverRequested: boolean?,
 	chestCarryReturnActive: boolean?,
+	lastRunAlongDistance: number?,
 	missAbortSentForThisRun: boolean?,
 	startTriggerStartArmed: boolean?,
 	startTriggerPlayerWasInsideVolume: boolean?,
@@ -172,12 +174,14 @@ local Refs: {
 	chestRewardPresentationStarted = false,
 	chestBounceAlongSpeed = nil,
 	chestLandClock = nil,
+	chestDynamicConfigId = nil,
 	chestScheduledSpawnPos = nil,
 	chestPredictedPlaceDistance = nil,
 	chestPostRewardExitCleanup = false,
 	chestPostOpenTeleportDelayToken = 0,
 	chestBackpackDeliverRequested = false,
 	chestCarryReturnActive = false,
+	lastRunAlongDistance = nil,
 	startTriggerStartArmed = true,
 	startTriggerPlayerWasInsideVolume = false,
 	startTriggerOutsideVolumeClock = nil,
@@ -983,6 +987,13 @@ function RunwaySession.StartFinalLandPronePhase(nowClock: number, hrp: BasePart?
 		hrp.AssemblyAngularVelocity = Vector3.zero
 		localState.finalLandProneSlideAlongStart = RunwaySession.CurrentAlongProgress(hrp)
 		Refs.chestSlideFwdH = fwdHInit
+		-- 记录本次跑道的沿轴距离，用于宝箱与怪物动态配置
+		local alongAtPhaseB = RunwaySession.CurrentAlongProgress(hrp)
+		Refs.lastRunAlongDistance = alongAtPhaseB
+		-- 根据距离动态选择宝箱配置
+		local chestByDist = GameConfig.GetLittleElfChestByDistance(alongAtPhaseB)
+		local chestIdOverride = if chestByDist then chestByDist.id else nil
+		Refs.chestDynamicConfigId = chestIdOverride
 		-- 子阶段 B 入口：用实际位置刷新宝箱落点（创建时机已在进入终局 Slide 时按 A+B 总时长调度）
 		local brakeK = cfg.RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP
 		local aheadStuds = cfg.RUNWAY_CHEST_SPAWN_AHEAD_STUDS
@@ -3277,9 +3288,11 @@ function RunwaySession.ClearLittleElfChestRefs()
 	Refs.chestRewardPresentationStarted = false
 	Refs.chestBounceAlongSpeed = nil
 	Refs.chestLandClock = nil
+	Refs.chestDynamicConfigId = nil
 	Refs.chestScheduledSpawnPos = nil
 	Refs.chestPredictedPlaceDistance = nil
 	Refs.chestBackpackDeliverRequested = false
+	Refs.lastRunAlongDistance = nil
 	ChaserClientManager.CleanupChaser()
 end
 
@@ -3452,9 +3465,15 @@ function RunwaySession.EnterLittleElfChestCarryReturn()
 	if localState.controlsDisabled then
 		RunwaySession.SetControlsEnabled(true)
 	end
+	-- 在清理之前先获取怪物数据
+	local monsterData: GameConfig.MonsterData? = nil
+	if Refs.lastRunAlongDistance ~= nil then
+		monsterData = GameConfig.GetMonsterByDistance(Refs.lastRunAlongDistance)
+	end
+	local chaserSpeedOverride = if monsterData then monsterData.moveSpeed else nil
 	RunwaySession.ClearLittleElfChestRefs()
 	if hDelay then
-		ChaserClientManager.SpawnChaser(hDelay:FindFirstAncestorOfClass("Model") :: Model, forwardExit)
+		ChaserClientManager.SpawnChaser(hDelay:FindFirstAncestorOfClass("Model") :: Model, forwardExit, chaserSpeedOverride)
 	end
 	Refs.chestCarryReturnActive = true
 	JumpRunWayFrame.EndSession()
@@ -3833,7 +3852,7 @@ function RunwaySession.TryLittleElfChestProximityHit(hrp: BasePart)
 	if not RunwaySession.IsPlayerNearLittleElfChest(hrp, chestModel, slideFwd) then
 		return
 	end
-	local chestConfigId = cfg.RUNWAY_CHEST_CONFIG_ID
+	local chestConfigId = if Refs.chestDynamicConfigId ~= nil then Refs.chestDynamicConfigId else cfg.RUNWAY_CHEST_CONFIG_ID
 	RunwaySession.ProcessLittleElfChestHit(chestModel, slideFwd, chestConfigId)
 end
 
@@ -3845,7 +3864,7 @@ function RunwaySession.SpawnLittleElfChestAtPosition(fwdH: Vector3, spawnPos: Ve
 		warn("[RunwaySession] LittleElfChests folder missing under ReplicatedStorage.Models")
 		return
 	end
-	local chestConfigId = cfg.RUNWAY_CHEST_CONFIG_ID
+	local chestConfigId = if Refs.chestDynamicConfigId ~= nil then Refs.chestDynamicConfigId else cfg.RUNWAY_CHEST_CONFIG_ID
 	local chestConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
 	if not chestConfig then
 		return

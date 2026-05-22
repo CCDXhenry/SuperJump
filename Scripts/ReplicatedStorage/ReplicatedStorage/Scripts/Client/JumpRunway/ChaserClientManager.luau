@@ -21,20 +21,31 @@ local heartbeatConn: RBXScriptConnection? = nil
 local faded = false
 local stopped = false
 
-local function IsChaserTouchingCharacter(chaser: Model, character: Model): boolean
-	local chaserParts = chaser:GetDescendants()
-	for _, descendant in ipairs(chaserParts) do
+local chaserCollisionGroup = "Chaser"
+local playerCollisionGroup = "Player"
+
+-- 管理 Chaser 所有 BasePart 的 Touched 连接，便于清理时统一断开
+local touchConns: { RBXScriptConnection } = {}
+
+local function SetPlayerCollisionGroup(character: Model)
+	for _, descendant in ipairs(character:GetDescendants()) do
 		if descendant:IsA("BasePart") then
-			local touching = descendant:GetTouchingParts()
-			for _, touchedPart in ipairs(touching) do
-				if touchedPart:IsAncestorOf(character) or character:IsAncestorOf(touchedPart) then
-					return true
-				end
-			end
+			descendant.CollisionGroup = playerCollisionGroup
 		end
 	end
-	return false
 end
+
+local function EnsurePlayerCollisionGroup()
+	local character = localPlayer.Character
+	if character then
+		SetPlayerCollisionGroup(character)
+	end
+end
+
+-- CharacterAdded 时也同步设置 Player 碰撞组
+localPlayer.CharacterAdded:Connect(function(character: Model)
+	SetPlayerCollisionGroup(character)
+end)
 
 local function KillCharacter(character: Model)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -43,12 +54,19 @@ local function KillCharacter(character: Model)
 	end
 end
 
+local function DisconnectTouchConns()
+	for _, conn in ipairs(touchConns) do
+		conn:Disconnect()
+	end
+	table.clear(touchConns)
+end
+
 local function InternalCleanup()
+	DisconnectTouchConns()
 	if heartbeatConn then
 		heartbeatConn:Disconnect()
 		heartbeatConn = nil
 	end
-	-- 不在这里销毁 activeChaser，由调用者根据需要决定何时销毁
 	faded = false
 	stopped = false
 end
@@ -61,7 +79,7 @@ local function InternalCleanupFull()
 	end
 end
 
-function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3)
+function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3, speedOverride: number?)
 	InternalCleanupFull()
 
 	if chaserTemplate == nil then
@@ -104,10 +122,13 @@ function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3)
 	chaser.Parent = workspace
 	activeChaser = chaser
 
-	local chaserSpeed = cfg.CHASER_SPEED
+	local chaserSpeed = if speedOverride ~= nil then speedOverride else cfg.CHASER_SPEED
 	if typeof(chaserSpeed) ~= "number" or chaserSpeed ~= chaserSpeed then
 		chaserSpeed = 16
 	end
+
+	-- 设置玩家角色的碰撞组
+	EnsurePlayerCollisionGroup()
 
 	-- 解除 HumanoidRootPart 的 Anchored，让 Humanoid 驱动移动和动画
 	local chaserHrpInit = chaser:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -116,10 +137,38 @@ function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3)
 		chaserHrpInit.CanCollide = true
 	end
 
-	-- 确保所有肢体部件有正确的物理属性
+	-- 设置 Chaser 所有部件的碰撞组 + 绑定 Touched 事件
+	-- 使用碰撞组使 Player 和 Chaser 不物理互碰，避免 Humanoid 避障干扰
+	-- 通过 Touched 事件检测接触来击杀玩家
 	for _, descendant in ipairs(chaser:GetDescendants()) do
-		if descendant:IsA("BasePart") and descendant.Name ~= "HumanoidRootPart" then
+		if descendant:IsA("BasePart") then
+			descendant.CollisionGroup = chaserCollisionGroup
 			descendant.CanCollide = true
+			descendant.CanTouch = true
+			local conn = descendant.Touched:Connect(function(hit: BasePart)
+				if stopped or faded then
+					return
+				end
+				if not hit or not hit.Parent then
+					return
+				end
+				local hitCharacter = hit:FindFirstAncestorOfClass("Model")
+				if hitCharacter == nil then
+					return
+				end
+				if hitCharacter ~= localPlayer.Character then
+					return
+				end
+				KillCharacter(hitCharacter)
+				stopped = true
+				task.delay(2, function()
+					if activeChaser == nil then
+						return
+					end
+					ChaserClientManager.StopAndFadeChaser()
+				end)
+			end)
+			table.insert(touchConns, conn)
 		end
 	end
 	local chaserHumanoid = chaser:FindFirstChildOfClass("Humanoid")
@@ -175,19 +224,6 @@ function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3)
 		end
 		local chaserHumanoidLive = chaser:FindFirstChildOfClass("Humanoid")
 		if chaserHumanoidLive == nil then
-			return
-		end
-
-		-- 碰撞检测
-		if IsChaserTouchingCharacter(chaser, currentChr) then
-			KillCharacter(currentChr)
-			stopped = true
-			task.delay(2, function()
-				if activeChaser == nil then
-					return
-				end
-				ChaserClientManager.StopAndFadeChaser()
-			end)
 			return
 		end
 
