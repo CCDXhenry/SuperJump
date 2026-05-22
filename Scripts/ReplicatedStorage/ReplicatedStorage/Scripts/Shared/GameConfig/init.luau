@@ -637,22 +637,20 @@ GameConfig.JumpRunwayDesigner = {
 	-- ═══════════════════════════════════════
 	-- 首跳前线前 AutoRun 沿轴速；↑ 起跳前冲更快
 	FIRST_TAKEOFF_AUTORUN_SPEED = 30,
-	-- 段内沿轴 max 初值；↑ 全程更快
-	JUMP_SPEED_INITIAL_MAX = 30,
 	-- max 与 min 固定差；↑ 段内减速幅度更大
 	JUMP_SPEED_MAX_TO_MIN_DELTA = 10,
-	-- [1]=Perfect,[2]=Ok,[3]=Late 每次起跳累加 bonus；↑ 踩点好则全程更快
+	-- [1]=Perfect,[2]=Ok,[3]=Late 每次起跳累加 bonus（相对 jumpPower 的比例）；↑ 踩点好则全程更快
 	JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER = {
-		[1] = 20,
-		[2] = 10,
-		[3] = 5,
+		[1] = 0.67,
+		[2] = 0.33,
+		[3] = 0.17,
 	},
 
 	-- ═══════════════════════════════════════
 	-- —— ③ 起跳 / 重力 / 贴地 ——
 	-- ═══════════════════════════════════════
-	-- 冲量起跳目标顶点高度(stud)；↑ 每跳更高、滞空更长
-	RUNWAY_JUMP_APEX_STUDS = 15,
+	-- 竖直速度相对于水平速度基准的比例（0~1 或 >1）；vy = jumpPower * 本值
+	JUMP_VERTICAL_RATIO = 0.6,
 	-- 跑道默认有效重力比例；↓ 更飘、顶点更高
 	RUNWAY_SESSION_EFFECTIVE_GRAVITY_SCALE = 0.15,
 	-- 终局按住冲刺时重力比例；↓ 冲刺段更飘
@@ -778,8 +776,7 @@ GameConfig.JumpRunway = {
 	-- —— 沿轴水平速度：首段 AutoRun、段内 min/max、评级 bonus、空中插值 ——
 	-- 第一次起跳前（takeoffCount==0 的 AutoRun）沿轴脚本推速
 	FIRST_TAKEOFF_AUTORUN_SPEED = jumpRunwayDesigner.FIRST_TAKEOFF_AUTORUN_SPEED,
-	-- 水平速度：每段 max = JUMP_SPEED_INITIAL_MAX + 累计起跳评级 bonus；min = max - JUMP_SPEED_MAX_TO_MIN_DELTA（固定差值）
-	JUMP_SPEED_INITIAL_MAX = jumpRunwayDesigner.JUMP_SPEED_INITIAL_MAX,
+	-- 水平速度：每段 max = jumpPower + 累计起跳评级 bonus；min = max - JUMP_SPEED_MAX_TO_MIN_DELTA（固定差值）
 	JUMP_SPEED_MAX_TO_MIN_DELTA = jumpRunwayDesigner.JUMP_SPEED_MAX_TO_MIN_DELTA,
 	-- 与 ComputeJumpWindowRatingTier 一致：1=Perfect，2=Ok，3=Late；每次起跳（含线前首跳配置的 tier）累加对应 bonus
 	JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER = jumpRunwayDesigner.JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER,
@@ -789,8 +786,8 @@ GameConfig.JumpRunway = {
 	JUMP_SPEED_LERP_CURVE = "ease_out",
 
 	-- —— 起跳竖直、冲量与各阶段有效重力 ——
-	-- 客户端冲量起跳：目标近似顶点高度（stud）；vy 使用有效重力 Workspace.Gravity * RUNWAY_SESSION_EFFECTIVE_GRAVITY_SCALE
-	RUNWAY_JUMP_APEX_STUDS = jumpRunwayDesigner.RUNWAY_JUMP_APEX_STUDS,
+	-- 竖直速度 = jumpPower * JUMP_VERTICAL_RATIO；原 jumpPower 绝对值改为水平速度基准
+	JUMP_VERTICAL_RATIO = jumpRunwayDesigner.JUMP_VERTICAL_RATIO,
 	-- PreSimulation 内保护 vy 不被脚本水平速度覆盖抹掉的时长（秒）
 	RUNWAY_JUMP_BOOST_HOLD_SEC = 0.28,
 	-- 跑道整局相对 Workspace.Gravity 的有效比例（VectorForce 抵消部分重力；起跳冲量与此对齐）
@@ -974,11 +971,12 @@ GameConfig.JumpRunway = {
 	CHASER_FADE_DURATION_SEC = 1.5,
 }
 
---- 跑道单段跳跃水平限速：max = JUMP_SPEED_INITIAL_MAX + cumulativeRatingBonus（clamp 至 ANTI_CHEAT_MAX_ALONG_SPEED）；min = max - JUMP_SPEED_MAX_TO_MIN_DELTA。
+--- 跑道单段跳跃水平限速：max = baseSpeed + cumulativeRatingBonus（clamp 至 ANTI_CHEAT_MAX_ALONG_SPEED）；min = max - JUMP_SPEED_MAX_TO_MIN_DELTA。
+--- baseSpeed 可选参数，若传入则作为水平速度基准（来自 jumpPower）；不传时回退为 0。
 --- segmentIndex 保留供调用方语义对齐（第 k 段对应 takeoffCount==k），当前与 max/min 数值无关。
-function GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(_segmentIndex: number, cumulativeRatingBonus: number): (number, number)
+function GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(_segmentIndex: number, cumulativeRatingBonus: number, baseSpeed: number?): (number, number)
 	local jr = GameConfig.JumpRunway
-	local initial = jr.JUMP_SPEED_INITIAL_MAX
+	local initial = baseSpeed or 0
 	if typeof(initial) ~= "number" or initial ~= initial then
 		initial = 0
 	end

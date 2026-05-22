@@ -36,6 +36,11 @@ type RunwayLocalState = RunwayStateStore.RunwayStateStoreShape
 local localPlayer = players.LocalPlayer
 local cfg = GameConfig.JumpRunway
 
+local function GetJumpPowerBaseSpeed(): number
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	return if localPlayerInfo then localPlayerInfo.jumpPower else GameConfig.JumpPowerDefaultValue
+end
+
 local Ph = RunwayConstants.Ph
 local Kind = RunwayConstants.Kind
 local SlideKindStandard = RunwayConstants.SlideKindStandard
@@ -626,7 +631,7 @@ end
 
 function RunwaySession.GetJumpHorizontalForwardSpeed(nowClock: number, segmentIndex: number): number
 	local maxSpd, minSpd =
-		GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(segmentIndex, localState.jumpSpeedCumulativeRatingBonus)
+		GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(segmentIndex, localState.jumpSpeedCumulativeRatingBonus, GetJumpPowerBaseSpeed())
 	local startClock = localState.jumpHorizLerpStartClock
 	if startClock == nil then
 		return minSpd
@@ -656,7 +661,8 @@ function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt
 	local segForDefault = math.max(1, localState.takeoffCount)
 	local _, defaultMinAlong = GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(
 		segForDefault,
-		localState.jumpSpeedCumulativeRatingBonus
+		localState.jumpSpeedCumulativeRatingBonus,
+		GetJumpPowerBaseSpeed()
 	)
 	local forwardSpeed = defaultMinAlong
 	if localState.takeoffCount == 0 then
@@ -703,7 +709,8 @@ function RunwaySession.UpdateSlideVelocity(hrp: BasePart, forward: Vector3, nowC
 	local slideSegIndex = math.clamp(math.max(1, localState.takeoffCount), 1, cfg.N_TOTAL_JUMPS)
 	local _, slideFloorAlong = GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(
 		slideSegIndex,
-		localState.jumpSpeedCumulativeRatingBonus
+		localState.jumpSpeedCumulativeRatingBonus,
+		GetJumpPowerBaseSpeed()
 	)
 	local slideSpeed = math.max(0, slideFloorAlong * (1 - alpha))
 	hrp.AssemblyLinearVelocity = forward * slideSpeed + Vector3.new(0, v.Y * cfg.SLIDE_VERTICAL_DAMP, 0)
@@ -1230,10 +1237,11 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 		localState.finalLandPronePrefallStartClock = 0
 		localState.finalLandProneSlideAlongStart = nil
 		localState.finalLandCachedLandingAlong = nil
-		-- 用当前段最大水平速度（JUMP_SPEED_INITIAL_MAX + 累计起跳评级 bonus）作为滑行起始速度
+		-- 用当前段最大水平速度（jumpPower + 累计起跳评级 bonus）作为滑行起始速度
 		local _, maxSpdForSeg = GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(
 			math.max(1, localState.takeoffCount),
-			localState.jumpSpeedCumulativeRatingBonus
+			localState.jumpSpeedCumulativeRatingBonus,
+			GetJumpPowerBaseSpeed()
 		)
 		local alongSpd = math.max(0, maxSpdForSeg)
 		localState.finalLandProneSlideAlongSpeedStart = alongSpd
@@ -1428,7 +1436,7 @@ function RunwaySession.GetRunwayTargetGroundAlongSpeed(humanoid: Humanoid, nowCl
 	if localState.phase == Ph.Airborne and localState.jumpHorizLerpStartClock ~= nil then
 		return RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, seg)
 	end
-	local _, minSpd = GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(seg, localState.jumpSpeedCumulativeRatingBonus)
+	local _, minSpd = GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(seg, localState.jumpSpeedCumulativeRatingBonus, GetJumpPowerBaseSpeed())
 	return minSpd
 end
 
@@ -2964,7 +2972,8 @@ function RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid: Humanoid, nowClock:
 	if localState.takeoffCount >= 1 then
 		local _, minSpd = GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(
 			math.max(1, localState.takeoffCount),
-			localState.jumpSpeedCumulativeRatingBonus
+			localState.jumpSpeedCumulativeRatingBonus,
+			GetJumpPowerBaseSpeed()
 		)
 		w = minSpd
 	end
@@ -4291,22 +4300,25 @@ end
 function RunwaySession.JumpSpeedBonusForTier(tier: number): number
 	local t = math.clamp(math.floor(tier), 1, 3)
 	local map = cfg.JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER :: { [number]: number }
-	local b = map[t]
-	if typeof(b) ~= "number" or b ~= b then
+	local ratio = map[t]
+	if typeof(ratio) ~= "number" or ratio ~= ratio then
 		return 0
 	end
-	return math.max(0, b)
+	ratio = math.max(0, ratio)
+	local baseSpd = GetJumpPowerBaseSpeed()
+	return baseSpd * ratio
 end
 
-function RunwaySession.JumpComputeSessionVy(): (number, number)
+function RunwaySession.JumpComputeSessionVy(): (number, number, number)
 	local gBase = workspace.Gravity
 	if gBase < 1e-3 then
 		gBase = 196.2
 	end
 	local gGrav = gBase * cfg.RUNWAY_SESSION_EFFECTIVE_GRAVITY_SCALE
 	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
-	local vy = if localPlayerInfo then localPlayerInfo.jumpPower else GameConfig.JumpPowerDefaultValue
-	return vy, gGrav
+	local jumpPower = if localPlayerInfo then localPlayerInfo.jumpPower else GameConfig.JumpPowerDefaultValue
+	local vy = jumpPower * cfg.JUMP_VERTICAL_RATIO
+	return jumpPower, vy, gGrav
 end
 
 function RunwaySession.JumpPerpImpulseTerm(hrp: BasePart, forward: Vector3): Vector3
@@ -4392,19 +4404,31 @@ function RunwaySession.JumpApplyTakeoff(
 	inLineWindow: boolean,
 	inChainWindow: boolean
 ): boolean
-	local vy, gGrav = RunwaySession.JumpComputeSessionVy()
+	local horizontalBaseSpeed, vy, gGrav = RunwaySession.JumpComputeSessionVy()
 	local forward = NormalizeRunwayForward(localState.runwayForward)
 	local perpTerm = RunwaySession.JumpPerpImpulseTerm(hrp, forward)
-	localState.jumpBoostVy = vy
-	localState.jumpBoostUntilClock = nowClock + cfg.RUNWAY_JUMP_BOOST_HOLD_SEC
 	-- 先累加本次起跳评级 bonus，再取冲量 max（与顶点内 max→min 一致）；终局叠冲刺在 UpdateAutoRunVelocity。
 	RunwaySession.JumpApplyRatingForTakeoff(humanoid, nowClock, inAuto, inLineWindow, inChainWindow)
 	local impulseSeg = math.clamp(localState.takeoffCount + 1, 1, cfg.N_TOTAL_JUMPS)
 	local forwardSpd = select(
 		1,
-		GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(impulseSeg, localState.jumpSpeedCumulativeRatingBonus)
+		GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(impulseSeg, localState.jumpSpeedCumulativeRatingBonus, horizontalBaseSpeed)
 	)
+	-- 竖直速度 = 水平速度基准对应比例 + bonus 对应比例
+	local bonusPart = forwardSpd - horizontalBaseSpeed
+	vy += bonusPart * cfg.JUMP_VERTICAL_RATIO
+	localState.jumpBoostVy = vy
+	localState.jumpBoostUntilClock = nowClock + cfg.RUNWAY_JUMP_BOOST_HOLD_SEC
 	hrp.AssemblyLinearVelocity = forward * forwardSpd + Vector3.new(0, vy, 0) + perpTerm
+	print(
+		string.format(
+			"[JumpApplyTakeoff] takeoffCount=%d forwardSpd=%.1f vy=%.1f bonusPart=%.1f",
+			localState.takeoffCount,
+			forwardSpd,
+			vy,
+			bonusPart
+		)
+	)
 	local tApex = if gGrav > 1e-6 then vy / gGrav else 0.25
 	localState.jumpHorizLerpStartClock = nowClock
 	localState.jumpHorizLerpDuration = math.max(0.01, tApex)
