@@ -844,6 +844,10 @@ GameConfig.JumpRunway = {
 	RUNWAY_RING_GROUND_RAY_MAX = 512,
 	-- 离地高度每增加 1 stud，Size.X/Size.Z 相对模板放大系数（触地 alt≈0 时为原大小）
 	RUNWAY_RING_SIZE_PER_STUD_ALT = 0.5,
+	-- AutoRun 且未过 BeginLine 时，最远端 Ring 缩放倍率（在 StartTrigger 处最大，接近 BeginLine 时线性降至 1x）
+	-- 缩放区间自动取 StartTrigger 到 BeginLine 的沿跑道距离
+	-- AutoRun 且未过 BeginLine 时，最远端 Ring 缩放倍率（距 BeginLine 足够远时最大，到达时恢复 1x）
+	RUNWAY_RING_BEGINLINE_MAX_MULTIPLIER = 5,
 	-- 仅当 RUNWAY_RING_SCRIPTED_SURFACE_UI 为 true 时由 SetupJumpRunwayRingSurfaceUi 使用
 	RUNWAY_RING_UI_PIXELS_PER_STUD = 20,
 	RUNWAY_RING_UI_TRACK_STROKE_PX = 15,

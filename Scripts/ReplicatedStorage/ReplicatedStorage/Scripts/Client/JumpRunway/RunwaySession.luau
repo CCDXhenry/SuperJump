@@ -2178,7 +2178,26 @@ function RunwaySession.UpdateRunwayRingTransform(humanoid: Humanoid, hrp: BasePa
 		groundY = hrp.Position.Y - humanoid.HipHeight
 	end
 	local sizeMul: number
-	if RunwaySession.IsRunwayScriptedGrounded(humanoid) then
+	if localState.phase == Ph.AutoRun and not localState.passedBeginLineOnce then
+		-- AutoRun 且未过 BeginLine：根据距 BeginLine 的沿轴距离缩放
+		local _, beginLine = RunwaySession.ResolveSceneParts()
+		if beginLine ~= nil and beginLine:IsA("BasePart") and localState.runwayOrigin ~= nil then
+			local fwd = NormalizeRunwayForward(localState.runwayForward)
+			local beginAlong = (beginLine.Position - localState.runwayOrigin):Dot(fwd)
+			local currentAlong = (hrp.Position - localState.runwayOrigin):Dot(fwd)
+			local distToBegin = beginAlong - currentAlong
+			local maxDist = beginAlong - localState.alongBaseline
+			if distToBegin > 0 and maxDist > 1e-4 then
+				local beginMaxMul = cfg.RUNWAY_RING_BEGINLINE_MAX_MULTIPLIER
+				local t = math.clamp(distToBegin / maxDist, 0, 1)
+				sizeMul = 1 + (beginMaxMul - 1) * t
+			else
+				sizeMul = 1
+			end
+		else
+			sizeMul = 1
+		end
+	elseif RunwaySession.IsRunwayScriptedGrounded(humanoid) then
 		sizeMul = 1
 	else
 		local altStuds = math.max(0, hrp.Position.Y - groundY - humanoid.HipHeight)
