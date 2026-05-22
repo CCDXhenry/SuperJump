@@ -57,6 +57,55 @@ local exerciseHrp: BasePart? = nil
 local exerciseForward: Vector3 = Vector3.zero
 local exerciseRunServiceConnection: RBXScriptConnection? = nil
 local exercisePrompt: ProximityPrompt? = nil
+local exerciseBikeAnimTrack: AnimationTrack? = nil
+
+--------------------------------------------------------------------
+-- 锻炼模式逻辑
+--------------------------------------------------------------------
+
+local function StopExerciseInternal()
+	if exerciseRunServiceConnection ~= nil then
+		exerciseRunServiceConnection:Disconnect()
+		exerciseRunServiceConnection = nil
+	end
+
+	if exerciseHumanoid ~= nil then
+		exerciseHumanoid.AutoRotate = true
+		exerciseHumanoid.PlatformStand = false
+		exerciseHumanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+		exerciseHumanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
+		exerciseHumanoid:Move(Vector3.zero, false)
+	end
+
+	-- 恢复玩家控制
+	local controls = GetPlayerControls()
+	if controls ~= nil then
+		pcall(function()
+			controls:Enable()
+		end)
+	end
+
+	-- 恢复器材 Prompt 按钮
+	if exercisePrompt ~= nil then
+		exercisePrompt.Enabled = true
+		exercisePrompt = nil
+	end
+
+	-- 停止 Bike 专属动画
+	if exerciseBikeAnimTrack ~= nil then
+		exerciseBikeAnimTrack:Stop()
+		exerciseBikeAnimTrack:Destroy()
+		exerciseBikeAnimTrack = nil
+	end
+
+	-- 关闭锻炼 UI
+	UIManager.CloseWindow(UIManager.WindowId.ExEquipFrame)
+
+	isExercising = false
+	exerciseHumanoid = nil
+	exerciseHrp = nil
+	exerciseForward = Vector3.zero
+end
 
 --------------------------------------------------------------------
 -- 模型替换逻辑
@@ -142,6 +191,11 @@ local function DoReplace(exEquipId: number, equipData: GameConfig.ExEquipData, e
 end
 
 local function ReplaceExEquipModel(exEquipId: number)
+	-- 切换器材时自动退出当前锻炼模式
+	if isExercising then
+		StopExerciseInternal()
+	end
+
 	local equipData = GameConfig.ExEquipDataMap[exEquipId]
 	if equipData == nil then
 		return
@@ -174,43 +228,6 @@ end
 --------------------------------------------------------------------
 -- 锻炼模式逻辑
 --------------------------------------------------------------------
-
-local function StopExerciseInternal()
-	if exerciseRunServiceConnection ~= nil then
-		exerciseRunServiceConnection:Disconnect()
-		exerciseRunServiceConnection = nil
-	end
-
-	if exerciseHumanoid ~= nil then
-		exerciseHumanoid.AutoRotate = true
-		exerciseHumanoid.PlatformStand = false
-		exerciseHumanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
-		exerciseHumanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
-		exerciseHumanoid:Move(Vector3.zero, false)
-	end
-
-	-- 恢复玩家控制
-	local controls = GetPlayerControls()
-	if controls ~= nil then
-		pcall(function()
-			controls:Enable()
-		end)
-	end
-
-	-- 恢复器材 Prompt 按钮
-	if exercisePrompt ~= nil then
-		exercisePrompt.Enabled = true
-		exercisePrompt = nil
-	end
-
-	-- 关闭锻炼 UI
-	UIManager.CloseWindow(UIManager.WindowId.ExEquipFrame)
-
-	isExercising = false
-	exerciseHumanoid = nil
-	exerciseHrp = nil
-	exerciseForward = Vector3.zero
-end
 
 local function StartExercise(equipId: number)
 	-- 如果已在锻炼中，先停止
@@ -254,16 +271,30 @@ local function StartExercise(equipId: number)
 	local forwardZ: Vector3 = -rootCf.LookVector
 	local rootPos: Vector3 = rootCf.Position
 
-	-- 根据器材类型确定站立面高度
-	local standHeight: number
-	if equipData.type == 1 then
-		-- type == 1：模型下有 ExerciseAttachment 标记站立高度
+	-- 获取 LowerTorso 相对于 HumanoidRootPart 的偏移量（用于将 LowerTorso 对齐到 Attachment）
+	local lowerTorsoOffset: Vector3 = Vector3.zero
+	local lowerTorso: BasePart? = character:FindFirstChild("LowerTorso") :: BasePart?
+	if lowerTorso ~= nil and hrp ~= nil then
+		lowerTorsoOffset = lowerTorso.Position - hrp.Position
+	end
+
+	-- 根据器材类型确定站立位置和高度
+	local standPos: Vector3
+	if equipData.type == 1 or equipData.type == 2 then
+		-- type == 1/2：模型下有 ExerciseAttachment 标记站立位置和高度
 		local exerciseAttachment: Attachment? = equipmentModel:FindFirstChild("ExerciseAttachment") :: Attachment?
 		if exerciseAttachment ~= nil then
-			standHeight = exerciseAttachment.WorldPosition.Y + CHARACTER_TORSO_HEIGHT
+			local attachPos: Vector3 = exerciseAttachment.WorldPosition
+			if equipData.type == 2 then
+				-- type == 2（Bike）：将玩家的 LowerTorso 对齐到 Attachment 位置
+				standPos = attachPos - lowerTorsoOffset
+			else
+				-- type == 1（Treadmill）：人物站立，需要躯干高度偏移
+				standPos = Vector3.new(attachPos.X, attachPos.Y + CHARACTER_TORSO_HEIGHT, attachPos.Z)
+			end
 		else
-			-- 没有 Attachment 时用 PrimaryPart 的 Y 作为兜底
-			standHeight = rootPos.Y + CHARACTER_TORSO_HEIGHT
+			-- 没有 Attachment 时用 PrimaryPart 的位置作为兜底
+			standPos = Vector3.new(rootPos.X, rootPos.Y + CHARACTER_TORSO_HEIGHT, rootPos.Z)
 		end
 	else
 		-- 其他类型：用 Raycast 向下检测器材顶面确定站立高度
@@ -283,9 +314,8 @@ local function StartExercise(equipId: number)
 			local cframe: CFrame, size: Vector3 = equipmentModel:GetBoundingBox()
 			modelTopY = cframe.Y + size.Y / 2
 		end
-		standHeight = modelTopY + CHARACTER_TORSO_HEIGHT
+		standPos = Vector3.new(rootPos.X, modelTopY + CHARACTER_TORSO_HEIGHT, rootPos.Z)
 	end
-	local standPos: Vector3 = Vector3.new(rootPos.X, standHeight, rootPos.Z)
 
 	-- 直接通过 CFrame 精确定位，避免物理碰撞导致穿模
 	hrp.CFrame = CFrame.lookAt(standPos, standPos + forwardZ)
@@ -337,17 +367,31 @@ local function StartExercise(equipId: number)
 			return
 		end
 
-		-- 稳定结束，锁定站立高度，开始跑步动画
+		-- 稳定结束，锁定站立高度
 		exerciseHrp.CFrame = CFrame.lookAt(standPos, standPos + forwardZ)
 
-		-- 强制走/跑状态产生动画
-		if exerciseHumanoid:GetState() ~= Enum.HumanoidStateType.Running
-			and exerciseHumanoid:GetState() ~= Enum.HumanoidStateType.RunningNoPhysics then
-			pcall(function()
-				exerciseHumanoid:ChangeState(Enum.HumanoidStateType.Running)
-			end)
+		if equipData.type == 2 then
+			-- Bike 类型：播放专属骑行动画
+			if exerciseBikeAnimTrack == nil then
+				local animator: Animator? = exerciseHumanoid:FindFirstChildOfClass("Animator")
+				if animator ~= nil then
+					local bikeAnim = Instance.new("Animation")
+					bikeAnim.AnimationId = "rbxassetid://78744145986758"
+					exerciseBikeAnimTrack = animator:LoadAnimation(bikeAnim)
+					exerciseBikeAnimTrack.Looped = true
+					exerciseBikeAnimTrack:Play()
+				end
+			end
+		else
+			-- 其他类型：强制走/跑状态产生动画
+			if exerciseHumanoid:GetState() ~= Enum.HumanoidStateType.Running
+				and exerciseHumanoid:GetState() ~= Enum.HumanoidStateType.RunningNoPhysics then
+				pcall(function()
+					exerciseHumanoid:ChangeState(Enum.HumanoidStateType.Running)
+				end)
+			end
+			exerciseHumanoid:Move(exerciseForward, false)
 		end
-		exerciseHumanoid:Move(exerciseForward, false)
 	end)
 end
 
