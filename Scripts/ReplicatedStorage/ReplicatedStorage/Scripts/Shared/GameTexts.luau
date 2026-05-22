@@ -82,5 +82,6 @@ local GameTexts = {
 	JumpRunwayWindowRatingPerfect = { key = "", source = "Perfect" },
 	JumpRunwayWindowRatingLate = { key = "", source = "Late" },
 	JumpRunwayWindowRatingMiss = { key = "", source = "Miss" },
+	JumpHeightPerSecond = { key = "JumpHeightPerSecond", source = "+{1}/s" },
 }
 return GameTexts

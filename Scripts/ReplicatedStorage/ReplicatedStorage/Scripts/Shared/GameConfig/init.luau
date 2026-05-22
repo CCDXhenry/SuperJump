@@ -11,6 +11,7 @@ local BrainrotDataModule = require(script:WaitForChild("BrainrotData"))
 local LittleElfChestDataModule = require(script:WaitForChild("LittleElfChestData"))
 local LittleElfChestRewardPoolDataModule = require(script:WaitForChild("LittleElfChestRewardPoolData"))
 local UpgradeShopRawData = require(script:WaitForChild("UpgradeShopData"))
+local ExEquipDataModule = require(script:WaitForChild("ExEquipData"))
 
 GameConfig.GameVersion = "1.0.0"
 GameConfig.ABTestVersion = "1.0.0"
@@ -33,6 +34,9 @@ GameConfig.RbImage = "rbxassetid://116949418469040"
 GameConfig.DecelerationOnImage = "rbxassetid://114216336762183"
 GameConfig.DecelerationOffImage = "rbxassetid://113696020530948"
 GameConfig.DecelerationButtonShowSpeed = 40
+
+GameConfig.JumpPowerDefaultValue = 50
+GameConfig.JumpPowerExerciseInterval = 1
 
 GameConfig.GuideType = {
 	None = 0,
@@ -92,12 +96,20 @@ GameConfig.CurrencyType = {
 	Coin = 1,
 }
 
+GameConfig.CostType = {
+	Coin = 1,
+	Rb = 2,
+	CoinOrRb = 3,
+	GroupReward = 4,
+}
+
 GameConfig.SkillType = {
 	WalkSpeed = 1,
 	HomeLevel = 2,
 	RebirthLevel = 3,
 	MaxFuel = 4,
 	MaxThrust = 5,
+	JumpPower = 6,
 }
 
 export type ShopAbilityInfo = {
@@ -123,10 +135,16 @@ GameConfig.ShopAbilityByType[GameConfig.SkillType.MaxThrust] = {
 	levelField = "maxThrustLevel",
 }
 
+GameConfig.ExEquipType = {
+	Treadmill = 1,
+	Bike = 2,
+}
+
 GameConfig.ItemType = {
 	Brainrot = 1,
 	Coil = 2,
 	LittleElfChest = 3,
+	ExEquip = 4,
 }
 
 GameConfig.ModelGetSource = {
@@ -400,6 +418,30 @@ export type LittleElfChestRewardPoolEntry = {
 
 export type LittleElfChestRewardPoolData = LittleElfChestRewardPoolEntry
 
+export type ExEquipData = {
+	id: number,
+	resourceName: string,
+	iconImageId: string,
+	name_t: string,
+	costCoin: number,
+	productId: number,
+	costRb: number,
+	ability: number,
+	costType: number,
+	quality: number,
+	type: number,
+}
+
+export type ExEquipInventory = {
+	currentId: string,
+	ownedList: { [string]: boolean },
+}
+
+GameConfig.ExEquipDataMap = {} :: { [number]: ExEquipData }
+for _, data in ExEquipDataModule do
+	GameConfig.ExEquipDataMap[data.id] = data :: ExEquipData
+end
+
 export type IslandData = {
 	id: number,
 	islandName: string,
@@ -575,7 +617,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- 摔滑 Slide 重力比例；↓ 摔滑更飘
 	RUNWAY_SLIDE_EFFECTIVE_GRAVITY_SCALE = 1,
 	-- 脚本贴地射线容差(stud)；↑ 更易判贴地
-	RUNWAY_SCRIPTED_GROUNDED_MAX_DIST_ABOVE_BASELINE_STUDS = 0,
+	RUNWAY_SCRIPTED_GROUNDED_MAX_DIST_ABOVE_BASELINE_STUDS = 2,
 
 	-- ═══════════════════════════════════════
 	-- —— ④ 终局冲刺 Dash ——
@@ -907,51 +949,9 @@ function GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(_segmentIndex: number
 	return maxSpd, minSpd
 end
 
-GameConfig.PavingRejectReason = {
-	InvalidPayload = "InvalidPayload",
-	BatchTooLarge = "BatchTooLarge",
-	NotVector3 = "NotVector3",
-	SafeZoneBlocked = "SafeZoneBlocked",
-	FloatBlockBlocked = "FloatBlockBlocked",
-	HeightMismatch = "HeightMismatch",
-	DistanceLimit = "DistanceLimit",
-	OutOfBricks = "OutOfBricks",
-	OccupiedByOther = "OccupiedByOther",
-	ServerBackpressure = "ServerBackpressure",
-	FallSafePitBlocked = "FallSafePitBlocked",
-}
-
 GameConfig.UpgradeHomeInfoUIDistanceLimit = 40
 GameConfig.HomePlaceModelInfoUIBillboardPadding = 0.5
 GameConfig.HomePlaceModelInfoUIBillboardOffsetY = 5
-
-GameConfig.Earthquake = {
-	IntervalMin = 999999,
-	IntervalMax = 999999,
-	Duration = 0,
-	CooldownAfterEnd = 0,
-	MinPlayersToTrigger = 99,
-	IntenseShakeAmplitude = 0,
-	IntenseShakeFrequency = 0,
-	PreFallIntenseDuration = 0,
-	FallDuration = 0,
-	RiseDuration = 0,
-	FallOffsetY = 0,
-	WarningSeconds = 0,
-	PavedBrickDestroyDelayAfterDrop = 0,
-	MarkedBrickColor = Color3.fromRGB(255, 0, 25),
-	MarkedFloatBlockTransparency = 0.5,
-	MarkedPavedBrickTransparency = 0.5,
-	MarkedShakeAmplitude = 0,
-	MarkedShakeFrequency = 0,
-	MarkedPavedShakeAmplitude = 0,
-	MarkedPavedShakeFrequency = 0,
-	DropExecuteWindowSeconds = 1,
-	FractureShardLifeTime = 0.5,
-	FractureShardPerBlock = 5,
-	ScreenShakeAmplitude = 0,
-	ScreenShakeFrequency = 0,
-}
 
 GameConfig.Inventory = {
 	InitialModelCapacity = 5,
@@ -1144,8 +1144,10 @@ export type PlayerSaveInfo = {
 		placedModels: { [string]: ModelInfo },
 	},
 	shopInfo: ShopInfo,
+	jumpPower: number,
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },
+	exEquipInventory: ExEquipInventory,
 	guideProgressInfo: GuideProgressSaveInfo,
 	discoveredIslandIds: { [string]: boolean }?,
 }
@@ -1204,12 +1206,17 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 			maxThrustLevel = 1,
 			rebirthLevel = 0,
 		},
+		jumpPower = GameConfig.JumpPowerDefaultValue,
 		brainrotsInfo = {
 			ownedBrainrots = {},
 			equippedBrainrots = {},
 			brainrotUsingNumMax = 3,
 		},
 		brainrotQueue = {},
+		exEquipInventory = {
+			currentId = "1",
+			ownedList = { ["1"] = true },
+		},
 		guideProgressInfo = {
 			guideStepDoneMap = {},
 			appearedGuideTypeInfo = {},
@@ -1229,8 +1236,10 @@ export type ClientLocalPlayerSaveInfo = {
 		placedModels: { [string]: ModelInfo },
 	},
 	shopInfo: ShopInfo,
+	jumpPower: number,
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },
+	exEquipInventory: ExEquipInventory,
 	homeSlot: string,
 	guideProgressInfo: GuideProgressSaveInfo,
 }

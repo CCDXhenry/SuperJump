@@ -27,6 +27,8 @@ UIManager.WindowId = {
 	Rebirth = "RebirthFrame",
 	StoreBundle = "StoreBundleFrame",
 	JumpRunWayFrame = "JumpRunWayFrame",
+	ExEquipShop = "ExEquipShopFrame",
+	ExEquipFrame = "ExEquipFrame",
 }
 
 type WindowConfig = {
@@ -58,6 +60,16 @@ local WindowConfigs: { [string]: WindowConfig } = {
 	[UIManager.WindowId.JumpRunWayFrame] = {
 		FrameName = "JumpRunWayFrame",
 		scriptName = "JumpRunWayFrame",
+		isModal = false,
+	},
+	[UIManager.WindowId.ExEquipShop] = {
+		FrameName = "ExEquipShopFrame",
+		scriptName = "ExEquipShopFrame",
+		isModal = true,
+	},
+	[UIManager.WindowId.ExEquipFrame] = {
+		FrameName = "ExEquipFrame",
+		scriptName = "ExEquipFrame",
 		isModal = false,
 	},
 }

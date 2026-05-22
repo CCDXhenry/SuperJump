@@ -22,6 +22,7 @@ local BrainrotClientManager = require(clientScripts:WaitForChild("BrainrotClient
 --local ChestWorkbenchClientManager = require(clientScripts:WaitForChild("ChestWorkbenchClientManager"))
 local GuideManager = require(clientScripts:WaitForChild("GuideManager"))
 local JumpRunwayClientManager = require(clientScripts:WaitForChild("JumpRunwayClientManager"))
+local ExEquipManager = require(clientScripts:WaitForChild("ExEquipManager"))
 -- JumpRunway：尽早绑定 NotifyJumpRunwayState，避免服务端开局 FireClient 时客户端尚未 OnClientEvent 导致队列耗尽
 
 local starterGui: StarterGui = game:GetService("StarterGui")
@@ -72,6 +73,7 @@ local function InitUI()
 	PlayerInteractClientManager.Init()
 	BrainrotClientManager.Init()
 	--ChestWorkbenchClientManager.Init()
+	ExEquipManager.Init()
 	GuideManager.Init()
 	-- JumpRunwayClientManager 已在脚本加载时 Init（见上方），勿仅放在 InitUI 以免晚于服务端推送
 	-- 初始化背包输入控制

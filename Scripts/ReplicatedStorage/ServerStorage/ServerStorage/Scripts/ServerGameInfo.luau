@@ -134,8 +134,13 @@ function ServerGameInfo.InitPlayerInfo(
 		inventoryInfo = playerSaveInfo.inventoryInfo,
 		homeInfo = playerSaveInfo.homeInfo,
 		shopInfo = playerSaveInfo.shopInfo,
+		jumpPower = playerSaveInfo.jumpPower,
 		brainrotsInfo = playerSaveInfo.brainrotsInfo,
 		brainrotQueue = playerSaveInfo.brainrotQueue or {},
+		exEquipInventory = playerSaveInfo.exEquipInventory or {
+			currentId = "1",
+			ownedList = { ["1"] = true },
+		},
 		guideProgressInfo = playerSaveInfo.guideProgressInfo
 			or {
 				guideStepDoneMap = {},
@@ -166,8 +171,10 @@ function ServerGameInfo.InitPlayerInfo(
 		inventoryInfo = playerInfo.inventoryInfo,
 		homeInfo = playerInfo.homeInfo,
 		shopInfo = playerInfo.shopInfo,
+		jumpPower = playerInfo.jumpPower,
 		brainrotsInfo = playerInfo.brainrotsInfo,
 		brainrotQueue = playerInfo.brainrotQueue,
+		exEquipInventory = playerInfo.exEquipInventory,
 		homeSlot = playerInfo.homeSlot,
 		guideProgressInfo = playerInfo.guideProgressInfo,
 	}
@@ -261,10 +268,12 @@ function ServerGameInfo.CreatePlayerSaveInfoByPlayerInfo(playerInfo: GameConfig.
 		inventoryInfo = playerInfo.inventoryInfo,
 		homeInfo = playerInfo.homeInfo,
 		shopInfo = playerInfo.shopInfo,
+		jumpPower = playerInfo.jumpPower,
 		brainrotsInfo = playerInfo.brainrotsInfo,
 		brainrotQueue = playerInfo.brainrotQueue,
 		guideProgressInfo = playerInfo.guideProgressInfo,
 		discoveredIslandIds = playerInfo.discoveredIslandIds,
+		exEquipInventory = playerInfo.exEquipInventory,
 	}
 end
 
@@ -1082,6 +1091,41 @@ function ServerGameInfo.TryMarkIslandDiscovered(player: Player, islandId: number
 	discoveredMap[key] = true
 	playerInfo.playerInfoChanged = true
 	analyticsTool().LogIslandDiscover(player, islandId)
+end
+
+-- 添加器材到玩家库存
+function ServerGameInfo.AddExEquipToInventory(player: Player, equipId: string)
+	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	if playerInfo == nil or playerInfo.exEquipInventory.ownedList[equipId] then
+		return
+	end
+	playerInfo.exEquipInventory.ownedList[equipId] = true
+	playerInfo.playerInfoChanged = true
+	print("[ServerGameInfo] AddExEquipToInventory", player.Name, equipId)
+	NetMsg.FireNotifyPlayerExEquipInventoryUpdate(player, playerInfo.exEquipInventory)
+end
+
+-- 设置当前装备的器材
+function ServerGameInfo.SetCurrentExEquip(player: Player, equipId: string)
+	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	if playerInfo == nil or not playerInfo.exEquipInventory.ownedList[equipId] then
+		return
+	end
+	playerInfo.exEquipInventory.currentId = equipId
+	playerInfo.playerInfoChanged = true
+	print("[ServerGameInfo] SetCurrentExEquip", player.Name, equipId)
+	NetMsg.FireNotifyPlayerExEquipInventoryUpdate(player, playerInfo.exEquipInventory)
+end
+
+-- 更新玩家 JumpPower 值
+function ServerGameInfo.UpdatePlayerJumpPower(player: Player, addAmount: number)
+	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	if playerInfo == nil then
+		return
+	end
+	playerInfo.jumpPower += addAmount
+	playerInfo.playerInfoChanged = true
+	NetMsg.FireNotifyPlayerJumpPowerUpdate(player, playerInfo.jumpPower, addAmount)
 end
 
 return ServerGameInfo

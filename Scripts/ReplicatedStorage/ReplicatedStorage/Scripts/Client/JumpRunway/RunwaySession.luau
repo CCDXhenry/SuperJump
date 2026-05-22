@@ -4188,8 +4188,8 @@ function RunwaySession.JumpComputeSessionVy(): (number, number)
 		gBase = 196.2
 	end
 	local gGrav = gBase * cfg.RUNWAY_SESSION_EFFECTIVE_GRAVITY_SCALE
-	local apex = cfg.RUNWAY_JUMP_APEX_STUDS
-	local vy = math.sqrt(math.max(0, 2 * gGrav * apex))
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	local vy = if localPlayerInfo then localPlayerInfo.jumpPower else GameConfig.JumpPowerDefaultValue
 	return vy, gGrav
 end
 

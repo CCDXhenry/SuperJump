@@ -117,6 +117,21 @@ local requestJumpRunwayLittleElfChestStartCarryEvent: RemoteEvent? =
 local notifyJumpRunwayLittleElfChestRewardEvent: RemoteEvent? =
 	remoteEventsFolder:FindFirstChild("NotifyJumpRunwayLittleElfChestReward") :: RemoteEvent?
 
+-- ExEquip 锻炼器材
+local requestBuyExEquipEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestBuyExEquip") :: RemoteEvent?
+local requestUpdateExEquipUsingEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestUpdateExEquipUsing") :: RemoteEvent?
+local notifyPlayerExEquipInventoryUpdateEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyPlayerExEquipInventoryUpdate") :: RemoteEvent?
+local requestClaimGroupRewardEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestClaimGroupReward") :: RemoteEvent?
+
+-- 锻炼模式
+local requestStartExerciseEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestStartExercise") :: RemoteEvent?
+local requestStopExerciseEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestStopExercise") :: RemoteEvent?
+local notifyExerciseStartEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyExerciseStart") :: RemoteEvent?
+local notifyExerciseEndEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyExerciseEnd") :: RemoteEvent?
+
+-- JumpPower 更新（服务端→客户端）
+local notifyJumpPowerUpdateEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyJumpPowerUpdate") :: RemoteEvent?
+
 --客户端请求设置背景音乐音量
 function NetMsg.FireRequestSetBGMVolume(volume: number)
 	requestSetBGMVolumeEvent:FireServer(volume)
@@ -764,6 +779,141 @@ function NetMsg.ConnectNotifyJumpRunwayLittleElfChestReward(callback: (brainrotI
 		return
 	end
 	notifyJumpRunwayLittleElfChestRewardEvent.OnClientEvent:Connect(callback)
+end
+
+-- ExEquip: 客户端请求购买器材
+function NetMsg.FireRequestBuyExEquip(equipId: number)
+	if requestBuyExEquipEvent == nil then
+		return
+	end
+	requestBuyExEquipEvent:FireServer(equipId)
+end
+
+function NetMsg.ConnectRequestBuyExEquip(callback: (player: Player, equipId: number) -> ())
+	if requestBuyExEquipEvent == nil then
+		return
+	end
+	requestBuyExEquipEvent.OnServerEvent:Connect(callback)
+end
+
+-- ExEquip: 客户端请求装备器材
+function NetMsg.FireRequestUpdateExEquipUsing(equipId: number)
+	if requestUpdateExEquipUsingEvent == nil then
+		return
+	end
+	requestUpdateExEquipUsingEvent:FireServer(equipId)
+end
+
+function NetMsg.ConnectRequestUpdateExEquipUsing(callback: (player: Player, equipId: number) -> ())
+	if requestUpdateExEquipUsingEvent == nil then
+		return
+	end
+	requestUpdateExEquipUsingEvent.OnServerEvent:Connect(callback)
+end
+
+-- ExEquip: 服务端通知客户端器材库存更新
+function NetMsg.FireNotifyPlayerExEquipInventoryUpdate(player: Player, inventory: GameConfig.ExEquipInventory)
+	if notifyPlayerExEquipInventoryUpdateEvent == nil then
+		return
+	end
+	notifyPlayerExEquipInventoryUpdateEvent:FireClient(player, inventory)
+end
+
+function NetMsg.ConnectNotifyPlayerExEquipInventoryUpdate(callback: (inventory: GameConfig.ExEquipInventory) -> ())
+	if notifyPlayerExEquipInventoryUpdateEvent == nil then
+		return
+	end
+	notifyPlayerExEquipInventoryUpdateEvent.OnClientEvent:Connect(callback)
+end
+
+-- ExEquip: 客户端请求领取群组奖励
+function NetMsg.FireRequestClaimGroupReward(isInGroup: boolean)
+	if requestClaimGroupRewardEvent == nil then
+		return
+	end
+	requestClaimGroupRewardEvent:FireServer(isInGroup)
+end
+
+function NetMsg.ConnectRequestClaimGroupReward(callback: (player: Player, isInGroup: boolean) -> ())
+	if requestClaimGroupRewardEvent == nil then
+		return
+	end
+	requestClaimGroupRewardEvent.OnServerEvent:Connect(callback)
+end
+
+-- 锻炼模式：客户端请求开始锻炼
+function NetMsg.FireRequestStartExercise(equipId: number)
+	if requestStartExerciseEvent == nil then
+		return
+	end
+	requestStartExerciseEvent:FireServer(equipId)
+end
+
+function NetMsg.ConnectRequestStartExercise(callback: (player: Player, equipId: number) -> ())
+	if requestStartExerciseEvent == nil then
+		return
+	end
+	requestStartExerciseEvent.OnServerEvent:Connect(callback)
+end
+
+-- 锻炼模式：客户端请求结束锻炼
+function NetMsg.FireRequestStopExercise()
+	if requestStopExerciseEvent == nil then
+		return
+	end
+	requestStopExerciseEvent:FireServer()
+end
+
+function NetMsg.ConnectRequestStopExercise(callback: (player: Player) -> ())
+	if requestStopExerciseEvent == nil then
+		return
+	end
+	requestStopExerciseEvent.OnServerEvent:Connect(callback)
+end
+
+-- 锻炼模式：服务端通知开始锻炼
+function NetMsg.FireNotifyExerciseStart(player: Player, equipId: number)
+	if notifyExerciseStartEvent == nil then
+		return
+	end
+	notifyExerciseStartEvent:FireClient(player, equipId)
+end
+
+function NetMsg.ConnectNotifyExerciseStart(callback: (equipId: number) -> ())
+	if notifyExerciseStartEvent == nil then
+		return
+	end
+	notifyExerciseStartEvent.OnClientEvent:Connect(callback)
+end
+
+-- 锻炼模式：服务端通知结束锻炼
+function NetMsg.FireNotifyExerciseEnd(player: Player)
+	if notifyExerciseEndEvent == nil then
+		return
+	end
+	notifyExerciseEndEvent:FireClient(player)
+end
+
+function NetMsg.ConnectNotifyExerciseEnd(callback: () -> ())
+	if notifyExerciseEndEvent == nil then
+		return
+	end
+	notifyExerciseEndEvent.OnClientEvent:Connect(callback)
+end
+
+-- JumpPower 更新（服务端→客户端）
+function NetMsg.FireNotifyPlayerJumpPowerUpdate(player: Player, newValue: number, addAmount: number)
+	if notifyJumpPowerUpdateEvent == nil then
+		return
+	end
+	notifyJumpPowerUpdateEvent:FireClient(player, newValue, addAmount)
+end
+
+function NetMsg.ConnectNotifyPlayerJumpPowerUpdate(callback: (newValue: number, addAmount: number) -> ())
+	if notifyJumpPowerUpdateEvent == nil then
+		return
+	end
+	notifyJumpPowerUpdateEvent.OnClientEvent:Connect(callback)
 end
 
 return NetMsg

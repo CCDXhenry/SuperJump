@@ -42,8 +42,13 @@ function ClientGameInfo.InitPlayerInfo(
 		inventoryInfo = localPlayerSaveInfo.inventoryInfo,
 		homeInfo = localPlayerSaveInfo.homeInfo,
 		shopInfo = localPlayerSaveInfo.shopInfo,
+		jumpPower = localPlayerSaveInfo.jumpPower,
 		brainrotsInfo = localPlayerSaveInfo.brainrotsInfo,
 		brainrotQueue = localPlayerSaveInfo.brainrotQueue or {},
+		exEquipInventory = localPlayerSaveInfo.exEquipInventory or {
+			currentId = "1",
+			ownedList = { ["1"] = true },
+		},
 		homeSlot = localPlayerSaveInfo.homeSlot,
 		guideProgressInfo = guideProgressInfo,
 		currentGuideType = GameConfig.GuideType.None,
@@ -352,6 +357,22 @@ function ClientGameInfo.UpdateBrainrotQueue(queue: { GameConfig.BrainrotQueueIte
 		end
 
 		--print("[ClientGameInfo] BrainrotQueue updated, count:", #queue)
+	end
+end
+
+-- 锻炼器材库存更新
+function ClientGameInfo.UpdateExEquipInventory(exEquipInventory: GameConfig.ExEquipInventory)
+	if localPlayerInfo then
+		localPlayerInfo.exEquipInventory = exEquipInventory
+		ClientMsg.FireLocalPlayerExEquipInventoryUpdate(exEquipInventory)
+	end
+end
+
+-- JumpPower 更新
+function ClientGameInfo.UpdateJumpPower(newValue: number, addAmount: number)
+	if localPlayerInfo then
+		localPlayerInfo.jumpPower = newValue
+		ClientMsg.FireLocalPlayerJumpPowerUpdate(newValue, addAmount)
 	end
 end
 

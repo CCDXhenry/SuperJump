@@ -39,6 +39,7 @@ local maxThrustText: TextLabel = maxThrustFrame:FindFirstChild("NumberText") :: 
 local decelerationButton: ImageButton? = lobbyFrame:FindFirstChild("DecelerationButton") :: ImageButton?
 local decelerationButtonTextLabel: TextLabel? = if decelerationButton then (decelerationButton:FindFirstChild("TextLabel") :: TextLabel?) else nil
 local bottomButtonsFrame = lobbyFrame:FindFirstChild("BottomButtonsFrame")
+local exEquipButton: ImageButton? = lobbyFrame:FindFirstChild("ExEquipButton") :: ImageButton?
 local rebirthFrame: Frame? = (lobbyFrame:FindFirstChild("RebirthFrame") or (if bottomButtonsFrame then bottomButtonsFrame:FindFirstChild("RebirthFrame") else nil)) :: Frame?
 local rebirthButton: GuiButton? = if rebirthFrame then (rebirthFrame:FindFirstChild("Button") :: any) else nil
 local rebirthNumberText: TextLabel? = if rebirthFrame then (rebirthFrame:FindFirstChild("NumberText") :: TextLabel?) else nil
@@ -48,6 +49,13 @@ local storeBundleButton: GuiButton? = if storeBundleEntryFrame then (storeBundle
 local walkSpeedAddButton: GuiButton? = walkSpeedFrame:FindFirstChild("AddButton") :: any
 local maxFuelAddButton: GuiButton? = maxFuelFrame:FindFirstChild("AddButton") :: any
 local maxThrustAddButton: GuiButton? = maxThrustFrame:FindFirstChild("AddButton") :: any
+
+-- JumpPowerFrame
+local jumpPowerFrame: Frame? = lobbyFrame:FindFirstChild("JumpPowerFrame") :: Frame?
+local jumpPowerText: TextLabel? = if jumpPowerFrame then jumpPowerFrame:FindFirstChild("NumberText") :: TextLabel? else nil
+local jumpPowerAddButton: GuiButton? = if jumpPowerFrame then jumpPowerFrame:FindFirstChild("AddButton") :: any else nil
+local jumpPowerFloatingText: TextLabel? = if jumpPowerFrame then jumpPowerFrame:FindFirstChild("FloatingText") :: TextLabel? else nil
+local jumpPowerFloatingTemplate: TextLabel? = if jumpPowerFrame then jumpPowerFrame:FindFirstChild("FloatingTemplate") :: TextLabel? else nil
 
 local defaultWalkSpeedColor = walkSpeedText.TextColor3
 local humSpeedConnection: RBXScriptConnection? = nil
@@ -154,6 +162,12 @@ if maxThrustAddButton then
 	end)
 end
 
+if jumpPowerAddButton then
+	jumpPowerAddButton.Activated:Connect(function()
+		UIManager.OpenWindow(UIManager.WindowId.ExEquipShop)
+	end)
+end
+
 if rebirthButton then
 	rebirthButton.Activated:Connect(function()
 		UIManager.OpenWindow(UIManager.WindowId.Rebirth)
@@ -163,6 +177,12 @@ end
 if storeBundleButton then
 	storeBundleButton.Activated:Connect(function()
 		UIManager.OpenWindow(UIManager.WindowId.StoreBundle)
+	end)
+end
+
+if exEquipButton then
+	exEquipButton.Activated:Connect(function()
+		UIManager.OpenWindow(UIManager.WindowId.ExEquipShop)
 	end)
 end
 
@@ -259,6 +279,49 @@ local function RefreshUpgradeValues()
 			or thrustConfig.abilityList[1]
 	end
 	maxThrustText.Text = string.format("+%s", NumberExtension.FormatBigNumberAA(maxThrustValue))
+
+	-- JumpPower
+	if jumpPowerText then
+		local jumpPowerValue = localPlayerInfo.jumpPower or GameConfig.JumpPowerDefaultValue
+		jumpPowerText.Text = NumberExtension.FormatBigNumberAA(jumpPowerValue)
+	end
+end
+
+local function ShowJumpPowerFloatingText(addAmount: number)
+	if jumpPowerFloatingTemplate == nil or jumpPowerFrame == nil then
+		return
+	end
+	local displayText = string.format("+%s", NumberExtension.FormatBigNumberAA(addAmount))
+
+	local floatingText: TextLabel = jumpPowerFloatingTemplate:Clone()
+	floatingText.Name = "FloatingText"
+	floatingText.Text = displayText
+	floatingText.TextTransparency = 0
+	floatingText.Visible = true
+	floatingText.ZIndex = 10
+	floatingText.Parent = jumpPowerFrame
+
+	local uiStroke: UIStroke? = floatingText:FindFirstChildOfClass("UIStroke") :: UIStroke?
+	if uiStroke then
+		uiStroke.Transparency = 0
+	end
+
+	local startPos = floatingText.Position
+	local tweenInfo = TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local goal: { [string]: any } = {
+		Position = UDim2.new(startPos.X.Scale, startPos.X.Offset, startPos.Y.Scale, startPos.Y.Offset - 40),
+		TextTransparency = 1,
+	}
+	local tween = tweenService:Create(floatingText, tweenInfo, goal)
+	tween.Completed:Connect(function()
+		floatingText:Destroy()
+	end)
+	tween:Play()
+
+	if uiStroke then
+		local strokeTween = tweenService:Create(uiStroke, tweenInfo, { Transparency = 1 })
+		strokeTween:Play()
+	end
 end
 
 local function RefreshView()
@@ -335,3 +398,9 @@ RefreshRebirthRedPointView()
 ClientMsg.ConnectLocalPlayerCurrencyUpdate(OnLocalPlayerCoinCountChanged)
 ClientMsg.ConnectLocalPlayerInfoInit(OnLocalPlayerInfoInit)
 ClientMsg.ConnectLocalPlayerSkillLevelUpdate(OnLocalPlayerSkillLevelChanged)
+ClientMsg.ConnectLocalPlayerJumpPowerUpdate(function(newValue: number, addAmount: number)
+	if jumpPowerText then
+		jumpPowerText.Text = NumberExtension.FormatBigNumberAA(newValue)
+	end
+	ShowJumpPowerFloatingText(addAmount)
+end)

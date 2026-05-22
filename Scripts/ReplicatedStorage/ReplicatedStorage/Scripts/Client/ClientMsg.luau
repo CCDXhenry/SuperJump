@@ -25,9 +25,11 @@ local showGiftConfirmPopupEvent: BindableEvent = bindableEventsFolder:FindFirstC
 local showGiftRequestPopupEvent: BindableEvent = bindableEventsFolder:FindFirstChild("ShowGiftRequestPopup") :: BindableEvent
 local showTopTipTextEvent: BindableEvent = bindableEventsFolder:FindFirstChild("ShowTopTipText") :: BindableEvent
 local brainrotQueueUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("BrainrotQueueUpdate") :: BindableEvent
+local localPlayerExEquipInventoryUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("LocalPlayerExEquipInventoryUpdate") :: BindableEvent
 local showRescuePopupEvent: BindableEvent = bindableEventsFolder:FindFirstChild("ShowRescuePopup") :: BindableEvent
 local resumeFallingEvent: BindableEvent = bindableEventsFolder:FindFirstChild("ResumeFalling") :: BindableEvent
 local earthquakeUiUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("EarthquakeUiUpdate") :: BindableEvent
+local localPlayerJumpPowerUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("LocalPlayerJumpPowerUpdate") :: BindableEvent
 
 --关闭窗口事件
 function ClientMsg.FireCloseWindow(windowName: string)
@@ -206,6 +208,25 @@ function ClientMsg.ConnectShowRescuePopup(callback: () -> ())
 	end
 end
 
+-- 本地玩家锻炼器材库存更新
+function ClientMsg.FireLocalPlayerExEquipInventoryUpdate(inventory: GameConfig.ExEquipInventory)
+	if localPlayerExEquipInventoryUpdateEvent then
+		localPlayerExEquipInventoryUpdateEvent:Fire(inventory)
+	end
+end
+
+function ClientMsg.ConnectLocalPlayerExEquipInventoryUpdate(callback: (inventory: GameConfig.ExEquipInventory) -> ())
+	if localPlayerExEquipInventoryUpdateEvent then
+		localPlayerExEquipInventoryUpdateEvent.Event:Connect(callback)
+	end
+end
+
+function ClientMsg.ConnectShowRescuePopup(callback: () -> ())
+	if showRescuePopupEvent then
+		showRescuePopupEvent.Event:Connect(callback)
+	end
+end
+
 -- 恢复掉落（拒绝救援或超时）
 function ClientMsg.FireResumeFalling()
 	if resumeFallingEvent then
@@ -216,6 +237,19 @@ end
 function ClientMsg.ConnectResumeFalling(callback: () -> ())
 	if resumeFallingEvent then
 		resumeFallingEvent.Event:Connect(callback)
+	end
+end
+
+-- JumpPower 更新
+function ClientMsg.FireLocalPlayerJumpPowerUpdate(newValue: number, addAmount: number)
+	if localPlayerJumpPowerUpdateEvent then
+		localPlayerJumpPowerUpdateEvent:Fire(newValue, addAmount)
+	end
+end
+
+function ClientMsg.ConnectLocalPlayerJumpPowerUpdate(callback: (newValue: number, addAmount: number) -> ())
+	if localPlayerJumpPowerUpdateEvent then
+		localPlayerJumpPowerUpdateEvent.Event:Connect(callback)
 	end
 end
 
