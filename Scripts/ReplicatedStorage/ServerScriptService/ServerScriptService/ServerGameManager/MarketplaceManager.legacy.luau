@@ -202,14 +202,6 @@ local function ProcessReceipt(receiptInfo: GameConfig.ReceiptInfo): Enum.Product
 		ServerGameInfo.UpgradeAbilityPaid(player, "WalkSpeed", 10)
 		AnalyticsTool.AddProductPurchaseEvent(player, receiptInfo)
 		return Enum.ProductPurchaseDecision.PurchaseGranted
-	elseif receiptInfo.ProductId == GameConfig.ShopPaid.MaxFuel10ProductId then
-		ServerGameInfo.UpgradeAbilityPaid(player, "MaxFuel", 10)
-		AnalyticsTool.AddProductPurchaseEvent(player, receiptInfo)
-		return Enum.ProductPurchaseDecision.PurchaseGranted
-	elseif receiptInfo.ProductId == GameConfig.ShopPaid.MaxThrust10ProductId then
-		ServerGameInfo.UpgradeAbilityPaid(player, "MaxThrust", 10)
-		AnalyticsTool.AddProductPurchaseEvent(player, receiptInfo)
-		return Enum.ProductPurchaseDecision.PurchaseGranted
 	elseif receiptInfo.ProductId == GameConfig.ShopPaid.BrainrotUpgrade3ProductId then
 		-- 支付完成后一次性将目标 Brainrot 等级提升若干级（默认 +3），具体点位由 PlayerHomeServerManager 事先记录
 		local upgraded = ServerGameInfo.TryConsumeBrainrotPaidUpgrade(player)

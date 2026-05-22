@@ -548,39 +548,39 @@ function RunwaySession.GetExpectedPlayerWalkSpeed(): number
 end
 
 function RunwaySession.GetExpectedPlayerMaxFuel(): number
-	local fuelConfig = GameConfig.Shop.MaxFuel
-	local fallback = fuelConfig.abilityList[1] or 2.5
+	local fallback = 2.5
 	local info = ClientGameInfo.GetLocalPlayerInfo()
 	if info == nil then
 		return fallback
 	end
-	local level = info.shopInfo.maxFuelLevel or 1
-	local maxLevel = fuelConfig.maxLevel
-	if typeof(level) ~= "number" or level ~= level then
-		level = 1
+	local currentId = info.jetpackInventory.currentId or "1"
+	local jetpackData = GameConfig.JetpackDataMap[tonumber(currentId)]
+	if jetpackData then
+		return jetpackData.fuel
 	end
-	level = math.clamp(math.floor(level), 1, maxLevel)
-	return fuelConfig.abilityList[level] or fallback
+	return fallback
 end
 
 function RunwaySession.GetCurrentFuel(): number
-	return localState.fuel
+	-- 终局冲刺段才返回实时燃料；之前显示最大值（UI 显示满格）
+	if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
+		return localState.fuel
+	end
+	return RunwaySession.GetExpectedPlayerMaxFuel()
 end
 
 function RunwaySession.GetExpectedPlayerMaxThrustSpeed(): number
-	local thrustConfig = GameConfig.Shop.MaxThrust
-	local fallback = thrustConfig.abilityList[1] or 100
+	local fallback = 100
 	local info = ClientGameInfo.GetLocalPlayerInfo()
 	if info == nil then
 		return fallback
 	end
-	local level = info.shopInfo.maxThrustLevel or 1
-	local maxLevel = thrustConfig.maxLevel
-	if typeof(level) ~= "number" or level ~= level then
-		level = 1
+	local currentId = info.jetpackInventory.currentId or "1"
+	local jetpackData = GameConfig.JetpackDataMap[tonumber(currentId)]
+	if jetpackData then
+		return jetpackData.thrust
 	end
-	level = math.clamp(math.floor(level), 1, maxLevel)
-	return thrustConfig.abilityList[level] or fallback
+	return fallback
 end
 
 function RunwaySession.ApplyExpectedWalkSpeedAfterRunway(humanoid: Humanoid?)
@@ -1165,7 +1165,11 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 	localState.slideStartClock = nowClock
 	-- 进入终局 Slide 时清除冲刺状态，避免 Physics 状态下的残留干扰
 	localState.dashHeld = false
-	localState.fuel = 0
+	if slideKind == SlideKindFinalLanding then
+		-- 终局落地保留燃料值，不清零
+	else
+		localState.fuel = 0
+	end
 	localState.finalDashAlongExtra = 0
 	if slideKind == SlideKindFinalLanding then
 		localState.jumpBoostVy = nil
@@ -2420,16 +2424,59 @@ function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
 	local useJetpackTemplate = cfg.RUNWAY_JETPACK_ENABLED == true
 	if useJetpackTemplate then
 		local modelsFolder = replicatedStorage:FindFirstChild("Models")
-		local outerTemplate = if modelsFolder
-			then modelsFolder:FindFirstChild(cfg.RUNWAY_JETPACK_OUTER_MODEL_NAME)
-			else nil
-		local innerTemplate = if outerTemplate and outerTemplate:IsA("Model")
-			then outerTemplate:FindFirstChild(cfg.RUNWAY_JETPACK_INNER_MODEL_NAME)
-			else nil
-		local middleTemplate = if innerTemplate and innerTemplate:IsA("Model")
-			then innerTemplate:FindFirstChild(cfg.RUNWAY_JETPACK_MIDDLE_NAME)
-			else nil
-		if modelsFolder ~= nil and outerTemplate ~= nil and outerTemplate:IsA("Model") and innerTemplate ~= nil and innerTemplate:IsA("Model") and middleTemplate ~= nil and middleTemplate:IsA("BasePart") then
+		local jetpackFolder = if modelsFolder then modelsFolder:FindFirstChild("Jetpack") :: Folder? else nil
+		local outerTemplate: Model? = nil
+		local innerTemplate: Instance? = nil
+		local middleTemplate: Instance? = nil
+
+		-- 尝试加载玩家当前装备的火箭背包模型
+		local function TryLoadEquippedJetpack(): boolean
+			local info = ClientGameInfo.GetLocalPlayerInfo()
+			if info == nil then
+				return false
+			end
+			local currentId = tonumber(info.jetpackInventory.currentId) or 1
+			local jetpackData = GameConfig.JetpackDataMap[currentId]
+			if jetpackData == nil then
+				return false
+			end
+			if jetpackFolder == nil then
+				return false
+			end
+			-- 用 resourceName 查找对应的子模型
+			outerTemplate = jetpackFolder:FindFirstChild(jetpackData.resourceName) :: Model?
+			if outerTemplate == nil or not outerTemplate:IsA("Model") then
+				outerTemplate = nil
+				return false
+			end
+			innerTemplate = outerTemplate:FindFirstChild(cfg.RUNWAY_JETPACK_INNER_MODEL_NAME)
+			middleTemplate = if innerTemplate and innerTemplate:IsA("Model")
+				then innerTemplate:FindFirstChild(cfg.RUNWAY_JETPACK_MIDDLE_NAME)
+				else nil
+			return outerTemplate ~= nil and innerTemplate ~= nil
+				and innerTemplate:IsA("Model") and middleTemplate ~= nil
+				and middleTemplate:IsA("BasePart")
+		end
+
+		-- 备用：加载默认的 Jetpack 模板
+		local function TryLoadDefaultJetpack(): boolean
+			outerTemplate = if modelsFolder
+				then modelsFolder:FindFirstChild(cfg.RUNWAY_JETPACK_OUTER_MODEL_NAME) :: Model?
+				else nil
+			innerTemplate = if outerTemplate and outerTemplate:IsA("Model")
+				then outerTemplate:FindFirstChild(cfg.RUNWAY_JETPACK_INNER_MODEL_NAME)
+				else nil
+			middleTemplate = if innerTemplate and innerTemplate:IsA("Model")
+				then innerTemplate:FindFirstChild(cfg.RUNWAY_JETPACK_MIDDLE_NAME)
+				else nil
+			return outerTemplate ~= nil and outerTemplate:IsA("Model")
+				and innerTemplate ~= nil and innerTemplate:IsA("Model")
+				and middleTemplate ~= nil and middleTemplate:IsA("BasePart")
+		end
+
+		local templateReady = TryLoadEquippedJetpack() or TryLoadDefaultJetpack()
+
+		if templateReady and outerTemplate ~= nil and innerTemplate ~= nil and middleTemplate ~= nil then
 			local clone = outerTemplate:Clone() :: Model
 			clone.Name = "JumpRunwayJetpackClone"
 			clone.Parent = character
@@ -2491,7 +2538,7 @@ function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
 		if not Refs.jetpackTemplateWarned then
 			Refs.jetpackTemplateWarned = true
 			warn(
-				"[RunwaySession] ReplicatedStorage.Models.Jetpack template missing or invalid hierarchy; using fallback Part."
+				"[RunwaySession] Jetpack template missing (looked in Models.Jetpack.<resourceName> and Models.Jetpack); using fallback Part."
 			)
 		end
 	end

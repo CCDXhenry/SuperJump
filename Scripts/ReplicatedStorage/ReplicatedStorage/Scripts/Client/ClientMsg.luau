@@ -26,6 +26,7 @@ local showGiftRequestPopupEvent: BindableEvent = bindableEventsFolder:FindFirstC
 local showTopTipTextEvent: BindableEvent = bindableEventsFolder:FindFirstChild("ShowTopTipText") :: BindableEvent
 local brainrotQueueUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("BrainrotQueueUpdate") :: BindableEvent
 local localPlayerExEquipInventoryUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("LocalPlayerExEquipInventoryUpdate") :: BindableEvent
+local localPlayerJetpackInventoryUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("LocalPlayerJetpackInventoryUpdate") :: BindableEvent
 local showRescuePopupEvent: BindableEvent = bindableEventsFolder:FindFirstChild("ShowRescuePopup") :: BindableEvent
 local resumeFallingEvent: BindableEvent = bindableEventsFolder:FindFirstChild("ResumeFalling") :: BindableEvent
 local earthquakeUiUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("EarthquakeUiUpdate") :: BindableEvent
@@ -218,6 +219,19 @@ end
 function ClientMsg.ConnectLocalPlayerExEquipInventoryUpdate(callback: (inventory: GameConfig.ExEquipInventory) -> ())
 	if localPlayerExEquipInventoryUpdateEvent then
 		localPlayerExEquipInventoryUpdateEvent.Event:Connect(callback)
+	end
+end
+
+-- 本地玩家火箭背包库存更新
+function ClientMsg.FireLocalPlayerJetpackInventoryUpdate(inventory: GameConfig.JetpackInventory)
+	if localPlayerJetpackInventoryUpdateEvent then
+		localPlayerJetpackInventoryUpdateEvent:Fire(inventory)
+	end
+end
+
+function ClientMsg.ConnectLocalPlayerJetpackInventoryUpdate(callback: (inventory: GameConfig.JetpackInventory) -> ())
+	if localPlayerJetpackInventoryUpdateEvent then
+		localPlayerJetpackInventoryUpdateEvent.Event:Connect(callback)
 	end
 end
 

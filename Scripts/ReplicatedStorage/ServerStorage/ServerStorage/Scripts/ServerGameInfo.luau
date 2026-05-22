@@ -38,22 +38,6 @@ local function ClampShopAndHomeLevelsFromConfig(shopInfo: ShopLevelsClampTarget,
 			changed = true
 		end
 	end
-	local fuelShop = GameConfig.Shop.MaxFuel
-	if fuelShop and fuelShop.maxLevel > 0 then
-		local v = math.clamp(math.floor(shopInfo.maxFuelLevel + 0.5), 1, fuelShop.maxLevel)
-		if v ~= shopInfo.maxFuelLevel then
-			shopInfo.maxFuelLevel = v
-			changed = true
-		end
-	end
-	local thrustShop = GameConfig.Shop.MaxThrust
-	if thrustShop and thrustShop.maxLevel > 0 then
-		local v = math.clamp(math.floor(shopInfo.maxThrustLevel + 0.5), 1, thrustShop.maxLevel)
-		if v ~= shopInfo.maxThrustLevel then
-			shopInfo.maxThrustLevel = v
-			changed = true
-		end
-	end
 	local homeShop = GameConfig.Shop.HomeLevel
 	if homeShop and homeShop.maxLevel > 0 then
 		local v = math.clamp(math.floor(homeInfo.level + 0.5), 1, homeShop.maxLevel)
@@ -141,6 +125,10 @@ function ServerGameInfo.InitPlayerInfo(
 			currentId = "1",
 			ownedList = { ["1"] = true },
 		},
+		jetpackInventory = playerSaveInfo.jetpackInventory or {
+			currentId = "1",
+			ownedList = { ["1"] = true },
+		},
 		guideProgressInfo = playerSaveInfo.guideProgressInfo
 			or {
 				guideStepDoneMap = {},
@@ -175,6 +163,7 @@ function ServerGameInfo.InitPlayerInfo(
 		brainrotsInfo = playerInfo.brainrotsInfo,
 		brainrotQueue = playerInfo.brainrotQueue,
 		exEquipInventory = playerInfo.exEquipInventory,
+		jetpackInventory = playerInfo.jetpackInventory,
 		homeSlot = playerInfo.homeSlot,
 		guideProgressInfo = playerInfo.guideProgressInfo,
 	}
@@ -274,6 +263,7 @@ function ServerGameInfo.CreatePlayerSaveInfoByPlayerInfo(playerInfo: GameConfig.
 		guideProgressInfo = playerInfo.guideProgressInfo,
 		discoveredIslandIds = playerInfo.discoveredIslandIds,
 		exEquipInventory = playerInfo.exEquipInventory,
+		jetpackInventory = playerInfo.jetpackInventory,
 	}
 end
 
@@ -320,13 +310,9 @@ function ServerGameInfo.ExecuteRebirth(player: Player, isPaid: boolean): boolean
 	if not isPaid then
 		-- 免费重生：重置等级
 		playerInfo.shopInfo.walkSpeedLevel = 1
-		playerInfo.shopInfo.maxFuelLevel = 1
-		playerInfo.shopInfo.maxThrustLevel = 1
 		ServerGameInfo.ApplyWalkSpeed(player)
 		-- 同步重置后的等级
 		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.WalkSpeed, 1)
-		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxFuel, 1)
-		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxThrust, 1)
 	end
 
 	-- 增加重生等级
@@ -784,36 +770,6 @@ function ServerGameInfo.UpdateWalkSpeedLevel(player: Player, levelAdd: number)
 	--print("[ServerGameInfo] UpdateWalkSpeedLevel for", player.Name, "by", levelAdd, "total", playerInfo.shopInfo.walkSpeedLevel)
 end
 
---更新最大燃料等级
-function ServerGameInfo.UpdateMaxFuelLevel(player: Player, levelAdd: number)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
-	if playerInfo == nil then
-		warn("[ServerGameInfo] UpdateMaxFuelLevel failed: playerInfo not found for", player.Name)
-		return
-	end
-	playerInfo.shopInfo.maxFuelLevel += levelAdd
-	playerInfo.playerInfoChanged = true
-
-	-- 通知客户端技能等级变更
-	NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxFuel, playerInfo.shopInfo.maxFuelLevel)
-	print("[ServerGameInfo] UpdateMaxFuelLevel for", player.Name, "by", levelAdd, "total", playerInfo.shopInfo.maxFuelLevel)
-end
-
---更新最大推进速度等级
-function ServerGameInfo.UpdateMaxThrustLevel(player: Player, levelAdd: number)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
-	if playerInfo == nil then
-		warn("[ServerGameInfo] UpdateMaxThrustLevel failed: playerInfo not found for", player.Name)
-		return
-	end
-	playerInfo.shopInfo.maxThrustLevel += levelAdd
-	playerInfo.playerInfoChanged = true
-
-	-- 通知客户端技能等级变更
-	NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxThrust, playerInfo.shopInfo.maxThrustLevel)
-	print("[ServerGameInfo] UpdateMaxThrustLevel for", player.Name, "by", levelAdd, "total", playerInfo.shopInfo.maxThrustLevel)
-end
-
 --统一处理属性升级
 function ServerGameInfo.UpgradeAbility(player: Player, abilityName: string, levelAdd: number?): boolean
 	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
@@ -829,10 +785,6 @@ function ServerGameInfo.UpgradeAbility(player: Player, abilityName: string, leve
 	local currentLevel: number = 0
 	if abilityName == "WalkSpeed" then
 		currentLevel = playerInfo.shopInfo.walkSpeedLevel
-	elseif abilityName == "MaxFuel" then
-		currentLevel = playerInfo.shopInfo.maxFuelLevel
-	elseif abilityName == "MaxThrust" then
-		currentLevel = playerInfo.shopInfo.maxThrustLevel
 	elseif abilityName == "HomeLevel" then
 		currentLevel = playerInfo.homeInfo.level
 	end
@@ -863,8 +815,6 @@ function ServerGameInfo.UpgradeAbility(player: Player, abilityName: string, leve
 	-- 扣除费用
 	local reason = if abilityName == "WalkSpeed"
 		then GameConfig.ItemCountChangeReason.SpendOnUpgradeWalkSpeed
-		elseif abilityName == "MaxFuel" then GameConfig.ItemCountChangeReason.SpendOnUpgradeFuel
-		elseif abilityName == "MaxThrust" then GameConfig.ItemCountChangeReason.SpendOnUpgradeThrust
 		else GameConfig.ItemCountChangeReason.SpendOnUpgradeHome
 	ServerGameInfo.UpdatePlayerCurrency(player, currencyType, -totalCost, reason)
 
@@ -874,14 +824,6 @@ function ServerGameInfo.UpgradeAbility(player: Player, abilityName: string, leve
 		-- 应用效果
 		ServerGameInfo.ApplyWalkSpeed(player)
 		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.WalkSpeed, nextLevel)
-	elseif abilityName == "MaxFuel" then
-		playerInfo.shopInfo.maxFuelLevel = nextLevel
-		-- 通知客户端技能等级变更
-		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxFuel, nextLevel)
-	elseif abilityName == "MaxThrust" then
-		playerInfo.shopInfo.maxThrustLevel = nextLevel
-		-- 通知客户端技能等级变更
-		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxThrust, nextLevel)
 	elseif abilityName == "HomeLevel" then
 		playerInfo.homeInfo.level = nextLevel
 		-- 家园等级变更通知
@@ -894,12 +836,6 @@ function ServerGameInfo.UpgradeAbility(player: Player, abilityName: string, leve
 	print("[ServerGameInfo] UpgradeAbility for", player.Name, "ability", abilityName, "to level", nextLevel)
 	if abilityName == "HomeLevel" then
 		analyticsTool().LogBaseUpgrade(player, nextLevel)
-	elseif abilityName == "MaxFuel" then
-		local upgradeType = if addLevels >= 10 then 2 else 1
-		analyticsTool().LogPlayerUpgrade(player, upgradeType, nextLevel)
-	elseif abilityName == "MaxThrust" then
-		local upgradeType = if addLevels >= 10 then 4 else 3
-		analyticsTool().LogPlayerUpgrade(player, upgradeType, nextLevel)
 	elseif abilityName == "WalkSpeed" then
 		local upgradeType = if addLevels >= 10 then 4 else 3
 		analyticsTool().LogPlayerUpgrade(player, upgradeType, nextLevel)
@@ -922,10 +858,6 @@ function ServerGameInfo.UpgradeAbilityPaid(player: Player, abilityName: string, 
 	local currentLevel: number
 	if abilityName == "WalkSpeed" then
 		currentLevel = playerInfo.shopInfo.walkSpeedLevel
-	elseif abilityName == "MaxFuel" then
-		currentLevel = playerInfo.shopInfo.maxFuelLevel
-	elseif abilityName == "MaxThrust" then
-		currentLevel = playerInfo.shopInfo.maxThrustLevel
 	elseif abilityName == "HomeLevel" then
 		currentLevel = playerInfo.homeInfo.level
 	else
@@ -954,12 +886,6 @@ function ServerGameInfo.UpgradeAbilityPaid(player: Player, abilityName: string, 
 		playerInfo.shopInfo.walkSpeedLevel = nextLevel
 		ServerGameInfo.ApplyWalkSpeed(player)
 		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.WalkSpeed, nextLevel)
-	elseif abilityName == "MaxFuel" then
-		playerInfo.shopInfo.maxFuelLevel = nextLevel
-		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxFuel, nextLevel)
-	elseif abilityName == "MaxThrust" then
-		playerInfo.shopInfo.maxThrustLevel = nextLevel
-		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.MaxThrust, nextLevel)
 	elseif abilityName == "HomeLevel" then
 		playerInfo.homeInfo.level = nextLevel
 		ServerGameInfo.NotifyPlayerHomeInfoUpdate(player.UserId)
@@ -970,12 +896,6 @@ function ServerGameInfo.UpgradeAbilityPaid(player: Player, abilityName: string, 
 	print("[ServerGameInfo] UpgradeAbilityPaid for", player.Name, "ability", abilityName, "to level", nextLevel)
 	if abilityName == "HomeLevel" then
 		analyticsTool().LogBaseUpgrade(player, nextLevel)
-	elseif abilityName == "MaxFuel" then
-		local upgradeType = if upgradedCount >= 10 then 2 else 1
-		analyticsTool().LogPlayerUpgrade(player, upgradeType, nextLevel)
-	elseif abilityName == "MaxThrust" then
-		local upgradeType = if upgradedCount >= 10 then 4 else 3
-		analyticsTool().LogPlayerUpgrade(player, upgradeType, nextLevel)
 	elseif abilityName == "WalkSpeed" then
 		local upgradeType = if upgradedCount >= 10 then 4 else 3
 		analyticsTool().LogPlayerUpgrade(player, upgradeType, nextLevel)
@@ -1115,6 +1035,30 @@ function ServerGameInfo.SetCurrentExEquip(player: Player, equipId: string)
 	playerInfo.playerInfoChanged = true
 	print("[ServerGameInfo] SetCurrentExEquip", player.Name, equipId)
 	NetMsg.FireNotifyPlayerExEquipInventoryUpdate(player, playerInfo.exEquipInventory)
+end
+
+-- 添加火箭背包到玩家库存
+function ServerGameInfo.AddJetpackToInventory(player: Player, jetpackId: string)
+	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	if playerInfo == nil or playerInfo.jetpackInventory.ownedList[jetpackId] then
+		return
+	end
+	playerInfo.jetpackInventory.ownedList[jetpackId] = true
+	playerInfo.playerInfoChanged = true
+	print("[ServerGameInfo] AddJetpackToInventory", player.Name, jetpackId)
+	NetMsg.FireNotifyPlayerJetpackInventoryUpdate(player, playerInfo.jetpackInventory)
+end
+
+-- 设置当前装备的火箭背包
+function ServerGameInfo.SetCurrentJetpack(player: Player, jetpackId: string)
+	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	if playerInfo == nil or not playerInfo.jetpackInventory.ownedList[jetpackId] then
+		return
+	end
+	playerInfo.jetpackInventory.currentId = jetpackId
+	playerInfo.playerInfoChanged = true
+	print("[ServerGameInfo] SetCurrentJetpack", player.Name, jetpackId)
+	NetMsg.FireNotifyPlayerJetpackInventoryUpdate(player, playerInfo.jetpackInventory)
 end
 
 -- 更新玩家 JumpPower 值

@@ -28,10 +28,6 @@ local scrollingFrame = thisFrame:WaitForChild("ScrollingFrame") :: ScrollingFram
 
 local upgradeWalkSpeedFrame1 = scrollingFrame:WaitForChild("UpgradeWalkSpeedFrame1") :: Frame
 local upgradeWalkSpeedFrame10 = scrollingFrame:WaitForChild("UpgradeWalkSpeedFrame10") :: Frame
-local upgradeMaxFuelFrame1 = scrollingFrame:WaitForChild("UpgradeMaxFuelFrame1") :: Frame
-local upgradeMaxFuelFrame10 = scrollingFrame:WaitForChild("UpgradeMaxFuelFrame10") :: Frame
-local upgradeMaxThrustSpeedFrame1 = scrollingFrame:WaitForChild("UpgradeMaxThrustSpeedFrame1") :: Frame
-local upgradeMaxThrustSpeedFrame10 = scrollingFrame:WaitForChild("UpgradeMaxThrustSpeedFrame10") :: Frame
 local uiListLayout = scrollingFrame:WaitForChild("UIListLayout") :: UIListLayout
 
 closeButton.Activated:Connect(function()
@@ -45,14 +41,10 @@ local warnedMissingAbilityList: { [string]: boolean } = {}
 -- 按 skillType 映射对应的 GameTexts
 local ABILITY_TIP_TEXTS: { [number]: { source: string, key: string } } = {
 	[GameConfig.SkillType.WalkSpeed] = GameTexts.UpgradeSpeedLevelIncreased,
-	[GameConfig.SkillType.MaxFuel] = GameTexts.UpgradeFuelLevelIncreased,
-	[GameConfig.SkillType.MaxThrust] = GameTexts.UpgradeThrustLevelIncreased,
 }
 
 local ABILITY_VALUE_TEXTS: { [number]: { source: string, key: string } } = {
 	[GameConfig.SkillType.WalkSpeed] = GameTexts.SpeedWithNumber,
-	[GameConfig.SkillType.MaxFuel] = GameTexts.FuelWithNumber,
-	[GameConfig.SkillType.MaxThrust] = GameTexts.ThrustWithNumber,
 }
 
 local function showUpgradeTip(skillType: number, level: number)
@@ -156,10 +148,6 @@ end
 local function refreshAll()
 	refreshFrame(upgradeWalkSpeedFrame1, GameConfig.SkillType.WalkSpeed, 1)
 	refreshFrame(upgradeWalkSpeedFrame10, GameConfig.SkillType.WalkSpeed, 10)
-	refreshFrame(upgradeMaxFuelFrame1, GameConfig.SkillType.MaxFuel, 1)
-	refreshFrame(upgradeMaxFuelFrame10, GameConfig.SkillType.MaxFuel, 10)
-	refreshFrame(upgradeMaxThrustSpeedFrame1, GameConfig.SkillType.MaxThrust, 1)
-	refreshFrame(upgradeMaxThrustSpeedFrame10, GameConfig.SkillType.MaxThrust, 10)
 end
 
 local function updateCanvas()
@@ -250,14 +238,8 @@ end
 
 bindButton(upgradeWalkSpeedFrame1, GameConfig.SkillType.WalkSpeed, 1)
 bindButton(upgradeWalkSpeedFrame10, GameConfig.SkillType.WalkSpeed, 10)
-bindButton(upgradeMaxFuelFrame1, GameConfig.SkillType.MaxFuel, 1)
-bindButton(upgradeMaxFuelFrame10, GameConfig.SkillType.MaxFuel, 10)
-bindButton(upgradeMaxThrustSpeedFrame1, GameConfig.SkillType.MaxThrust, 1)
-bindButton(upgradeMaxThrustSpeedFrame10, GameConfig.SkillType.MaxThrust, 10)
 
 bindPaymentButton(upgradeWalkSpeedFrame10, GameConfig.SkillType.WalkSpeed, 10, GameConfig.ShopPaid.WalkSpeed10ProductId)
-bindPaymentButton(upgradeMaxFuelFrame10, GameConfig.SkillType.MaxFuel, 10, GameConfig.ShopPaid.MaxFuel10ProductId)
-bindPaymentButton(upgradeMaxThrustSpeedFrame10, GameConfig.SkillType.MaxThrust, 10, GameConfig.ShopPaid.MaxThrust10ProductId)
 
 local function OnCloseWindow(windowId: string)
 	if windowId == thisFrame:GetAttribute("WindowId") then

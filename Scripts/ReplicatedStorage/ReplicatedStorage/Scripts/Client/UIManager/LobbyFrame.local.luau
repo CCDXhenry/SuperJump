@@ -15,6 +15,7 @@ local clientScripts = scripts:WaitForChild("Client")
 local ClientGameInfo = require(clientScripts:FindFirstChild("ClientGameInfo"))
 local uiManagerScript = clientScripts:WaitForChild("UIManager")
 local UIManager = require(uiManagerScript)
+local RunwaySession = require(clientScripts:FindFirstChild("JumpRunway"):FindFirstChild("RunwaySession"))
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
 local TranslationTool = require(core:WaitForChild("Scripts"):WaitForChild("Client"):FindFirstChild("TranslationTool"))
 local GameTexts = require(sharedScripts_game:FindFirstChild("GameTexts"))
@@ -40,6 +41,7 @@ local decelerationButton: ImageButton? = lobbyFrame:FindFirstChild("Deceleration
 local decelerationButtonTextLabel: TextLabel? = if decelerationButton then (decelerationButton:FindFirstChild("TextLabel") :: TextLabel?) else nil
 local bottomButtonsFrame = lobbyFrame:FindFirstChild("BottomButtonsFrame")
 local exEquipButton: ImageButton? = lobbyFrame:FindFirstChild("ExEquipButton") :: ImageButton?
+local jetpackButton: ImageButton? = lobbyFrame:FindFirstChild("JetpackButton") :: ImageButton?
 local rebirthFrame: Frame? = (lobbyFrame:FindFirstChild("RebirthFrame") or (if bottomButtonsFrame then bottomButtonsFrame:FindFirstChild("RebirthFrame") else nil)) :: Frame?
 local rebirthButton: GuiButton? = if rebirthFrame then (rebirthFrame:FindFirstChild("Button") :: any) else nil
 local rebirthNumberText: TextLabel? = if rebirthFrame then (rebirthFrame:FindFirstChild("NumberText") :: TextLabel?) else nil
@@ -152,13 +154,13 @@ end
 
 if maxFuelAddButton then
 	maxFuelAddButton.Activated:Connect(function()
-		UIManager.OpenWindow(UIManager.WindowId.UpgradeShop)
+		UIManager.OpenWindow(UIManager.WindowId.JetpackShop)
 	end)
 end
 
 if maxThrustAddButton then
 	maxThrustAddButton.Activated:Connect(function()
-		UIManager.OpenWindow(UIManager.WindowId.UpgradeShop)
+		UIManager.OpenWindow(UIManager.WindowId.JetpackShop)
 	end)
 end
 
@@ -183,6 +185,12 @@ end
 if exEquipButton then
 	exEquipButton.Activated:Connect(function()
 		UIManager.OpenWindow(UIManager.WindowId.ExEquipShop)
+	end)
+end
+
+if jetpackButton then
+	jetpackButton.Activated:Connect(function()
+		UIManager.OpenWindow(UIManager.WindowId.JetpackShop)
 	end)
 end
 
@@ -258,26 +266,30 @@ local function RefreshUpgradeValues()
 	end
 	RefreshDecelerationButtonVisible(levelSpeed)
 
-	-- MaxFuel
-	local fuelLevel = localPlayerInfo.shopInfo.maxFuelLevel or 1
-	local fuelConfig = GameConfig.Shop.MaxFuel
-	local maxFuelValue = 0
-	if fuelConfig then
-		maxFuelValue = fuelConfig.abilityList[fuelLevel]
-			or fuelConfig.abilityList[fuelConfig.maxLevel]
-			or fuelConfig.abilityList[1]
+	-- MaxFuel: 从火箭背包库存读取（跑道模式中显示实时燃料）
+	local jetpackCurrentId = localPlayerInfo.jetpackInventory.currentId or "1"
+	local jetpackData = GameConfig.JetpackDataMap[tonumber(jetpackCurrentId)]
+	local maxFuelValue = if jetpackData then jetpackData.fuel else 0
+	local isRunwayMode = UIManager.IsWindowShowing(UIManager.WindowId.JumpRunWayFrame)
+	if isRunwayMode then
+		local currentFuel = RunwaySession.GetCurrentFuel()
+		maxFuelText.Text = string.format("%.1fs/%.0fs", currentFuel, maxFuelValue)
+		-- 按燃料比例设置颜色：>66% 绿, >33% 黄, <=33% 红
+		local fuelRatio = if maxFuelValue > 0 then currentFuel / maxFuelValue else 0
+		if fuelRatio > 0.66 then
+			maxFuelText.TextColor3 = Color3.fromRGB(80, 255, 120) -- 绿色
+		elseif fuelRatio > 0.33 then
+			maxFuelText.TextColor3 = Color3.fromRGB(255, 220, 30) -- 黄色
+		else
+			maxFuelText.TextColor3 = Color3.fromRGB(255, 60, 60) -- 红色
+		end
+	else
+		maxFuelText.Text = string.format("%.0fs/%.0fs", maxFuelValue, maxFuelValue)
+		maxFuelText.TextColor3 = defaultWalkSpeedColor
 	end
-	maxFuelText.Text = string.format("%.0fs/%.0fs", maxFuelValue, maxFuelValue)
 
-	-- MaxThrust
-	local thrustLevel = localPlayerInfo.shopInfo.maxThrustLevel or 1
-	local thrustConfig = GameConfig.Shop.MaxThrust
-	local maxThrustValue = 0
-	if thrustConfig then
-		maxThrustValue = thrustConfig.abilityList[thrustLevel]
-			or thrustConfig.abilityList[thrustConfig.maxLevel]
-			or thrustConfig.abilityList[1]
-	end
+	-- MaxThrust: 从火箭背包库存读取
+	local maxThrustValue = if jetpackData then jetpackData.thrust else 0
 	maxThrustText.Text = string.format("+%s", NumberExtension.FormatBigNumberAA(maxThrustValue))
 
 	-- JumpPower
@@ -381,8 +393,6 @@ local function OnLocalPlayerSkillLevelChanged(skillType: number, level: number)
 
 	if skillType == GameConfig.SkillType.RebirthLevel
 		or skillType == GameConfig.SkillType.WalkSpeed
-		or skillType == GameConfig.SkillType.MaxFuel
-		or skillType == GameConfig.SkillType.MaxThrust
 	then
 		RefreshRebirthRedPointView()
 	end
@@ -403,4 +413,31 @@ ClientMsg.ConnectLocalPlayerJumpPowerUpdate(function(newValue: number, addAmount
 		jumpPowerText.Text = NumberExtension.FormatBigNumberAA(newValue)
 	end
 	ShowJumpPowerFloatingText(addAmount)
+end)
+
+-- 火箭背包库存更新时刷新显示
+ClientMsg.ConnectLocalPlayerJetpackInventoryUpdate(function()
+	RefreshUpgradeValues()
+end)
+
+-- 跑道模式中轮询实时燃料显示
+local runService: RunService = game:GetService("RunService")
+local lastDisplayedFuel: number = -1
+runService.Heartbeat:Connect(function()
+	if UIManager.IsWindowShowing(UIManager.WindowId.JumpRunWayFrame) then
+		local currentFuel = RunwaySession.GetCurrentFuel()
+		if math.abs(currentFuel - lastDisplayedFuel) > 0.05 then
+			lastDisplayedFuel = currentFuel
+			RefreshUpgradeValues()
+		end
+	else
+		lastDisplayedFuel = -1
+	end
+end)
+
+-- 监听跑道窗口打开/关闭来启停轮询
+ClientMsg.ConnectCloseWindow(function(windowId: string)
+	if windowId == UIManager.WindowId.JumpRunWayFrame then
+		RefreshUpgradeValues()
+	end
 end)

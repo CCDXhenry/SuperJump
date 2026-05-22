@@ -901,6 +901,12 @@ function NetMsg.ConnectNotifyExerciseEnd(callback: () -> ())
 	notifyExerciseEndEvent.OnClientEvent:Connect(callback)
 end
 
+-- Jetpack: 客户端请求购买火箭背包
+local requestBuyJetpackEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestBuyJetpack") :: RemoteEvent?
+local requestUpdateJetpackUsingEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestUpdateJetpackUsing") :: RemoteEvent?
+local notifyPlayerJetpackInventoryUpdateEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyPlayerJetpackInventoryUpdate") :: RemoteEvent?
+local requestClaimJetpackGroupRewardEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestClaimJetpackGroupReward") :: RemoteEvent?
+
 -- JumpPower 更新（服务端→客户端）
 function NetMsg.FireNotifyPlayerJumpPowerUpdate(player: Player, newValue: number, addAmount: number)
 	if notifyJumpPowerUpdateEvent == nil then
@@ -914,6 +920,66 @@ function NetMsg.ConnectNotifyPlayerJumpPowerUpdate(callback: (newValue: number, 
 		return
 	end
 	notifyJumpPowerUpdateEvent.OnClientEvent:Connect(callback)
+end
+
+-- Jetpack: 客户端请求购买火箭背包
+function NetMsg.FireRequestBuyJetpack(jetpackId: number)
+	if requestBuyJetpackEvent == nil then
+		return
+	end
+	requestBuyJetpackEvent:FireServer(jetpackId)
+end
+
+function NetMsg.ConnectRequestBuyJetpack(callback: (player: Player, jetpackId: number) -> ())
+	if requestBuyJetpackEvent == nil then
+		return
+	end
+	requestBuyJetpackEvent.OnServerEvent:Connect(callback)
+end
+
+-- Jetpack: 客户端请求装备火箭背包
+function NetMsg.FireRequestUpdateJetpackUsing(jetpackId: number)
+	if requestUpdateJetpackUsingEvent == nil then
+		return
+	end
+	requestUpdateJetpackUsingEvent:FireServer(jetpackId)
+end
+
+function NetMsg.ConnectRequestUpdateJetpackUsing(callback: (player: Player, jetpackId: number) -> ())
+	if requestUpdateJetpackUsingEvent == nil then
+		return
+	end
+	requestUpdateJetpackUsingEvent.OnServerEvent:Connect(callback)
+end
+
+-- Jetpack: 服务端通知客户端火箭背包库存更新
+function NetMsg.FireNotifyPlayerJetpackInventoryUpdate(player: Player, inventory: GameConfig.JetpackInventory)
+	if notifyPlayerJetpackInventoryUpdateEvent == nil then
+		return
+	end
+	notifyPlayerJetpackInventoryUpdateEvent:FireClient(player, inventory)
+end
+
+function NetMsg.ConnectNotifyPlayerJetpackInventoryUpdate(callback: (inventory: GameConfig.JetpackInventory) -> ())
+	if notifyPlayerJetpackInventoryUpdateEvent == nil then
+		return
+	end
+	notifyPlayerJetpackInventoryUpdateEvent.OnClientEvent:Connect(callback)
+end
+
+-- Jetpack: 客户端请求领取群组火箭背包奖励
+function NetMsg.FireRequestClaimJetpackGroupReward(isInGroup: boolean)
+	if requestClaimJetpackGroupRewardEvent == nil then
+		return
+	end
+	requestClaimJetpackGroupRewardEvent:FireServer(isInGroup)
+end
+
+function NetMsg.ConnectRequestClaimJetpackGroupReward(callback: (player: Player, isInGroup: boolean) -> ())
+	if requestClaimJetpackGroupRewardEvent == nil then
+		return
+	end
+	requestClaimJetpackGroupRewardEvent.OnServerEvent:Connect(callback)
 end
 
 return NetMsg

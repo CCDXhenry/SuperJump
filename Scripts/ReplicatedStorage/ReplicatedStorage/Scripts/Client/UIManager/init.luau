@@ -29,6 +29,7 @@ UIManager.WindowId = {
 	JumpRunWayFrame = "JumpRunWayFrame",
 	ExEquipShop = "ExEquipShopFrame",
 	ExEquipFrame = "ExEquipFrame",
+	JetpackShop = "JetpackShopFrame",
 }
 
 type WindowConfig = {
@@ -71,6 +72,11 @@ local WindowConfigs: { [string]: WindowConfig } = {
 		FrameName = "ExEquipFrame",
 		scriptName = "ExEquipFrame",
 		isModal = false,
+	},
+	[UIManager.WindowId.JetpackShop] = {
+		FrameName = "JetpackShopFrame",
+		scriptName = "JetpackShopFrame",
+		isModal = true,
 	},
 }
 

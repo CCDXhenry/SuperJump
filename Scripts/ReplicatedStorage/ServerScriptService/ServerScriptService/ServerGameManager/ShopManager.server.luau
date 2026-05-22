@@ -23,8 +23,6 @@ local ShopManager = {}
 
 function ShopManager.OnUpgradeRequested(player: Player, skillType: number, levelAdd: number)
 	local abilityName = if skillType == GameConfig.SkillType.WalkSpeed then "WalkSpeed"
-		elseif skillType == GameConfig.SkillType.MaxFuel then "MaxFuel"
-		elseif skillType == GameConfig.SkillType.MaxThrust then "MaxThrust"
 		elseif skillType == GameConfig.SkillType.HomeLevel then "HomeLevel"
 		else nil
 	

@@ -49,6 +49,10 @@ function ClientGameInfo.InitPlayerInfo(
 			currentId = "1",
 			ownedList = { ["1"] = true },
 		},
+		jetpackInventory = localPlayerSaveInfo.jetpackInventory or {
+			currentId = "1",
+			ownedList = { ["1"] = true },
+		},
 		homeSlot = localPlayerSaveInfo.homeSlot,
 		guideProgressInfo = guideProgressInfo,
 		currentGuideType = GameConfig.GuideType.None,
@@ -264,10 +268,6 @@ function ClientGameInfo.UpdateSkillLevel(skillType: number, level: number)
 
 	if skillType == GameConfig.SkillType.WalkSpeed then
 		localPlayerInfo.shopInfo.walkSpeedLevel = level
-	elseif skillType == GameConfig.SkillType.MaxFuel then
-		localPlayerInfo.shopInfo.maxFuelLevel = level
-	elseif skillType == GameConfig.SkillType.MaxThrust then
-		localPlayerInfo.shopInfo.maxThrustLevel = level
 	elseif skillType == GameConfig.SkillType.RebirthLevel then
 		localPlayerInfo.shopInfo.rebirthLevel = level
 		localPlayerInfo.settingInfo.decelerationOn = false
@@ -365,6 +365,14 @@ function ClientGameInfo.UpdateExEquipInventory(exEquipInventory: GameConfig.ExEq
 	if localPlayerInfo then
 		localPlayerInfo.exEquipInventory = exEquipInventory
 		ClientMsg.FireLocalPlayerExEquipInventoryUpdate(exEquipInventory)
+	end
+end
+
+-- 火箭背包库存更新
+function ClientGameInfo.UpdateJetpackInventory(jetpackInventory: GameConfig.JetpackInventory)
+	if localPlayerInfo then
+		localPlayerInfo.jetpackInventory = jetpackInventory
+		ClientMsg.FireLocalPlayerJetpackInventoryUpdate(jetpackInventory)
 	end
 end
 

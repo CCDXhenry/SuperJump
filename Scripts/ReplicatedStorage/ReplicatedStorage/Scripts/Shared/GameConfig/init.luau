@@ -12,6 +12,7 @@ local LittleElfChestDataModule = require(script:WaitForChild("LittleElfChestData
 local LittleElfChestRewardPoolDataModule = require(script:WaitForChild("LittleElfChestRewardPoolData"))
 local UpgradeShopRawData = require(script:WaitForChild("UpgradeShopData"))
 local ExEquipDataModule = require(script:WaitForChild("ExEquipData"))
+local JetpackDataModule = require(script:WaitForChild("JetpackData"))
 local MonsterDataModule = require(script:WaitForChild("MonsterData"))
 
 GameConfig.GameVersion = "1.0.0"
@@ -108,8 +109,6 @@ GameConfig.SkillType = {
 	WalkSpeed = 1,
 	HomeLevel = 2,
 	RebirthLevel = 3,
-	MaxFuel = 4,
-	MaxThrust = 5,
 	JumpPower = 6,
 }
 
@@ -125,20 +124,14 @@ GameConfig.ShopAbilityByType[GameConfig.SkillType.WalkSpeed] = {
 	shopKey = "WalkSpeed",
 	levelField = "walkSpeedLevel",
 }
-GameConfig.ShopAbilityByType[GameConfig.SkillType.MaxFuel] = {
-	abilityName = "MaxFuel",
-	shopKey = "MaxFuel",
-	levelField = "maxFuelLevel",
-}
-GameConfig.ShopAbilityByType[GameConfig.SkillType.MaxThrust] = {
-	abilityName = "MaxThrust",
-	shopKey = "MaxThrust",
-	levelField = "maxThrustLevel",
-}
 
 GameConfig.ExEquipType = {
 	Treadmill = 1,
 	Bike = 2,
+}
+
+GameConfig.JetpackType = {
+	Basic = 1,
 }
 
 GameConfig.ItemType = {
@@ -146,6 +139,7 @@ GameConfig.ItemType = {
 	Coil = 2,
 	LittleElfChest = 3,
 	ExEquip = 4,
+	Jetpack = 5,
 }
 
 GameConfig.ModelGetSource = {
@@ -181,8 +175,8 @@ GameConfig.ItemCountChangeReason = {
 	SpendOnUpgradeBrainrot = 2001,
 	SpendOnUpgradeHome = 2002,
 	SpendOnUpgradeWalkSpeed = 2003,
-	SpendOnUpgradeFuel = 2004,
-	SpendOnUpgradeThrust = 2005,
+	SpendOnUpgradeJetpackFuel = 2004,
+	SpendOnUpgradeJetpackThrust = 2005,
 }
 
 export type BrainrotData = {
@@ -442,6 +436,30 @@ export type ExEquipInventory = {
 GameConfig.ExEquipDataMap = {} :: { [number]: ExEquipData }
 for _, data in ExEquipDataModule do
 	GameConfig.ExEquipDataMap[data.id] = data :: ExEquipData
+end
+
+export type JetpackData = {
+	id: number,
+	resourceName: string,
+	iconImageId: string,
+	name_t: string,
+	costCoin: number,
+	productId: number,
+	costRb: number,
+	fuel: number,
+	thrust: number,
+	costType: number,
+	quality: number,
+}
+
+export type JetpackInventory = {
+	currentId: string,
+	ownedList: { [string]: boolean },
+}
+
+GameConfig.JetpackDataMap = {} :: { [number]: JetpackData }
+for _, data in JetpackDataModule do
+	GameConfig.JetpackDataMap[data.id] = data :: JetpackData
 end
 
 export type MonsterData = {
@@ -1048,7 +1066,7 @@ end
 
 local function BuildShopFromRawData()
 	-- 遍历 UpgradeShopData 原始数据，按 type 分组构建 GameConfig.Shop 条目
-	-- type=1 → WalkSpeed, type=2 → HomeLevel, type=4 → MaxFuel, type=5 → MaxThrust
+	-- type=1 → WalkSpeed, type=2 → HomeLevel
 	local shopBuilders: { [number]: { abilityList: { [number]: number }, upgradeCostList: { [number]: number }, name_t: string } } = {}
 	for _, entry in ipairs(UpgradeShopRawData) do
 		local t = entry["type"]
@@ -1064,8 +1082,6 @@ local function BuildShopFromRawData()
 			local nameLookup = {
 				[1] = "WalkSpeed",
 				[2] = "HomeLevel",
-				[4] = "MaxFuel",
-				[5] = "MaxThrust",
 			}
 			local name_t = nameLookup[t]
 			if name_t == nil then
@@ -1081,8 +1097,6 @@ local function BuildShopFromRawData()
 	local typeToShopKey = {
 		[1] = "WalkSpeed",
 		[2] = "HomeLevel",
-		[4] = "MaxFuel",
-		[5] = "MaxThrust",
 	}
 	for t, builder in pairs(shopBuilders) do
 		local shopKey = typeToShopKey[t]
@@ -1103,8 +1117,6 @@ end
 GameConfig.Shop = {
 	WalkSpeed = MakeStubShop(GameConfig.SkillType.WalkSpeed, "WalkSpeed", 16),
 	HomeLevel = MakeStubShop(GameConfig.SkillType.HomeLevel, "HomeLevel", 1),
-	MaxFuel = MakeStubShop(GameConfig.SkillType.MaxFuel, "MaxFuel", 20),
-	MaxThrust = MakeStubShop(GameConfig.SkillType.MaxThrust, "MaxThrust", 20),
 }
 BuildShopFromRawData()
 
@@ -1137,15 +1149,11 @@ GameConfig.ShopBundleList = {} :: { number }
 
 export type ShopPaidConfig = {
 	WalkSpeed10ProductId: number,
-	MaxFuel10ProductId: number,
-	MaxThrust10ProductId: number,
 	BrainrotUpgrade3ProductId: number,
 }
 
 GameConfig.ShopPaid = {
 	WalkSpeed10ProductId = 3567697343,
-	MaxFuel10ProductId = 0,
-	MaxThrust10ProductId = 0,
 	BrainrotUpgrade3ProductId = 3568879048,
 } :: ShopPaidConfig
 
@@ -1191,8 +1199,6 @@ export type GuideProgressSaveInfo = {
 
 export type ShopInfo = {
 	walkSpeedLevel: number,
-	maxFuelLevel: number,
-	maxThrustLevel: number,
 	rebirthLevel: number,
 }
 
@@ -1217,6 +1223,7 @@ export type PlayerSaveInfo = {
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },
 	exEquipInventory: ExEquipInventory,
+	jetpackInventory: JetpackInventory,
 	guideProgressInfo: GuideProgressSaveInfo,
 	discoveredIslandIds: { [string]: boolean }?,
 }
@@ -1271,8 +1278,6 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 		},
 		shopInfo = {
 			walkSpeedLevel = 1,
-			maxFuelLevel = 1,
-			maxThrustLevel = 1,
 			rebirthLevel = 0,
 		},
 		jumpPower = GameConfig.JumpPowerDefaultValue,
@@ -1283,6 +1288,10 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 		},
 		brainrotQueue = {},
 		exEquipInventory = {
+			currentId = "1",
+			ownedList = { ["1"] = true },
+		},
+		jetpackInventory = {
 			currentId = "1",
 			ownedList = { ["1"] = true },
 		},
@@ -1309,6 +1318,7 @@ export type ClientLocalPlayerSaveInfo = {
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },
 	exEquipInventory: ExEquipInventory,
+	jetpackInventory: JetpackInventory,
 	homeSlot: string,
 	guideProgressInfo: GuideProgressSaveInfo,
 }
