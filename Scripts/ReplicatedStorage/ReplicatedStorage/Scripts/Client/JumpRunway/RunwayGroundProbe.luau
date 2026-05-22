@@ -20,7 +20,11 @@ local function RaycastFeet(humanoid: Humanoid): (boolean, number)
 	if root == nil then
 		return false, 1e9
 	end
-	local origin = root.Position + Vector3.new(0, C().cfg.RUNWAY_GROUND_RAY_ORIGIN_Y, 0)
+	local hip = humanoid.HipHeight
+	if typeof(hip) ~= "number" or hip ~= hip or hip < 0.01 then
+		hip = 2
+	end
+	local origin = root.Position + Vector3.new(0, C().cfg.RUNWAY_GROUND_RAY_ORIGIN_Y - hip, 0)
 	local cast = Vector3.new(0, -C().cfg.RUNWAY_GROUND_PROBE_DOWN, 0)
 	local rp = RaycastParams.new()
 	rp.FilterType = Enum.RaycastFilterType.Exclude

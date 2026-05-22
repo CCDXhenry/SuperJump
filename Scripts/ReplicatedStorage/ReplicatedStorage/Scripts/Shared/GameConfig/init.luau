@@ -660,7 +660,10 @@ GameConfig.JumpRunwayDesigner = {
 	-- 摔滑 Slide 重力比例；↓ 摔滑更飘
 	RUNWAY_SLIDE_EFFECTIVE_GRAVITY_SCALE = 1,
 	-- 脚本贴地射线容差(stud)；↑ 更易判贴地
-	RUNWAY_SCRIPTED_GROUNDED_MAX_DIST_ABOVE_BASELINE_STUDS = 2,
+	RUNWAY_SCRIPTED_GROUNDED_MAX_DIST_ABOVE_BASELINE_STUDS = 0,
+	-- 链式起跳窗口开始倒计时的高度(stud)：玩家距地 ≤ 此值时启动评分倒计时；
+	-- 在此高度以上（但已在 bandOk 范围内）起跳 → 强制 Ok；此高度以下起跳 → 按 deltaT 算 Perfect/Ok/Late
+	RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS = 3.5,
 
 	-- ═══════════════════════════════════════
 	-- —— ④ 终局冲刺 Dash ——
@@ -804,6 +807,8 @@ GameConfig.JumpRunway = {
 	RUNWAY_GROUND_MIN_NORMAL_Y = 0.25,
 	-- IsRunwayScriptedGrounded 射线分支：有 baseline 时 dist < baseline + 本值 视为脚射线贴地；与 RUNWAY_PRELAND_MAX_DIST_STUDS（起跳窗带）分离
 	RUNWAY_SCRIPTED_GROUNDED_MAX_DIST_ABOVE_BASELINE_STUDS = jumpRunwayDesigner.RUNWAY_SCRIPTED_GROUNDED_MAX_DIST_ABOVE_BASELINE_STUDS,
+	-- 链式起跳窗口开始倒计时的高度(stud)：dist ≤ baseline + 本值时启动评分倒计时
+	RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS = jumpRunwayDesigner.RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS,
 	-- IsRunwayScriptedGrounded：FloorMaterial=Air 且脚射线未命中时，若已记录起跑 HRP 世界 Y，且 |当前 HRP.Y - 基准| ≤ 本值（且通过同函数内 vy<12），仍视为贴地。0 关闭仅走射线/状态机回退
 	RUNWAY_SCRIPTED_GROUNDED_HRP_Y_DEVIATION_STUDS = 0.5,
 	-- StartTrigger 未贴地归位：向下射线起点在 max(HRP.Y, 触发器.Y) 之上额外抬高（stud），避免 HRP 在触发器内时测不到地

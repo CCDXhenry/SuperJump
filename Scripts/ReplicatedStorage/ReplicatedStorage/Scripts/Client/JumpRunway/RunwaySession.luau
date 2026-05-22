@@ -1593,7 +1593,11 @@ function RunwaySession.RaycastFeet(humanoid: Humanoid): (boolean, number)
 	if root == nil then
 		return false, 1e9
 	end
-	local origin = root.Position + Vector3.new(0, cfg.RUNWAY_GROUND_RAY_ORIGIN_Y, 0)
+	local hip = humanoid.HipHeight
+	if typeof(hip) ~= "number" or hip ~= hip or hip < 0.01 then
+		hip = 2
+	end
+	local origin = root.Position + Vector3.new(0, cfg.RUNWAY_GROUND_RAY_ORIGIN_Y - hip, 0)
 	local cast = Vector3.new(0, -cfg.RUNWAY_GROUND_PROBE_DOWN, 0)
 	local rp = RaycastParams.new()
 	rp.FilterType = Enum.RaycastFilterType.Exclude
@@ -1646,6 +1650,20 @@ function RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid: Humanoid): boolean
 		maxBand = baseline + cfg.RUNWAY_PRELAND_MAX_DIST_STUDS
 	end
 	return dist <= maxBand
+end
+
+-- 链式起跳窗口倒计时启动高度检测：dist <= baseline + RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS
+function RunwaySession.IsRunwayChainWindowHeightOk(humanoid: Humanoid): boolean
+	local ok, dist = RunwaySession.RaycastFeet(humanoid)
+	if not ok then
+		return false
+	end
+	local maxH = cfg.RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS
+	local baseline = localState.preLandRayBaselineStuds
+	if typeof(baseline) == "number" and baseline == baseline then
+		maxH = baseline + cfg.RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS
+	end
+	return dist <= maxH
 end
 
 -- IsRunwayScriptedGrounded 射线分支：有 baseline 时 dist < baseline + slack；无 baseline 时 ok 即真
@@ -2811,11 +2829,13 @@ function RunwaySession.MaybeStartJumpWindowTimingFromGround(humanoid: Humanoid, 
 		and localState.takeoffCount >= 1
 		and localState.takeoffCount < cfg.N_TOTAL_JUMPS
 	if chainSeg and localState.chainJumpWindowAwaitingGround then
-		if localState.tHudStart == nil then
-			localState.tHudStart = nowClock
+		if RunwaySession.IsRunwayChainWindowHeightOk(humanoid) or RunwaySession.IsRunwayScriptedGrounded(humanoid) then
+			if localState.tHudStart == nil then
+				localState.tHudStart = nowClock
+			end
+			localState.predictJumpWindowUntil = nowClock + cfg.T_WINDOW
+			localState.chainJumpWindowAwaitingGround = false
 		end
-		localState.predictJumpWindowUntil = nowClock + cfg.T_WINDOW
-		localState.chainJumpWindowAwaitingGround = false
 	end
 end
 
@@ -2832,11 +2852,20 @@ function RunwaySession.UpdateLocalJumpWindowPrediction(humanoid: Humanoid, nowCl
 				localState.predictJumpWindowUntil = nowClock + cfg.T_WINDOW
 				localState.tHudStart = nowClock
 				localState.chainJumpWindowAwaitingGround = false
+			elseif RunwaySession.IsRunwayChainWindowHeightOk(humanoid) then
+				localState.predictJumpWindowUntil = nowClock + cfg.T_WINDOW
+				localState.tHudStart = nowClock
+				localState.chainJumpWindowAwaitingGround = false
 			else
 				localState.chainJumpWindowAwaitingGround = true
 				localState.predictJumpWindowUntil = nil
-				localState.tHudStart = nowClock
+				localState.tHudStart = nil
 			end
+		elseif localState.chainJumpWindowAwaitingGround and RunwaySession.IsRunwayChainWindowHeightOk(humanoid) then
+			-- chainJumpWindowAwaitingGround 期间高度达到要求：启动倒计时
+			localState.predictJumpWindowUntil = nowClock + cfg.T_WINDOW
+			localState.tHudStart = if localState.tHudStart == nil then nowClock else localState.tHudStart
+			localState.chainJumpWindowAwaitingGround = false
 		end
 		localState.prevJumpWindowRayBand = bandOk
 		localState.prevLocalGroundedForLand = g
@@ -4318,9 +4347,7 @@ function RunwaySession.JumpApplyRatingForTakeoff(
 		JumpRunWayFrame.ShowRatingTier(tierLine)
 	elseif inChainWindow then
 		local tierChain: number
-		local _grounded = RunwaySession.IsRunwayScriptedGrounded(humanoid)
-		local _preLand = RunwaySession.IsRunwayPreLanding(humanoid)
-		if (_grounded or _preLand) and localState.tHudStart ~= nil then
+		if localState.tHudStart ~= nil then
 			tierChain = RunwaySession.JumpComputeJumpWindowRatingTier(nowClock - (localState.tHudStart :: number))
 		else
 			tierChain = 2
@@ -4436,9 +4463,17 @@ function RunwaySession.JumpTry(): boolean
 		return false
 	end
 	if (inLineWindow or inChainWindow) and not inAuto then
-		if not RunwaySession.IsRunwayScriptedGrounded(humanoid) and not RunwaySession.IsRunwayPreLanding(humanoid) then
+		if not RunwaySession.IsRunwayScriptedGrounded(humanoid) and not RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid) then
 			return false
 		end
+	end
+	local okDist, distFeet = RunwaySession.RaycastFeet(humanoid)
+	if okDist then
+		local deltaT = if localState.tHudStart ~= nil then nowClock - (localState.tHudStart :: number) else -1
+		print(
+			`[RunwaySession] JumpTry takeoffCount={localState.takeoffCount} dist={string.format("%.2f", distFeet)}`
+				.. ` deltaT={string.format("%.3f", deltaT)} phase={localState.phase}`
+		)
 	end
 	return RunwaySession.JumpApplyTakeoff(humanoid, hrp, nowClock, inAuto, inLineWindow, inChainWindow)
 end
