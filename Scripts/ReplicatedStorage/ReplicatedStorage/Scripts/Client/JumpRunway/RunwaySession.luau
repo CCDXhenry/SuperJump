@@ -2744,8 +2744,10 @@ function RunwaySession.MaybeStartJumpWindowTimingFromGround(humanoid: Humanoid, 
 	local chainSeg = localState.phase == Ph.Airborne
 		and localState.takeoffCount >= 1
 		and localState.takeoffCount < cfg.N_TOTAL_JUMPS
-	if chainSeg and localState.chainJumpWindowAwaitingGround and localState.tHudStart == nil then
-		localState.tHudStart = nowClock
+	if chainSeg and localState.chainJumpWindowAwaitingGround then
+		if localState.tHudStart == nil then
+			localState.tHudStart = nowClock
+		end
 		localState.predictJumpWindowUntil = nowClock + cfg.T_WINDOW
 		localState.chainJumpWindowAwaitingGround = false
 	end
@@ -2767,7 +2769,7 @@ function RunwaySession.UpdateLocalJumpWindowPrediction(humanoid: Humanoid, nowCl
 			else
 				localState.chainJumpWindowAwaitingGround = true
 				localState.predictJumpWindowUntil = nil
-				localState.tHudStart = nil
+				localState.tHudStart = nowClock
 			end
 		end
 		localState.prevJumpWindowRayBand = bandOk
@@ -4250,7 +4252,9 @@ function RunwaySession.JumpApplyRatingForTakeoff(
 		JumpRunWayFrame.ShowRatingTier(tierLine)
 	elseif inChainWindow then
 		local tierChain: number
-		if RunwaySession.IsRunwayScriptedGrounded(humanoid) and localState.tHudStart ~= nil then
+		local _grounded = RunwaySession.IsRunwayScriptedGrounded(humanoid)
+		local _preLand = RunwaySession.IsRunwayPreLanding(humanoid)
+		if (_grounded or _preLand) and localState.tHudStart ~= nil then
 			tierChain = RunwaySession.JumpComputeJumpWindowRatingTier(nowClock - (localState.tHudStart :: number))
 		else
 			tierChain = 2
