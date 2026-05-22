@@ -37,7 +37,7 @@ GameConfig.DecelerationOnImage = "rbxassetid://114216336762183"
 GameConfig.DecelerationOffImage = "rbxassetid://113696020530948"
 GameConfig.DecelerationButtonShowSpeed = 40
 
-GameConfig.JumpPowerDefaultValue = 50
+GameConfig.JumpPowerDefaultValue = 30
 GameConfig.JumpPowerExerciseInterval = 1
 
 GameConfig.GuideType = {
