@@ -37,9 +37,6 @@ GameConfig.DecelerationOnImage = "rbxassetid://114216336762183"
 GameConfig.DecelerationOffImage = "rbxassetid://113696020530948"
 GameConfig.DecelerationButtonShowSpeed = 40
 
-GameConfig.JumpPowerDefaultValue = 10
-GameConfig.JumpPowerExerciseInterval = 1
-
 GameConfig.GuideType = {
 	None = 0,
 	TutorialBrainrotPickup = 1,
@@ -616,6 +613,8 @@ GameConfig.Paving = {
 -- 物理与状态机由客户端权威驱动；服务端仅会话登记、沿轴样本防作弊与终局距离采纳。
 -- JumpRunway 表内按主题分组；常用项由 JumpRunwayDesigner 透传，实现细节注释仍在本表。
 
+
+
 -- JumpRunway 策划调参：仅修改本表数值；经 GameConfig.JumpRunway 透传，业务勿直接读此表。
 GameConfig.JumpRunwayDesigner = {
 	-- ═══════════════════════════════════════
@@ -635,6 +634,10 @@ GameConfig.JumpRunwayDesigner = {
 	-- ═══════════════════════════════════════
 	-- —— ② 沿轴水平速度 ——
 	-- ═══════════════════════════════════════
+	-- 默认跳跃力
+	DEFAULT_JUMP_POWER = 10,
+	-- 跳跃力锻炼间隔
+	JUMP_POWER_EXERCISE_INTERVAL = 1,
 	-- 首跳前线前 AutoRun 沿轴速；↑ 起跳前冲更快
 	FIRST_TAKEOFF_AUTORUN_SPEED = 20,
 	-- max 与 min 固定差；↑ 段内减速幅度更大
@@ -734,6 +737,9 @@ GameConfig.JumpRunwayDesigner = {
 }
 
 local jumpRunwayDesigner = GameConfig.JumpRunwayDesigner
+
+GameConfig.JumpPowerDefaultValue = jumpRunwayDesigner.DEFAULT_JUMP_POWER -- 默认跳跃力
+GameConfig.JumpPowerExerciseInterval = jumpRunwayDesigner.JUMP_POWER_EXERCISE_INTERVAL -- 跳跃力锻炼间隔
 
 GameConfig.JumpRunway = {
 	-- —— 会话与诊断 ——
