@@ -644,9 +644,9 @@ GameConfig.JumpRunwayDesigner = {
 	JUMP_SPEED_MAX_TO_MIN_DELTA = 15,
 	-- [1]=Perfect,[2]=Ok,[3]=Late 每次起跳累加 bonus（相对 jumpPower 的比例）；↑ 踩点好则全程更快
 	JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER = {
-		[1] = 0.67,
-		[2] = 0.33,
-		[3] = 0.17,
+		[1] = 0.5,
+		[2] = 0.3,
+		[3] = 0.1,
 	},
 
 	-- ═══════════════════════════════════════

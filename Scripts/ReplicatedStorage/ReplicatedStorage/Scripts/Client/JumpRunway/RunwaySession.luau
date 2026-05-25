@@ -317,6 +317,7 @@ function RunwaySession.HudEnsure()
 	Refs.windowLabel = makeLabel("WindowLabel", 104)
 	Refs.fuelLabel = makeLabel("FuelLabel", 136)
 	Refs.vyLabel = makeLabel("VyLabel", 168)
+	Refs.stateLabel = makeLabel("StateLabel", 200)
 end
 
 function RunwaySession.HudRefresh()
@@ -325,7 +326,7 @@ function RunwaySession.HudRefresh()
 		return
 	end
 	RunwaySession.HudEnsure()
-	local _c, _h, hrp = RunwaySession.GetCharacterParts()
+	local _c, humanoid, hrp = RunwaySession.GetCharacterParts()
 	local dist = 0
 	if hrp ~= nil and localState.runwayOrigin ~= nil then
 		dist = math.max(0, RunwaySession.CurrentAlongProgress(hrp))
@@ -381,6 +382,13 @@ function RunwaySession.HudRefresh()
 			vy = hrp.AssemblyLinearVelocity.Y
 		end
 		Refs.vyLabel.Text = string.format("Vy  %.2f", vy)
+	end
+	if Refs.stateLabel then
+		local humanoidState = "nil"
+		if humanoid then
+			humanoidState = humanoid:GetState().Name
+		end
+		Refs.stateLabel.Text = string.format("State  ph=%d  slide=%s  finSub=%d  hState=%s", localState.phase, localState.runwaySlideKind, localState.finalLandSubPhase, humanoidState)
 	end
 end
 
