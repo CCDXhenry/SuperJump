@@ -9,6 +9,7 @@ export type RunwayStateStoreShape = {
 	alongBaseline: number?,
 	takeoffCount: number,
 	jumpSpeedCumulativeRatingBonus: number,
+	jumpSpeedCurrentReductionDelta: number,
 	fuel: number,
 	ratingTier: number?,
 	finalScore: number?,
@@ -67,6 +68,7 @@ function RunwayStateStore.CreateDefault(phases: any, slideKindStandard: string):
 		alongBaseline = nil,
 		takeoffCount = 0,
 		jumpSpeedCumulativeRatingBonus = 0,
+		jumpSpeedCurrentReductionDelta = 0,
 		fuel = 0,
 		ratingTier = nil,
 		finalScore = nil,
@@ -124,6 +126,7 @@ function RunwayStateStore.ResetForIdle(localState: RunwayStateStoreShape, phases
 	localState.alongBaseline = nil
 	localState.takeoffCount = 0
 	localState.jumpSpeedCumulativeRatingBonus = 0
+	localState.jumpSpeedCurrentReductionDelta = 0
 	localState.fuel = 0
 	localState.ratingTier = nil
 	localState.finalScore = nil

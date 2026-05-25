@@ -635,18 +635,18 @@ GameConfig.JumpRunwayDesigner = {
 	-- —— ② 沿轴水平速度 ——
 	-- ═══════════════════════════════════════
 	-- 默认跳跃力
-	DEFAULT_JUMP_POWER = 10,
+	DEFAULT_JUMP_POWER = 30,
 	-- 跳跃力锻炼间隔
 	JUMP_POWER_EXERCISE_INTERVAL = 1,
 	-- 首跳前线前 AutoRun 沿轴速；↑ 起跳前冲更快
 	FIRST_TAKEOFF_AUTORUN_SPEED = 20,
-	-- max 与 min 固定差；↑ 段内减速幅度更大
-	JUMP_SPEED_MAX_TO_MIN_DELTA = 15,
-	-- [1]=Perfect,[2]=Ok,[3]=Late 每次起跳累加 bonus（相对 jumpPower 的比例）；↑ 踩点好则全程更快
+	-- max 到 min 的降速比例（相对本次起跳前最终减速完的速度）；↑ 段内减速幅度更大
+	JUMP_SPEED_REDUCTION_RATIO = 0.17,
+	-- [1]=Perfect,[2]=Ok,[3]=Late 每次起跳增加 bonus（相对本次起跳前最终减速完的速度重新计算）；↑ 踩点好则全程更快
 	JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER = {
 		[1] = 0.5,
 		[2] = 0.3,
-		[3] = 0.1,
+		[3] = 0.17,
 	},
 
 	-- ═══════════════════════════════════════
@@ -782,9 +782,9 @@ GameConfig.JumpRunway = {
 	-- —— 沿轴水平速度：首段 AutoRun、段内 min/max、评级 bonus、空中插值 ——
 	-- 第一次起跳前（takeoffCount==0 的 AutoRun）沿轴脚本推速
 	FIRST_TAKEOFF_AUTORUN_SPEED = jumpRunwayDesigner.FIRST_TAKEOFF_AUTORUN_SPEED,
-	-- 水平速度：每段 max = jumpPower + 累计起跳评级 bonus；min = max - JUMP_SPEED_MAX_TO_MIN_DELTA（固定差值）
-	JUMP_SPEED_MAX_TO_MIN_DELTA = jumpRunwayDesigner.JUMP_SPEED_MAX_TO_MIN_DELTA,
-	-- 与 ComputeJumpWindowRatingTier 一致：1=Perfect，2=Ok，3=Late；每次起跳（含线前首跳配置的 tier）累加对应 bonus
+	-- 水平速度：每段 max = jumpPower + 累计起跳评级 bonus；min = max - 本次起跳前最终减速完的速度 * JUMP_SPEED_REDUCTION_RATIO
+	JUMP_SPEED_REDUCTION_RATIO = jumpRunwayDesigner.JUMP_SPEED_REDUCTION_RATIO,
+	-- 与 ComputeJumpWindowRatingTier 一致：1=Perfect，2=Ok，3=Late；每次起跳（含线前首跳配置的 tier）基于起跳前最终速度计算对应 bonus
 	JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER = jumpRunwayDesigner.JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER,
 	-- AutoRun 且尚未触碰起跳线时起跳：速度 bonus 使用该 tier（默认 2=Ok）；浮层与之一致
 	JUMP_FIRST_TAKEOFF_BEFORE_LINE_SPEED_RATING_TIER = 2,
@@ -977,16 +977,22 @@ GameConfig.JumpRunway = {
 	CHASER_FADE_DURATION_SEC = 1.5,
 }
 
---- 跑道单段跳跃水平限速：max = baseSpeed + cumulativeRatingBonus（clamp 至 ANTI_CHEAT_MAX_ALONG_SPEED）；min = max - JUMP_SPEED_MAX_TO_MIN_DELTA。
+--- 跑道单段跳跃水平限速：max = baseSpeed + cumulativeRatingBonus（clamp 至 ANTI_CHEAT_MAX_ALONG_SPEED）；min = max - reductionDelta。
 --- baseSpeed 可选参数，若传入则作为水平速度基准（来自 jumpPower）；不传时回退为 0。
+--- reductionDelta 可选参数，来自本次起跳前最终减速完的速度 * JUMP_SPEED_REDUCTION_RATIO；不传时回退为 0。
 --- segmentIndex 保留供调用方语义对齐（第 k 段对应 takeoffCount==k），当前与 max/min 数值无关。
-function GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(_segmentIndex: number, cumulativeRatingBonus: number, baseSpeed: number?): (number, number)
+function GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(
+	_segmentIndex: number,
+	cumulativeRatingBonus: number,
+	baseSpeed: number?,
+	reductionDelta: number?
+): (number, number)
 	local jr = GameConfig.JumpRunway
 	local initial = baseSpeed or 0
 	if typeof(initial) ~= "number" or initial ~= initial then
 		initial = 0
 	end
-	local delta = jr.JUMP_SPEED_MAX_TO_MIN_DELTA
+	local delta = reductionDelta or 0
 	if typeof(delta) ~= "number" or delta ~= delta then
 		delta = 0
 	end
