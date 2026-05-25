@@ -151,6 +151,12 @@ end
 
 -- 处理客户端请求开始锻炼
 function ExEquipManager.OnRequestStartExercise(player: Player, equipId: number)
+	local userId = player.UserId
+	if exerciseRunningMap[userId] then
+		LogInfo(string.format("StartRejected userId=%d reason=already_exercising", userId))
+		return
+	end
+
 	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		return
@@ -161,7 +167,6 @@ function ExEquipManager.OnRequestStartExercise(player: Player, equipId: number)
 		return
 	end
 
-	local userId = player.UserId
 	exerciseRunningMap[userId] = true
 
 	task.spawn(function()

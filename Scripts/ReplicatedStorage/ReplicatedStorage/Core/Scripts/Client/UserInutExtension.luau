@@ -23,7 +23,8 @@ function UserInutExtension.GetInputType(): (string?, Enum.UserInputType)
 	local lastInputEnum = userInputService:GetLastInputType()
 	if lastInputEnum == Enum.UserInputType.Keyboard 
 		or string.find(tostring(lastInputEnum.Name), "MouseButton") 
-		or lastInputEnum == Enum.UserInputType.MouseWheel then
+		or lastInputEnum == Enum.UserInputType.MouseWheel
+		or lastInputEnum == Enum.UserInputType.MouseMovement then
 		inputTypeString = UserInutExtension.InputTypeString.Keyboard_Mouse
 	elseif lastInputEnum == Enum.UserInputType.Touch then
 		inputTypeString = UserInutExtension.InputTypeString.Touch

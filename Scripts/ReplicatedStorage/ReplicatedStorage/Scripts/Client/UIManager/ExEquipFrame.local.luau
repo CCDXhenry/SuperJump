@@ -14,7 +14,6 @@ local closeButton: ImageButton = thisFrame:FindFirstChild("CloseButton") :: Imag
 
 local function OnCloseButtonActivated()
 	NetMsg.FireRequestStopExercise()
-	UIManager.CloseWindow(windowId)
 end
 
 local function OnCloseWindow(closeWindowId: string)

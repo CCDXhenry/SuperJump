@@ -5,12 +5,18 @@ local replicatedStorage: ReplicatedStorage = game:GetService("ReplicatedStorage"
 local players: Players = game:GetService("Players")
 local workspace: Workspace = game:GetService("Workspace")
 local runService: RunService = game:GetService("RunService")
+local tweenService: TweenService = game:GetService("TweenService")
+local userInputService: UserInputService = game:GetService("UserInputService")
 local localPlayer: Player? = players.LocalPlayer
 
 if localPlayer == nil then
 	return ExEquipManager
 end
 
+local core = replicatedStorage:WaitForChild("Core")
+local coreScripts = core:WaitForChild("Scripts")
+local coreSharedScripts = coreScripts:WaitForChild("Shared")
+local NumberExtension = require(coreSharedScripts:FindFirstChild("NumberExtension"))
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
@@ -19,6 +25,7 @@ local clientScripts = scripts:WaitForChild("Client")
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
 local ClientGameInfo = require(clientScripts:FindFirstChild("ClientGameInfo"))
 local UIManager = require(clientScripts:FindFirstChild("UIManager"))
+local BillboardManager = require(clientScripts:FindFirstChild("BillboardManager"))
 
 local function GetPlayerControls(): any
 	local playerScripts = localPlayer:FindFirstChildOfClass("PlayerScripts")
@@ -45,10 +52,29 @@ end
 
 local modelsFolder = replicatedStorage:FindFirstChild("Models")
 local exEquipModelsFolder: Folder? = if modelsFolder ~= nil then modelsFolder:FindFirstChild("ExEquip") :: Folder? else nil
+local uiFolder = replicatedStorage:WaitForChild("UI")
+local exercisePopupGuiTemplate = uiFolder:WaitForChild("ExerciseJumpPowerPopupGui") :: BillboardGui
 
 -- 锻炼模式常量
 -- 人物躯干高度（HumanoidRootPart 到脚底的参考偏移）
 local CHARACTER_TORSO_HEIGHT: number = 3
+-- 锻炼数值浮字对象池大小：允许同时显示多个浮字，超过时复用最早播放的浮字。
+local EXERCISE_POPUP_POOL_SIZE: number = 5
+-- 浮字完整动画时长，调大则跳出和落下更慢。
+local EXERCISE_POPUP_LIFETIME: number = 1.5
+-- 浮字初始高度，相对于 HumanoidRootPart。
+local EXERCISE_POPUP_START_HEIGHT: number = 2.4
+-- 抛物线最高点高度，调大则弹得更高。
+local EXERCISE_POPUP_PARABOLA_HEIGHT: number = 1.8
+-- 抛物线终点比起点低多少，调大则下落更明显。
+local EXERCISE_POPUP_FALL_DISTANCE: number = 0.45
+-- 抛物线水平位移的最小/最大距离，影响离开玩家身体的幅度。
+local EXERCISE_POPUP_OUT_DISTANCE_MIN: number = 2
+local EXERCISE_POPUP_OUT_DISTANCE_MAX: number = 3
+-- 随机向上弹出的水平角度范围，360 表示可朝任意水平方向弹出。
+local EXERCISE_POPUP_RANDOM_ANGLE_DEGREES: number = 360
+-- 第二段淡出开始时间占比，越小越早开始变透明。
+local EXERCISE_POPUP_FADE_START_RATIO: number = 0.45
 
 -- 锻炼模式状态
 local isExercising: boolean = false
@@ -56,17 +82,266 @@ local exerciseHumanoid: Humanoid? = nil
 local exerciseHrp: BasePart? = nil
 local exerciseForward: Vector3 = Vector3.zero
 local exerciseRunServiceConnection: RBXScriptConnection? = nil
+local exerciseInputConnection: RBXScriptConnection? = nil
 local exercisePrompt: ProximityPrompt? = nil
 local exerciseBikeAnimTrack: AnimationTrack? = nil
+local exercisePopupRandom = Random.new()
+
+type ExercisePopupItem = {
+	gui: BillboardGui,
+	attachment: Attachment?,
+	textLabel: TextLabel?,
+	stroke: UIStroke?,
+	isActive: boolean,
+	startedAt: number,
+	moveTween: Tween?,
+	textTween: Tween?,
+	strokeTween: Tween?,
+	progressValue: NumberValue?,
+	progressConnection: RBXScriptConnection?,
+}
+
+local exercisePopupPool: { ExercisePopupItem } = {}
 
 --------------------------------------------------------------------
 -- 锻炼模式逻辑
 --------------------------------------------------------------------
 
+local function GetExercisePopupText(gui: BillboardGui): TextLabel?
+	local controllerFrame = gui:FindFirstChild("ControllerFrame")
+	if controllerFrame == nil or not controllerFrame:IsA("Frame") then
+		return nil
+	end
+	return controllerFrame:FindFirstChild("JumpPowerPopupText") :: TextLabel?
+end
+
+local function StopExercisePopupTweens(item: ExercisePopupItem)
+	if item.moveTween ~= nil then
+		item.moveTween:Cancel()
+		item.moveTween = nil
+	end
+	if item.textTween ~= nil then
+		item.textTween:Cancel()
+		item.textTween = nil
+	end
+	if item.strokeTween ~= nil then
+		item.strokeTween:Cancel()
+		item.strokeTween = nil
+	end
+	if item.progressConnection ~= nil then
+		item.progressConnection:Disconnect()
+		item.progressConnection = nil
+	end
+	if item.progressValue ~= nil then
+		item.progressValue:Destroy()
+		item.progressValue = nil
+	end
+end
+
+local function ReleaseExercisePopupItem(item: ExercisePopupItem)
+	StopExercisePopupTweens(item)
+	BillboardManager.Untrack(item.gui)
+	item.gui.Enabled = false
+	item.gui.Adornee = nil
+	item.gui.Parent = nil
+	item.isActive = false
+	item.startedAt = 0
+
+	if item.attachment ~= nil and item.attachment.Parent ~= nil then
+		item.attachment:Destroy()
+	end
+	item.attachment = nil
+	item.textLabel = nil
+	item.stroke = nil
+end
+
+local function EnsureExercisePopupPool()
+	if #exercisePopupPool > 0 then
+		return
+	end
+
+	for popupIndex: number = 1, EXERCISE_POPUP_POOL_SIZE do
+		local gui = exercisePopupGuiTemplate:Clone()
+		gui.Name = `ExerciseJumpPowerPopupGui_{popupIndex}`
+		gui.Enabled = false
+		gui.Adornee = nil
+		gui.Parent = nil
+
+		table.insert(exercisePopupPool, {
+			gui = gui,
+			attachment = nil,
+			textLabel = nil,
+			stroke = nil,
+			isActive = false,
+			startedAt = 0,
+			moveTween = nil,
+			textTween = nil,
+			strokeTween = nil,
+			progressValue = nil,
+			progressConnection = nil,
+		})
+	end
+end
+
+local function GetExercisePopupItem(): ExercisePopupItem?
+	EnsureExercisePopupPool()
+
+	for _, item: ExercisePopupItem in exercisePopupPool do
+		if not item.isActive then
+			return item
+		end
+	end
+
+	local oldestItem: ExercisePopupItem? = nil
+	for _, item: ExercisePopupItem in exercisePopupPool do
+		if oldestItem == nil or item.startedAt < oldestItem.startedAt then
+			oldestItem = item
+		end
+	end
+
+	if oldestItem ~= nil then
+		ReleaseExercisePopupItem(oldestItem)
+	end
+	return oldestItem
+end
+
+local function CleanupExercisePopups()
+	for _, item: ExercisePopupItem in exercisePopupPool do
+		ReleaseExercisePopupItem(item)
+	end
+end
+
+local function GetExercisePopupAdornee(): BasePart?
+	local character: Model? = localPlayer.Character
+	if character == nil then
+		return nil
+	end
+	return character:FindFirstChild("HumanoidRootPart") :: BasePart?
+end
+
+local function GetExercisePopupParent(): PlayerGui?
+	return localPlayer:FindFirstChildOfClass("PlayerGui")
+end
+
+local function GetRandomPopupDirection(adornee: BasePart): Vector3
+	local angleRange = math.rad(EXERCISE_POPUP_RANDOM_ANGLE_DEGREES)
+	local angle = exercisePopupRandom:NextNumber(-angleRange / 2, angleRange / 2)
+	local baseForward = if exerciseForward.Magnitude > 0 then exerciseForward.Unit else adornee.CFrame.LookVector
+	local baseRight = adornee.CFrame.RightVector
+	local direction = baseForward * math.cos(angle) + baseRight * math.sin(angle)
+	if direction.Magnitude <= 0 then
+		return baseForward
+	end
+	return direction.Unit
+end
+
+local function ShowExerciseJumpPowerPopup(addAmount: number)
+	if not isExercising or addAmount <= 0 then
+		return
+	end
+
+	local adornee = GetExercisePopupAdornee()
+	if adornee == nil then
+		return
+	end
+
+	local popupParent = GetExercisePopupParent()
+	if popupParent == nil then
+		return
+	end
+
+	local item = GetExercisePopupItem()
+	if item == nil then
+		return
+	end
+
+	local textLabel = GetExercisePopupText(item.gui)
+	if textLabel == nil then
+		warn("[ExEquipManager] ExerciseJumpPowerPopupGui missing ControllerFrame.JumpPowerPopupText")
+		return
+	end
+
+	local displayText = string.format("+%s", NumberExtension.FormatBigNumberAA(addAmount))
+	local popupAttachment = Instance.new("Attachment")
+	popupAttachment.Name = "ExerciseJumpPowerPopupAttachment"
+	popupAttachment.Position = Vector3.new(0, EXERCISE_POPUP_START_HEIGHT, 0)
+	popupAttachment.Parent = adornee
+
+	local stroke: UIStroke? = textLabel:FindFirstChild("PopupStroke") :: UIStroke?
+	textLabel.Text = displayText
+	textLabel.TextTransparency = 0
+	if stroke ~= nil then
+		stroke.Transparency = 0
+	end
+
+	item.gui.Adornee = popupAttachment
+	item.gui.Enabled = true
+	item.gui.Parent = popupParent
+	item.attachment = popupAttachment
+	item.textLabel = textLabel
+	item.stroke = stroke
+	item.isActive = true
+	item.startedAt = os.clock()
+
+	BillboardManager.Track(item.gui)
+
+	local popupDirection = GetRandomPopupDirection(adornee)
+	local outDistance = exercisePopupRandom:NextNumber(EXERCISE_POPUP_OUT_DISTANCE_MIN, EXERCISE_POPUP_OUT_DISTANCE_MAX)
+	local startPosition = Vector3.new(0, EXERCISE_POPUP_START_HEIGHT, 0)
+	local progressValue = Instance.new("NumberValue")
+	progressValue.Name = "ExerciseJumpPowerPopupProgress"
+	progressValue.Value = 0
+	item.progressValue = progressValue
+	item.progressConnection = progressValue:GetPropertyChangedSignal("Value"):Connect(function()
+		local progress = math.clamp(progressValue.Value, 0, 1)
+		local horizontalOffset = popupDirection * outDistance * progress
+		local parabolaOffsetY = EXERCISE_POPUP_PARABOLA_HEIGHT * 4 * progress * (1 - progress)
+			- EXERCISE_POPUP_FALL_DISTANCE * progress
+		popupAttachment.Position = startPosition + horizontalOffset + Vector3.new(0, parabolaOffsetY, 0)
+	end)
+
+	local moveTweenInfo = TweenInfo.new(EXERCISE_POPUP_LIFETIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local fadeTweenInfo = TweenInfo.new(
+		EXERCISE_POPUP_LIFETIME * (1 - EXERCISE_POPUP_FADE_START_RATIO),
+		Enum.EasingStyle.Quad,
+		Enum.EasingDirection.In
+	)
+
+	local moveTween = tweenService:Create(progressValue, moveTweenInfo, { Value = 1 })
+	local textTween = tweenService:Create(textLabel, fadeTweenInfo, { TextTransparency = 1 })
+	item.moveTween = moveTween
+	item.textTween = textTween
+
+	if stroke ~= nil then
+		item.strokeTween = tweenService:Create(stroke, fadeTweenInfo, { Transparency = 1 })
+	end
+
+	moveTween.Completed:Connect(function(playbackState: Enum.PlaybackState)
+		if playbackState == Enum.PlaybackState.Completed and item.isActive and item.attachment == popupAttachment then
+			ReleaseExercisePopupItem(item)
+		end
+	end)
+
+	moveTween:Play()
+	task.delay(EXERCISE_POPUP_LIFETIME * EXERCISE_POPUP_FADE_START_RATIO, function()
+		if item.isActive and item.attachment == popupAttachment then
+			textTween:Play()
+			if item.strokeTween ~= nil then
+				item.strokeTween:Play()
+			end
+		end
+	end)
+end
+
 local function StopExerciseInternal()
 	if exerciseRunServiceConnection ~= nil then
 		exerciseRunServiceConnection:Disconnect()
 		exerciseRunServiceConnection = nil
+	end
+
+	if exerciseInputConnection ~= nil then
+		exerciseInputConnection:Disconnect()
+		exerciseInputConnection = nil
 	end
 
 	if exerciseHumanoid ~= nil then
@@ -100,6 +375,7 @@ local function StopExerciseInternal()
 
 	-- 关闭锻炼 UI
 	UIManager.CloseWindow(UIManager.WindowId.ExEquipFrame)
+	CleanupExercisePopups()
 
 	isExercising = false
 	exerciseHumanoid = nil
@@ -230,10 +506,11 @@ end
 --------------------------------------------------------------------
 
 local function StartExercise(equipId: number)
-	-- 如果已在锻炼中，先停止
+	-- 如果已在锻炼中，则忽略后续的开始请求，防止竞态条件
 	if isExercising then
-		StopExerciseInternal()
+		return
 	end
+	isExercising = true
 
 	local character: Model? = localPlayer.Character
 	if character == nil then
@@ -342,14 +619,15 @@ local function StartExercise(equipId: number)
 		exercisePrompt.Enabled = false
 	end
 
-	-- 打开锻炼 UI
-	UIManager.OpenWindow(UIManager.WindowId.ExEquipFrame)
-
 	-- 记录状态
 	isExercising = true
 	exerciseHumanoid = humanoid
 	exerciseHrp = hrp
 	exerciseForward = forwardZ
+	EnsureExercisePopupPool()
+
+	-- 打开锻炼 UI
+	UIManager.OpenWindow(UIManager.WindowId.ExEquipFrame)
 
 	-- 站立稳定：前几帧保持 CFrame 精确定位，防止物理引擎推开人物
 	local settleFrames: number = 0
@@ -391,6 +669,17 @@ local function StartExercise(equipId: number)
 				end)
 			end
 			exerciseHumanoid:Move(exerciseForward, false)
+		end
+	end)
+
+	exerciseInputConnection = userInputService.InputBegan:Connect(function(input: InputObject, gameProcessedEvent: boolean)
+		if gameProcessedEvent then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Space then
+			if isExercising then
+				NetMsg.FireRequestStopExercise()
+			end
 		end
 	end)
 end
@@ -438,15 +727,18 @@ function ExEquipManager.Init()
 	-- 监听 JumpPower 更新
 	NetMsg.ConnectNotifyPlayerJumpPowerUpdate(function(newValue: number, addAmount: number)
 		ClientGameInfo.UpdateJumpPower(newValue, addAmount)
+		ShowExerciseJumpPowerPopup(addAmount)
 	end)
 
 	-- 角色死亡/移除时退出锻炼模式
 	localPlayer.CharacterRemoving:Connect(function()
 		StopExercise()
+		CleanupExercisePopups()
 	end)
 	localPlayer.CharacterAdded:Connect(function(_character: Model)
 		-- 如果还在锻炼状态（实际不应发生），清理状态
 		StopExercise()
+		CleanupExercisePopups()
 	end)
 end
 
