@@ -37,7 +37,7 @@ GameConfig.DecelerationOnImage = "rbxassetid://114216336762183"
 GameConfig.DecelerationOffImage = "rbxassetid://113696020530948"
 GameConfig.DecelerationButtonShowSpeed = 40
 
-GameConfig.JumpPowerDefaultValue = 30
+GameConfig.JumpPowerDefaultValue = 10
 GameConfig.JumpPowerExerciseInterval = 1
 
 GameConfig.GuideType = {
@@ -636,9 +636,9 @@ GameConfig.JumpRunwayDesigner = {
 	-- —— ② 沿轴水平速度 ——
 	-- ═══════════════════════════════════════
 	-- 首跳前线前 AutoRun 沿轴速；↑ 起跳前冲更快
-	FIRST_TAKEOFF_AUTORUN_SPEED = 30,
+	FIRST_TAKEOFF_AUTORUN_SPEED = 20,
 	-- max 与 min 固定差；↑ 段内减速幅度更大
-	JUMP_SPEED_MAX_TO_MIN_DELTA = 10,
+	JUMP_SPEED_MAX_TO_MIN_DELTA = 15,
 	-- [1]=Perfect,[2]=Ok,[3]=Late 每次起跳累加 bonus（相对 jumpPower 的比例）；↑ 踩点好则全程更快
 	JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER = {
 		[1] = 0.67,
@@ -650,7 +650,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- —— ③ 起跳 / 重力 / 贴地 ——
 	-- ═══════════════════════════════════════
 	-- 竖直速度相对于水平速度基准的比例（0~1 或 >1）；vy = jumpPower * 本值
-	JUMP_VERTICAL_RATIO = 0.6,
+	JUMP_VERTICAL_RATIO = 0.4,
 	-- 跑道默认有效重力比例；↓ 更飘、顶点更高
 	RUNWAY_SESSION_EFFECTIVE_GRAVITY_SCALE = 0.15,
 	-- 终局按住冲刺时重力比例；↓ 冲刺段更飘
@@ -673,9 +673,9 @@ GameConfig.JumpRunwayDesigner = {
 	-- 冲刺燃料上限(s)；↑ 可冲更久
 	DASH_FUEL_MAX = 2.5,
 	-- 冲刺向上线加速度；↑ 抬头爬升更强
-	DASH_UPWARD_ACCEL = 12,
+	DASH_UPWARD_ACCEL = 196.2*0.075,
 	-- 冲刺最高竖直速度；↑ 可飞更高
-	DASH_UPWARD_VY_MAX = 75,
+	DASH_UPWARD_VY_MAX = 0,
 	-- 松冲刺后额外沿轴速衰减率；↑ 松键收速更快
 	FINAL_DASH_ALONG_EXTRA_DECEL_PER_SEC = 0.8,
 	-- 终局基础俯仰(度)；↑ 身体更前倾
