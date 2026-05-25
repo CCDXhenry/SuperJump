@@ -727,21 +727,23 @@ function NetMsg.ConnectRequestJumpRunwayLittleElfChestReward(callback: (player: 
 end
 
 -- 客户端开箱动画播完后请求服务端创建头顶携带态 brainrot
-function NetMsg.FireRequestJumpRunwayLittleElfChestStartCarry()
+function NetMsg.FireRequestJumpRunwayLittleElfChestStartCarry(brainrotId: number?, chestConfigId: number?)
 	if requestJumpRunwayLittleElfChestStartCarryEvent == nil then
 		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
 		return
 	end
-	requestJumpRunwayLittleElfChestStartCarryEvent:FireServer()
+	requestJumpRunwayLittleElfChestStartCarryEvent:FireServer(brainrotId, chestConfigId)
 end
 
-function NetMsg.ConnectRequestJumpRunwayLittleElfChestStartCarry(callback: (player: Player) -> ())
+function NetMsg.ConnectRequestJumpRunwayLittleElfChestStartCarry(callback: (player: Player, brainrotId: number?, chestConfigId: number?) -> ())
 	if requestJumpRunwayLittleElfChestStartCarryEvent == nil then
 		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
 		return
 	end
-	requestJumpRunwayLittleElfChestStartCarryEvent.OnServerEvent:Connect(function(player: Player)
-		callback(player)
+	requestJumpRunwayLittleElfChestStartCarryEvent.OnServerEvent:Connect(function(player: Player, brainrotId: any, chestConfigId: any)
+		local resolvedBrainrotId = if typeof(brainrotId) == "number" then brainrotId :: number else nil
+		local resolvedChestConfigId = if typeof(chestConfigId) == "number" then chestConfigId :: number else nil
+		callback(player, resolvedBrainrotId, resolvedChestConfigId)
 	end)
 end
 

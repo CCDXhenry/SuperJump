@@ -534,6 +534,39 @@ local function GrantLittleElfChestPendingToPlayer(player: Player): boolean
 	return true
 end
 
+local function TryCreateFallbackLittleElfChestPending(player: Player, brainrotId: number?, chestConfigId: number?): boolean
+	if brainrotId == nil or chestConfigId == nil then
+		return false
+	end
+	local rewardPool = GameConfig.LittleElfChestRewardPoolMap[chestConfigId]
+	if rewardPool == nil then
+		return false
+	end
+	local smallestId: number? = nil
+	local inPool = false
+	for _, entry in ipairs(rewardPool) do
+		if entry.itemId == brainrotId then
+			inPool = true
+		end
+		if smallestId == nil or entry.itemId < (smallestId :: number) then
+			smallestId = entry.itemId
+		end
+	end
+	if not inPool or smallestId ~= brainrotId then
+		return false
+	end
+	local brainrotData = GameConfig.BrainrotIdMap[brainrotId]
+	if brainrotData == nil then
+		return false
+	end
+	pendingLittleElfChestRewardMap[player.UserId] = {
+		brainrotId = brainrotId,
+		chestConfigId = chestConfigId,
+		quality = brainrotData.quality,
+	}
+	return true
+end
+
 local function HandleLittleElfChestReward(player: Player, chestConfigId: number)
 	-- 不检查 runMap：可能玩家跑道已结束但宝箱撞击滞后，仍应发放奖励
 	local character = player.Character
@@ -591,10 +624,20 @@ local function HandleLittleElfChestReward(player: Player, chestConfigId: number)
 	NetMsg.FireNotifyJumpRunwayLittleElfChestReward(player, brainrotId, chestConfigId, 1)
 end
 
-local function HandleLittleElfChestStartCarry(player: Player)
+local function HandleLittleElfChestStartCarry(player: Player, brainrotId: number?, chestConfigId: number?)
 	local pending = pendingLittleElfChestRewardMap[player.UserId]
 	if pending == nil then
-		return
+		if not TryCreateFallbackLittleElfChestPending(player, brainrotId, chestConfigId) then
+			return
+		end
+		pending = pendingLittleElfChestRewardMap[player.UserId]
+		if pending == nil then
+			return
+		end
+	elseif brainrotId ~= nil and chestConfigId ~= nil and pending.chestConfigId == chestConfigId and pending.brainrotId ~= brainrotId then
+		if TryCreateFallbackLittleElfChestPending(player, brainrotId, chestConfigId) then
+			pending = pendingLittleElfChestRewardMap[player.UserId]
+		end
 	end
 	if GetRunwayLittleElfChestCarrying(player) ~= nil then
 		return
@@ -700,8 +743,8 @@ function JumpRunwayServerManager.Init()
 	NetMsg.ConnectRequestJumpRunwayLittleElfChestReward(function(player: Player, chestConfigId: number)
 		HandleLittleElfChestReward(player, chestConfigId)
 	end)
-	NetMsg.ConnectRequestJumpRunwayLittleElfChestStartCarry(function(player: Player)
-		HandleLittleElfChestStartCarry(player)
+	NetMsg.ConnectRequestJumpRunwayLittleElfChestStartCarry(function(player: Player, brainrotId: number?, chestConfigId: number?)
+		HandleLittleElfChestStartCarry(player, brainrotId, chestConfigId)
 	end)
 	NetMsg.ConnectRequestJumpRunwayLittleElfChestGrant(function(player: Player)
 		HandleLittleElfChestGrant(player)

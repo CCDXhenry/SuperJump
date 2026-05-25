@@ -39,9 +39,25 @@ local function EnsureBillboardTracked(gui: BillboardGui)
 	BillboardManager.Track(gui)
 end
 
+-- 开箱动画参数：随机轮播次数。
 local RandomCount = 10
+-- 开箱动画参数：模型缩小时的接近隐藏比例。
 local TinyScale = 0.02
+-- 跑道开箱参数：客户端等待服务端最终奖励的最长时间，超时使用本地兜底奖励。
+local RunwayMaxOpenAnimationSec = 5
+-- 宝箱摇晃参数：时长乘数，1 / 2 表示摇晃速度为原来的 2 倍。
+local ChestShakeDurationMultiplier = 1 / 2
+-- Brainrot 缩放参数：时长乘数，1 / 1.5 表示缩放速度为原来的 1.5 倍。
+local BrainrotOpenScaleDurationMultiplier = 1 / 1.5
+-- Brainrot 缩放参数：随机轮播奖励弹出的峰值比例。
+local BrainrotRandomRevealScale = 2.5
+-- Brainrot 缩放参数：最终奖励弹出的峰值比例。
+local BrainrotFinalRevealScale = 3.1
+-- Brainrot 缩放参数：最终奖励从峰值回落后的停留比例。
+local BrainrotFinalSettleScale = 2.5
+-- 跑道开箱参数：宝箱从玩家撞击点向前抛出的距离。
 local ChestThrowForwardDistance = 1.0
+-- 跑道开箱参数：锁定朝向时 Brainrot 面向镜头的修正角度。
 local RunwayChestBrainrotLeftYawRad = math.rad(90)
 
 local playingUidMap: { [string]: boolean } = {}
@@ -75,6 +91,14 @@ local function TweenModelScale(model: Model, fromScale: number, toScale: number,
 	if model.Parent then
 		model:ScaleTo(toScale)
 	end
+end
+
+local function GetBrainrotOpenScaleDuration(duration: number): number
+	return duration * BrainrotOpenScaleDurationMultiplier
+end
+
+local function GetChestShakeDuration(duration: number): number
+	return duration * ChestShakeDurationMultiplier
 end
 
 local function CreateOrUpdateInfoUI(
@@ -221,6 +245,17 @@ local function PickRandomEntry(pool: { any }, lastId: number?): any?
 	return randomEntry
 end
 
+local function GetSmallestRewardBrainrotId(rewardPool: { any }): number?
+	local smallestId: number? = nil
+	for _, entry in ipairs(rewardPool) do
+		local itemId = entry.itemId
+		if typeof(itemId) == "number" and (smallestId == nil or itemId < (smallestId :: number)) then
+			smallestId = itemId
+		end
+	end
+	return smallestId
+end
+
 local function CreateAnchoredModelFromConfig(folder: Folder, resourceName: string, parentInst: Instance, modelName: string, targetCFrame: CFrame): (Model?, BasePart?)
 	local template = GameConfig.FindResourceTemplateByResourceName(folder, resourceName)
 	if not template then
@@ -289,6 +324,8 @@ end
 type PlayInWorldOptions = {
 	existingChestModel: Model?,
 	lockFacing: boolean?,
+	resolveFinalBrainrotId: (() -> number?)?,
+	maxPlayTimeSec: number?,
 }
 
 local function PrepareExistingChestForOpenAnim(chestModel: Model, container: Instance, throwCFrame: CFrame): BasePart?
@@ -321,22 +358,28 @@ local function PlayInWorld(
 	finalBrainrotId: number,
 	originCFrame: CFrame,
 	options: PlayInWorldOptions?
-)
+): number?
 	local resolved = ResolveChestConfigAndPool(chestConfigId)
 	if not resolved then
 		warn(LogPrefix, "PlayInWorld: no chest config/pool for id", chestConfigId)
-		return
+		return nil
 	end
 	local chestConfig = resolved.chestConfig
 	local rewardPool = resolved.rewardPool
 	local chestModelsFolder = resolved.chestFolder
-	local container = Instance.new("Folder")
-	container.Name = "OpenChestAnim_" .. uid
-	container.Parent = workspace
 
 	local throwCFrame = originCFrame * CFrame.new(0, 0, -ChestThrowForwardDistance)
 	local lockFacing = options ~= nil and options.lockFacing == true
 	local existingChestModel = if options ~= nil then options.existingChestModel else nil
+	local container = if existingChestModel ~= nil and existingChestModel.Parent ~= nil then existingChestModel.Parent else workspace
+	local startedClock = os.clock()
+	local maxPlayTimeSec = RunwayMaxOpenAnimationSec
+	if options ~= nil and typeof(options.maxPlayTimeSec) == "number" then
+		maxPlayTimeSec = options.maxPlayTimeSec :: number
+	end
+	if maxPlayTimeSec <= 0 then
+		maxPlayTimeSec = RunwayMaxOpenAnimationSec
+	end
 
 	local chestModel: Model?
 	local chestRoot: BasePart?
@@ -348,8 +391,7 @@ local function PlayInWorld(
 		chestModel, chestRoot = CreateAnchoredModelFromConfig(chestModelsFolder, chestConfig.resourceName, container, "WorldChestModel", throwCFrame)
 	end
 	if not chestModel or not chestRoot then
-		container:Destroy()
-		return
+		return nil
 	end
 
 	local yDriver = Instance.new("NumberValue")
@@ -368,45 +410,45 @@ local function PlayInWorld(
 	UpdateChestPivot()
 
 	if not lockFacing then
-		TweenPropertyNoWait(yawDriver, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		TweenPropertyNoWait(yawDriver, TweenInfo.new(GetChestShakeDuration(0.2), Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Value = yawDriver.Value + math.rad(math.random(-120, 120)),
 		})
 	end
-	TweenProperty(yDriver, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = -0.2 })
+	TweenProperty(yDriver, TweenInfo.new(GetChestShakeDuration(0.2), Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = -0.2 })
 
-	TweenModelScale(chestModel, 1, 0.85, 0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	TweenModelScale(chestModel, 0.85, 1, 0.08, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	TweenModelScale(chestModel, 1, 0.85, GetChestShakeDuration(0.08), Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenModelScale(chestModel, 0.85, 1, GetChestShakeDuration(0.08), Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
 	local leftYaw = math.rad(math.random(25, 50))
 	local rightYaw = -leftYaw
 	local smallUp1 = 0.55
 	local smallUp2 = 0.45
 
-	TweenPropertyNoWait(yawDriver, TweenInfo.new(0.16, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = leftYaw })
-	TweenProperty(yDriver, TweenInfo.new(0.16, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = smallUp1 })
-	TweenPropertyNoWait(yawDriver, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = 0 })
-	TweenProperty(yDriver, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = -0.2 })
+	TweenPropertyNoWait(yawDriver, TweenInfo.new(GetChestShakeDuration(0.16), Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = leftYaw })
+	TweenProperty(yDriver, TweenInfo.new(GetChestShakeDuration(0.16), Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = smallUp1 })
+	TweenPropertyNoWait(yawDriver, TweenInfo.new(GetChestShakeDuration(0.16), Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = 0 })
+	TweenProperty(yDriver, TweenInfo.new(GetChestShakeDuration(0.16), Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = -0.2 })
 
-	TweenPropertyNoWait(yawDriver, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = rightYaw })
-	TweenProperty(yDriver, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = smallUp2 })
-	TweenPropertyNoWait(yawDriver, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = 0 })
-	TweenProperty(yDriver, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = -0.2 })
+	TweenPropertyNoWait(yawDriver, TweenInfo.new(GetChestShakeDuration(0.12), Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = rightYaw })
+	TweenProperty(yDriver, TweenInfo.new(GetChestShakeDuration(0.12), Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = smallUp2 })
+	TweenPropertyNoWait(yawDriver, TweenInfo.new(GetChestShakeDuration(0.12), Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = 0 })
+	TweenProperty(yDriver, TweenInfo.new(GetChestShakeDuration(0.12), Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = -0.2 })
 
 	local bigYaw = math.rad(math.random(120, 160))
 	local bigUp1 = 1.0
 	local bigUp2 = 0.85
 
-	TweenPropertyNoWait(yawDriver, TweenInfo.new(0.18, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = bigYaw })
-	TweenProperty(yDriver, TweenInfo.new(0.18, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = bigUp1 })
-	TweenPropertyNoWait(yawDriver, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = 0 })
-	TweenProperty(yDriver, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = -0.2 })
+	TweenPropertyNoWait(yawDriver, TweenInfo.new(GetChestShakeDuration(0.18), Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = bigYaw })
+	TweenProperty(yDriver, TweenInfo.new(GetChestShakeDuration(0.18), Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = bigUp1 })
+	TweenPropertyNoWait(yawDriver, TweenInfo.new(GetChestShakeDuration(0.18), Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = 0 })
+	TweenProperty(yDriver, TweenInfo.new(GetChestShakeDuration(0.18), Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = -0.2 })
 
-	TweenPropertyNoWait(yawDriver, TweenInfo.new(0.18, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = -bigYaw })
-	TweenProperty(yDriver, TweenInfo.new(0.18, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = bigUp2 })
-	TweenPropertyNoWait(yawDriver, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = 0 })
-	TweenProperty(yDriver, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = -0.2 })
+	TweenPropertyNoWait(yawDriver, TweenInfo.new(GetChestShakeDuration(0.18), Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = -bigYaw })
+	TweenProperty(yDriver, TweenInfo.new(GetChestShakeDuration(0.18), Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = bigUp2 })
+	TweenPropertyNoWait(yawDriver, TweenInfo.new(GetChestShakeDuration(0.18), Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = 0 })
+	TweenProperty(yDriver, TweenInfo.new(GetChestShakeDuration(0.18), Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Value = -0.2 })
 
-	TweenModelScale(chestModel, 1, TinyScale, 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+	TweenModelScale(chestModel, 1, TinyScale, GetChestShakeDuration(0.18), Enum.EasingStyle.Back, Enum.EasingDirection.In)
 
 	yConn:Disconnect()
 	yawConn:Disconnect()
@@ -438,19 +480,54 @@ local function PlayInWorld(
 		if not displayModel or not displayRoot then
 			return
 		end
-		CreateOrUpdateInfoUI(container, displayRoot, brainrotId, chestLevel, displayModel, true)
-		TweenModelScale(displayModel, TinyScale, 1, 0.14, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		CreateOrUpdateInfoUI(displayModel, displayRoot, brainrotId, chestLevel, displayModel, true)
+		TweenModelScale(
+			displayModel,
+			TinyScale,
+			BrainrotRandomRevealScale,
+			GetBrainrotOpenScaleDuration(0.14),
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+		)
 		if stayAsFinal then
-			TweenModelScale(displayModel, 1, 1.15, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-			TweenModelScale(displayModel, 1.15, 1, 0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			TweenModelScale(
+				displayModel,
+				BrainrotRandomRevealScale,
+				BrainrotFinalRevealScale,
+				GetBrainrotOpenScaleDuration(0.22),
+				Enum.EasingStyle.Back,
+				Enum.EasingDirection.Out
+			)
+			TweenModelScale(
+				displayModel,
+				BrainrotFinalRevealScale,
+				BrainrotFinalSettleScale,
+				GetBrainrotOpenScaleDuration(0.1),
+				Enum.EasingStyle.Quad,
+				Enum.EasingDirection.Out
+			)
 			task.wait(0.08)
-			TweenModelScale(displayModel, 1, TinyScale, 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+			TweenModelScale(
+				displayModel,
+				BrainrotFinalSettleScale,
+				TinyScale,
+				GetBrainrotOpenScaleDuration(0.18),
+				Enum.EasingStyle.Back,
+				Enum.EasingDirection.In
+			)
 			displayModel:Destroy()
 			displayModel = nil
 			displayRoot = nil
 		else
 			task.wait(0.05)
-			TweenModelScale(displayModel, 1, TinyScale, 0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			TweenModelScale(
+				displayModel,
+				BrainrotRandomRevealScale,
+				TinyScale,
+				GetBrainrotOpenScaleDuration(0.1),
+				Enum.EasingStyle.Quad,
+				Enum.EasingDirection.In
+			)
 		end
 	end
 
@@ -463,10 +540,30 @@ local function PlayInWorld(
 		lastId = randomId
 		ShowOne(randomId, false)
 	end
-	ShowOne(finalBrainrotId, true)
-	if container and container.Parent then
-		container:Destroy()
+
+	local resolvedFinalBrainrotId = finalBrainrotId
+	local resolveFinalBrainrotId = if options ~= nil then options.resolveFinalBrainrotId else nil
+	if resolveFinalBrainrotId ~= nil then
+		local deadlineClock = startedClock + maxPlayTimeSec
+		while os.clock() < deadlineClock do
+			local resolvedId = resolveFinalBrainrotId()
+			if resolvedId ~= nil then
+				resolvedFinalBrainrotId = resolvedId
+				break
+			end
+			task.wait(0.05)
+		end
+		if resolvedFinalBrainrotId <= 0 then
+			resolvedFinalBrainrotId = GetSmallestRewardBrainrotId(rewardPool) or 0
+		end
 	end
+	if resolvedFinalBrainrotId > 0 then
+		ShowOne(resolvedFinalBrainrotId, true)
+	end
+	if chestModel and chestModel.Parent then
+		chestModel:Destroy()
+	end
+	return if resolvedFinalBrainrotId > 0 then resolvedFinalBrainrotId else nil
 end
 
 function ChestOpenAnimationManager.PlayInWorldAndWait(
@@ -476,18 +573,20 @@ function ChestOpenAnimationManager.PlayInWorldAndWait(
 	finalBrainrotId: number,
 	originCFrame: CFrame,
 	options: PlayInWorldOptions?
-)
+): number?
 	if playingUidMap[uid] then
-		return
+		return nil
 	end
 	playingUidMap[uid] = true
+	local selectedBrainrotId: number? = nil
 	local ok, err = pcall(function()
-		PlayInWorld(uid, chestConfigId, chestLevel, finalBrainrotId, originCFrame, options)
+		selectedBrainrotId = PlayInWorld(uid, chestConfigId, chestLevel, finalBrainrotId, originCFrame, options)
 	end)
 	if not ok then
 		warn(LogPrefix, "PlayInWorldAndWait failed:", err)
 	end
 	playingUidMap[uid] = nil
+	return selectedBrainrotId
 end
 
 function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId: number, chestLevel: number, finalBrainrotId: number, fallbackCFrame: CFrame?)
@@ -517,15 +616,15 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 			return
 		end
 
-		TweenProperty(visualMotor, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { C0 = CFrame.new(0, 0.2, 0) })
-		TweenModelScale(chestModel, 1, 0.85, 0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-		TweenModelScale(chestModel, 0.85, 1, 0.08, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-		TweenProperty(visualMotor, TweenInfo.new(0.16, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { C0 = CFrame.new(0, 1.15, 0) })
-		TweenProperty(visualMotor, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { C0 = CFrame.new(0, 0.2, 0) })
-		TweenProperty(visualMotor, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { C0 = CFrame.new(0, 0.75, 0) })
-		TweenProperty(visualMotor, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { C0 = CFrame.new(0, 0.2, 0) })
+		TweenProperty(visualMotor, TweenInfo.new(GetChestShakeDuration(0.2), Enum.EasingStyle.Quad, Enum.EasingDirection.In), { C0 = CFrame.new(0, 0.2, 0) })
+		TweenModelScale(chestModel, 1, 0.85, GetChestShakeDuration(0.08), Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		TweenModelScale(chestModel, 0.85, 1, GetChestShakeDuration(0.08), Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		TweenProperty(visualMotor, TweenInfo.new(GetChestShakeDuration(0.16), Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { C0 = CFrame.new(0, 1.15, 0) })
+		TweenProperty(visualMotor, TweenInfo.new(GetChestShakeDuration(0.16), Enum.EasingStyle.Quad, Enum.EasingDirection.In), { C0 = CFrame.new(0, 0.2, 0) })
+		TweenProperty(visualMotor, TweenInfo.new(GetChestShakeDuration(0.12), Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { C0 = CFrame.new(0, 0.75, 0) })
+		TweenProperty(visualMotor, TweenInfo.new(GetChestShakeDuration(0.12), Enum.EasingStyle.Quad, Enum.EasingDirection.In), { C0 = CFrame.new(0, 0.2, 0) })
 
-		TweenModelScale(chestModel, 1, TinyScale, 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+		TweenModelScale(chestModel, 1, TinyScale, GetChestShakeDuration(0.18), Enum.EasingStyle.Back, Enum.EasingDirection.In)
 
 		local lastId: number? = nil
 		for _ = 1, RandomCount do
@@ -545,17 +644,45 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 			end
 
 			CreateOrUpdateInfoUI(tool, root, randomId, chestLevel, showModel, true)
-			TweenModelScale(showModel, TinyScale, 1, 0.14, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+			TweenModelScale(
+				showModel,
+				TinyScale,
+				BrainrotRandomRevealScale,
+				GetBrainrotOpenScaleDuration(0.14),
+				Enum.EasingStyle.Back,
+				Enum.EasingDirection.Out
+			)
 			task.wait(0.05)
-			TweenModelScale(showModel, 1, TinyScale, 0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			TweenModelScale(
+				showModel,
+				BrainrotRandomRevealScale,
+				TinyScale,
+				GetBrainrotOpenScaleDuration(0.1),
+				Enum.EasingStyle.Quad,
+				Enum.EasingDirection.In
+			)
 			showModel:Destroy()
 		end
 
 		local finalModel, finalRoot = CreateDisplayModel(tool, finalBrainrotId)
 		if finalModel and finalRoot then
 			CreateOrUpdateInfoUI(tool, finalRoot, finalBrainrotId, chestLevel, finalModel, true)
-			TweenModelScale(finalModel, TinyScale, 1.15, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-			TweenModelScale(finalModel, 1.15, 1, 0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			TweenModelScale(
+				finalModel,
+				TinyScale,
+				BrainrotFinalRevealScale,
+				GetBrainrotOpenScaleDuration(0.22),
+				Enum.EasingStyle.Back,
+				Enum.EasingDirection.Out
+			)
+			TweenModelScale(
+				finalModel,
+				BrainrotFinalRevealScale,
+				BrainrotFinalSettleScale,
+				GetBrainrotOpenScaleDuration(0.1),
+				Enum.EasingStyle.Quad,
+				Enum.EasingDirection.Out
+			)
 		end
 	end)
 

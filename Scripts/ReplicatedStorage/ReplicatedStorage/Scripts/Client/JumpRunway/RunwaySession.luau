@@ -56,7 +56,6 @@ local modelsFolder = replicatedStorage:WaitForChild("Models")
 local actualChests = modelsFolder:FindFirstChild("LittleElfChests")
 local CHEST_GROUND_RAISE_STUDS = 0.2
 local CHEST_HIT_HORIZONTAL_MAX_DIST_STUDS = 14
-local CHEST_REWARD_RESPONSE_TIMEOUT_SEC = 15
 local CHEST_HIT_MIN_SETTLE_AFTER_LAND_SEC = 0.2
 local CHEST_FALL_MAX_HEIGHT_STUDS = 8
 local JumpRunwayLittleElfChestCarryAttr = "JumpRunwayLittleElfChestCarry"
@@ -3461,6 +3460,21 @@ function RunwaySession.DestroyLittleElfChestSpawnedModel()
 	Refs.chestSpawnedModel = nil
 end
 
+function RunwaySession.GetLittleElfChestFallbackBrainrotId(chestConfigId: number): number?
+	local rewardPool = GameConfig.LittleElfChestRewardPoolMap[chestConfigId]
+	if rewardPool == nil then
+		return nil
+	end
+	local smallestId: number? = nil
+	for _, entry in ipairs(rewardPool) do
+		local itemId = entry.itemId
+		if typeof(itemId) == "number" and (smallestId == nil or itemId < (smallestId :: number)) then
+			smallestId = itemId
+		end
+	end
+	return smallestId
+end
+
 function RunwaySession.IsLittleElfChestCarryReturnActive(): boolean
 	return Refs.chestCarryReturnActive == true
 end
@@ -3541,8 +3555,8 @@ function RunwaySession.ShouldBlockJumpRunwayStartAtStartTrigger(): boolean
 	return Refs.chestCarryReturnActive == true
 end
 
-function RunwaySession.EnterLittleElfChestCarryReturn()
-	NetMsg.FireRequestJumpRunwayLittleElfChestStartCarry()
+function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chestConfigId: number?)
+	NetMsg.FireRequestJumpRunwayLittleElfChestStartCarry(brainrotId, chestConfigId)
 	RunwayCameraController.Disable(workspace, RunwaySession.GetCharacterParts)
 	RunwaySession.DestroyJumpRunwayRocketBackpack()
 	RunwaySession.DestroyRunwayGravityForce()
@@ -3633,11 +3647,8 @@ function RunwaySession.TryPresentLittleElfChestReward()
 	if Refs.chestRewardPresentationStarted == true then
 		return
 	end
-	local pending = Refs.chestPendingReward
-	if pending == nil then
-		return
-	end
-	if Refs.chestBounceActive == true then
+	local pickedConfigId = Refs.chestPickedConfigId
+	if pickedConfigId == nil then
 		return
 	end
 	Refs.chestRewardPresentationStarted = true
@@ -3654,26 +3665,36 @@ function RunwaySession.TryPresentLittleElfChestReward()
 		end
 	end
 	local _, humanoidOpen, hrpOpen = RunwaySession.GetCharacterParts()
-	if humanoidOpen and hrpOpen then
+	if Refs.chestBounceActive ~= true and humanoidOpen and hrpOpen then
 		RunwaySession.EnterLittleElfChestRewardWaitPose(humanoidOpen, hrpOpen)
 	end
 	if openCFrame then
 		local runwayChestModel = Refs.chestSpawnedModel
 		Refs.chestSpawnedModel = nil
 		Refs.chestSpawnedConnList = nil
-		ChestOpenAnimationManager.PlayInWorldAndWait(
+		local selectedBrainrotId = ChestOpenAnimationManager.PlayInWorldAndWait(
 			"RunwayChest_" .. tostring(os.clock()),
-			pending.chestConfigId,
-			pending.chestLevel,
-			pending.brainrotId,
+			pickedConfigId,
+			1,
+			Refs.chestPickedBrainrotId or 0,
 			openCFrame,
 			{
 				existingChestModel = runwayChestModel,
 				lockFacing = true,
+				resolveFinalBrainrotId = function()
+					if Refs.chestPickedConfigId ~= pickedConfigId then
+						return nil
+					end
+					return Refs.chestPickedBrainrotId
+				end,
 			}
 		)
+		if selectedBrainrotId == nil then
+			selectedBrainrotId = RunwaySession.GetLittleElfChestFallbackBrainrotId(pickedConfigId)
+		end
+		Refs.chestPickedBrainrotId = selectedBrainrotId
 	end
-	RunwaySession.EnterLittleElfChestCarryReturn()
+	RunwaySession.EnterLittleElfChestCarryReturn(Refs.chestPickedBrainrotId, pickedConfigId)
 end
 
 function RunwaySession.EndChestProneBounceAndWaitForReward()
@@ -3932,12 +3953,7 @@ function RunwaySession.ProcessLittleElfChestHit(chestModel: Model, fwdH: Vector3
 	end)
 
 	NetMsg.FireRequestJumpRunwayLittleElfChestReward(chestConfigId)
-
-	task.delay(CHEST_REWARD_RESPONSE_TIMEOUT_SEC, function()
-		if Refs.chestPendingReward == nil and Refs.chestRunwayAwaitingExit == true then
-			warn("[RunwaySession] LittleElf chest reward response timeout; waiting for server notify")
-		end
-	end)
+	task.spawn(RunwaySession.TryPresentLittleElfChestReward)
 end
 
 function RunwaySession.TryLittleElfChestProximityHit(hrp: BasePart)
