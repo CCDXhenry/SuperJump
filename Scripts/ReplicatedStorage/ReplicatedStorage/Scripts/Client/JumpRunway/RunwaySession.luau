@@ -878,26 +878,9 @@ function RunwaySession.ShouldEnterFinalLandPhaseB(popCount: number, landingAlong
 end
 
 function RunwaySession.ResolveFinalLandAlongSpeedForPhaseB(hrp: BasePart, fwdH: Vector3): number
-	local horiz = HorizontalVelocity(hrp.AssemblyLinearVelocity)
-	local sampledAlong = math.max(0, horiz:Dot(fwdH))
-	local lockedAlong = math.max(0, localState.finalLandLockedTumbleAlong)
-	local cachedLandingAlong = localState.finalLandCachedLandingAlong
-	if typeof(cachedLandingAlong) ~= "number" or cachedLandingAlong ~= cachedLandingAlong then
-		cachedLandingAlong = 0
-	else
-		cachedLandingAlong = math.max(0, cachedLandingAlong)
-	end
-	local storedStart = localState.finalLandProneSlideAlongSpeedStart
-	if typeof(storedStart) ~= "number" or storedStart ~= storedStart then
-		storedStart = 0
-	else
-		storedStart = math.max(0, storedStart)
-	end
-	return math.clamp(
-		math.max(sampledAlong, lockedAlong, cachedLandingAlong, storedStart),
-		0,
-		cfg.ANTI_CHEAT_MAX_ALONG_SPEED
-	)
+	-- 子阶段B的沿轴速度直接使用子阶段A的计算值延续，不依赖实时物理速度
+	local along = math.max(0, localState.finalLandLockedTumbleAlong)
+	return math.clamp(along, 0, cfg.ANTI_CHEAT_MAX_ALONG_SPEED)
 end
 
 function RunwaySession.ApplyFinalLandPhaseAPop(hrp: BasePart, fwdH: Vector3, nowClock: number)
