@@ -19,6 +19,7 @@ local ServerGameInfo = require(serverScripts:FindFirstChild("ServerGameInfo"))
 local clearDataStoreCommand: TextChatCommand = customTextChatCommandsFolder:FindFirstChild("ClearDataStoreCommand") :: TextChatCommand
 local getCoilCommand: TextChatCommand = customTextChatCommandsFolder:FindFirstChild("GetCoilCommand") :: TextChatCommand
 local getCurrencyCommand: TextChatCommand = customTextChatCommandsFolder:FindFirstChild("GetCurrencyCommand") :: TextChatCommand
+local setJumpPowerCommand: TextChatCommand = customTextChatCommandsFolder:FindFirstChild("SetJumpPowerCommand") :: TextChatCommand
 
 --清空数据
 local function OnClearDataStoreCommandTrigged(originTextSource: TextSource, unfilteredText: string)
@@ -129,6 +130,41 @@ local function OnGetCurrencyCommandTriggered(originTextSource: TextSource, unfil
 	print("[PlayerChatCommandManager] Gave Currency", currencyType, addAmount, "to", player.Name)
 end
 
+
+--设置JumpPower
+local function OnSetJumpPowerCommandTriggered(originTextSource: TextSource, unfilteredText: string)
+	if not GMConfig.IsGMPlayer(originTextSource.UserId) then
+		return
+	end
+
+	local player: Player? = players:GetPlayerByUserId(originTextSource.UserId)
+	if player == nil then
+		return
+	end
+
+	local args = string.split(unfilteredText, " ")
+	if #args < 2 then
+		warn("[PlayerChatCommandManager] SetJumpPowerCommand failed: missing value")
+		return
+	end
+
+	local newValue = tonumber(args[2])
+	if newValue == nil then
+		warn("[PlayerChatCommandManager] SetJumpPowerCommand failed: invalid value", args[2])
+		return
+	end
+
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return
+	end
+
+	local addAmount = newValue - playerInfo.jumpPower
+	ServerGameInfo.UpdatePlayerJumpPower(player, addAmount)
+	print("[PlayerChatCommandManager] Set JumpPower to", newValue, "for", player.Name, "(delta:", addAmount, ")")
+end
+
 clearDataStoreCommand.Triggered:Connect(OnClearDataStoreCommandTrigged)
 getCoilCommand.Triggered:Connect(OnGiveCoilCommandTriggered)
 getCurrencyCommand.Triggered:Connect(OnGetCurrencyCommandTriggered)
+setJumpPowerCommand.Triggered:Connect(OnSetJumpPowerCommandTriggered)
