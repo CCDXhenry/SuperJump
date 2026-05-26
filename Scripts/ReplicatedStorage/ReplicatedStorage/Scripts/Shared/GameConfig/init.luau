@@ -635,20 +635,20 @@ GameConfig.JumpRunwayDesigner = {
 	-- —— ② 沿轴水平速度 ——
 	-- ═══════════════════════════════════════
 	-- 默认跳跃力
-	DEFAULT_JUMP_POWER = 30,
+	DEFAULT_JUMP_POWER = 20,
 	-- 跳跃力锻炼间隔
 	JUMP_POWER_EXERCISE_INTERVAL = 1,
 	-- 首跳前线前 AutoRun 沿轴速；↑ 起跳前冲更快
 	FIRST_TAKEOFF_AUTORUN_SPEED = 20,
 	-- max 到 min 的降速比例（相对本次起跳前最终减速完的速度）；↑ 段内减速幅度更大
-	JUMP_SPEED_REDUCTION_RATIO = 0.17,
+	JUMP_SPEED_REDUCTION_RATIO = 0.3,
 	-- [1]=Perfect,[2]=Ok,[3]=Late 每次起跳增加 bonus（相对本次起跳前最终减速完的速度重新计算）；↑ 踩点好则全程更快
 	JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER = {
 		[1] = 0.5,
 		[2] = 0.3,
 		[3] = 0.17,
 	},
-
+	
 	-- ═══════════════════════════════════════
 	-- —— ③ 起跳 / 重力 / 贴地 ——
 	-- ═══════════════════════════════════════
@@ -710,6 +710,8 @@ GameConfig.JumpRunwayDesigner = {
 	RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP = 1.6,
 	-- 子阶段 B：趴姿 HRP 相对地面下沉偏移（stud）；越大越贴地，负值则抬高
 	RUNWAY_FINAL_LAND_PRONE_GROUND_OFFSET = 0.5,
+	-- MISS 滑行：趴姿 HRP 相对地面下沉偏移（stud）；独立于终局趴滑偏移
+	RUNWAY_MISS_SLIDE_PRONE_GROUND_OFFSET = 0.3,
 
 	-- ═══════════════════════════════════════
 	-- —— ⑥ 玩法摄像机 ——
@@ -941,6 +943,8 @@ GameConfig.JumpRunway = {
 	RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP = jumpRunwayDesigner.RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP,
 	-- 子阶段 B 趴姿 HRP 相对地面下沉偏移（stud）
 	RUNWAY_FINAL_LAND_PRONE_GROUND_OFFSET = jumpRunwayDesigner.RUNWAY_FINAL_LAND_PRONE_GROUND_OFFSET,
+	-- MISS 滑行趴姿 HRP 相对地面下沉偏移（stud）
+	RUNWAY_MISS_SLIDE_PRONE_GROUND_OFFSET = jumpRunwayDesigner.RUNWAY_MISS_SLIDE_PRONE_GROUND_OFFSET,
 
 	-- 终局趴滑（子阶段 B）地面滑行痕迹：客户端克隆 ReplicatedStorage.Models.SlideTracePart（长方 Part，长边沿 Size.X 对齐跑道方向；内嵌 SurfaceGui 等 UI）。模板仅存在于 Studio 同步资源，仓库不存实例。
 	RUNWAY_SLIDE_TRACE_ENABLED = true,
