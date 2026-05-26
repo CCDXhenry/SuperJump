@@ -51,9 +51,9 @@ function ClientGameInfo.InitPlayerInfo(
 			currentId = "1",
 			ownedList = { ["1"] = true },
 		},
-		jetpackInventory = localPlayerSaveInfo.jetpackInventory or {
-			currentId = "1",
-			ownedList = { ["1"] = true },
+        jetpackInventory = localPlayerSaveInfo.jetpackInventory or {
+            currentId = "",
+            ownedList = {},
 		},
 		homeSlot = localPlayerSaveInfo.homeSlot,
 		guideProgressInfo = guideProgressInfo,

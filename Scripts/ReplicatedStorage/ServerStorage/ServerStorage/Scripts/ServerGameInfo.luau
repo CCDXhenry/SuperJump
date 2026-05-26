@@ -125,9 +125,9 @@ function ServerGameInfo.InitPlayerInfo(
 			currentId = "1",
 			ownedList = { ["1"] = true },
 		},
-		jetpackInventory = playerSaveInfo.jetpackInventory or {
-			currentId = "1",
-			ownedList = { ["1"] = true },
+        jetpackInventory = playerSaveInfo.jetpackInventory or {
+            currentId = "",
+            ownedList = {},
 		},
 		guideProgressInfo = playerSaveInfo.guideProgressInfo
 			or {

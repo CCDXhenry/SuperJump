@@ -559,17 +559,34 @@ function RunwaySession.GetExpectedPlayerWalkSpeed(): number
 	return walkSpeedConfig.abilityList[level] or fallback
 end
 
+
+function RunwaySession.HasEquippedJetpack(): boolean
+   local info = ClientGameInfo.GetLocalPlayerInfo()
+   if info == nil then
+       return false
+   end
+   local currentId = info.jetpackInventory.currentId
+   if currentId == nil or currentId == "" then
+       return false
+   end
+   local jetpackData = GameConfig.JetpackDataMap[tonumber(currentId)]
+   return jetpackData ~= nil
+end
+
 function RunwaySession.GetExpectedPlayerMaxFuel(): number
-	local fallback = 2.5
+   local fallback = 0
 	local info = ClientGameInfo.GetLocalPlayerInfo()
 	if info == nil then
 		return fallback
 	end
-	local currentId = info.jetpackInventory.currentId or "1"
-	local jetpackData = GameConfig.JetpackDataMap[tonumber(currentId)]
-	if jetpackData then
-		return jetpackData.fuel
-	end
+   local currentId = info.jetpackInventory.currentId
+   if currentId == nil or currentId == "" then
+       return 0
+   end
+   local jetpackData = GameConfig.JetpackDataMap[tonumber(currentId)]
+   if jetpackData then
+       return jetpackData.fuel
+   end
 	return fallback
 end
 
@@ -582,16 +599,19 @@ function RunwaySession.GetCurrentFuel(): number
 end
 
 function RunwaySession.GetExpectedPlayerMaxThrustSpeed(): number
-	local fallback = 100
+   local fallback = 0
 	local info = ClientGameInfo.GetLocalPlayerInfo()
 	if info == nil then
 		return fallback
 	end
-	local currentId = info.jetpackInventory.currentId or "1"
-	local jetpackData = GameConfig.JetpackDataMap[tonumber(currentId)]
-	if jetpackData then
-		return jetpackData.thrust
-	end
+   local currentId = info.jetpackInventory.currentId
+   if currentId == nil or currentId == "" then
+       return 0
+   end
+   local jetpackData = GameConfig.JetpackDataMap[tonumber(currentId)]
+   if jetpackData then
+       return jetpackData.thrust
+   end
 	return fallback
 end
 
@@ -2435,6 +2455,10 @@ function RunwaySession.WeldAllRunwayJetpackPartsToMiddle(jetpackRoot: Model, mid
 end
 
 function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
+   -- 如果玩家没有装备火箭背包，不创建
+   if not RunwaySession.HasEquippedJetpack() then
+       return
+   end
 	if Refs.jetpackVisualRoot ~= nil and Refs.jetpackVisualRoot.Parent ~= nil then
 		return
 	end
@@ -2509,7 +2533,14 @@ function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
 			if info == nil then
 				return false
 			end
-			local currentId = tonumber(info.jetpackInventory.currentId) or 1
+           local currentIdStr = info.jetpackInventory.currentId
+           if currentIdStr == nil or currentIdStr == "" then
+               return false
+           end
+           local currentId = tonumber(currentIdStr)
+           if currentId == nil then
+               return false
+           end
 			local jetpackData = GameConfig.JetpackDataMap[currentId]
 			if jetpackData == nil then
 				return false

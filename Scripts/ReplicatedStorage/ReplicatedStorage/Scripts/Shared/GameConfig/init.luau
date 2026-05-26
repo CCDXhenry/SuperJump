@@ -648,7 +648,7 @@ GameConfig.JumpRunwayDesigner = {
 		[2] = 0.3,
 		[3] = 0.17,
 	},
-	
+
 	-- ═══════════════════════════════════════
 	-- —— ③ 起跳 / 重力 / 贴地 ——
 	-- ═══════════════════════════════════════
@@ -709,7 +709,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- 子阶段 B：趴滑沿轴速度衰减指数（每帧 exp(-brakeK * dt)）；越大停得越快
 	RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP = 1.6,
 	-- 子阶段 B：趴姿 HRP 相对地面下沉偏移（stud）；越大越贴地，负值则抬高
-	RUNWAY_FINAL_LAND_PRONE_GROUND_OFFSET = 0.5,
+	RUNWAY_FINAL_LAND_PRONE_GROUND_OFFSET = 1,
 	-- MISS 滑行：趴姿 HRP 相对地面下沉偏移（stud）；独立于终局趴滑偏移
 	RUNWAY_MISS_SLIDE_PRONE_GROUND_OFFSET = 0.3,
 
@@ -1310,9 +1310,9 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 			currentId = "1",
 			ownedList = { ["1"] = true },
 		},
-		jetpackInventory = {
-			currentId = "1",
-			ownedList = { ["1"] = true },
+        jetpackInventory = {
+            currentId = "",
+            ownedList = {},
 		},
 		guideProgressInfo = {
 			guideStepDoneMap = {},
