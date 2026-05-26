@@ -2765,6 +2765,7 @@ end
 
 function RunwaySession.ResetLocalRunToIdle()
 	local _, humanoid, hrp = RunwaySession.GetCharacterParts()
+	ClientGameInfo.SetInJumpRunway(false)
 	-- 先同步清理资源和状态（避免异步延迟导致新一局启动后资源混乱）
 	RunwaySession.DestroyJumpRunwayRocketBackpack()
 	RunwayCameraController.Disable(workspace, GetCharacterParts)
@@ -3623,6 +3624,7 @@ function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chest
 	if hDelay then
 		ChaserClientManager.SpawnChaser(hDelay:FindFirstAncestorOfClass("Model") :: Model, forwardExit, chaserSpeedOverride)
 	end
+	ClientGameInfo.SetInJumpRunwayEscapePhase(true)
 	Refs.chestCarryReturnActive = true
 	JumpRunWayFrame.EndSession()
 end
@@ -4721,6 +4723,9 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	if not closeEnough then
 		return false
 	end
+	-- 进入跑道时收起所有手持 Tool
+	humanoid:UnequipTools()
+	ClientGameInfo.SetInJumpRunway(true)
 	Refs.startTriggerStartArmed = false
 	RunwaySession.DestroyDistanceRecorder()
 	RunwaySession.SlideTraceDestroy()

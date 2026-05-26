@@ -11,6 +11,8 @@ local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
 
 local localPlayerInfo: GameConfig.ClientLocalPlayerInfo?
 local otherPlayerInfoMap: { [number]: GameConfig.ClientOtherPlayerInfo } = {}
+local isInJumpRunway = false
+local isInJumpRunwayEscapePhase = false
 
 -- 用于“新增 uid 才显示获得奖励提示”的增量判定
 -- 避免玩家重新进游戏时把旧队列也触发提示。
@@ -418,10 +420,32 @@ function ClientGameInfo.UpdateGuideProgressInfo(guideProgressInfo: GameConfig.Gu
 	ClientMsg.FireCurrentGuideTypeChanged()
 end
 
+function ClientGameInfo.IsInJumpRunway(): boolean
+	return isInJumpRunway
+end
+
+function ClientGameInfo.SetInJumpRunway(value: boolean)
+	if isInJumpRunway == value then
+		return
+	end
+	isInJumpRunway = value
+	if not value then
+		isInJumpRunwayEscapePhase = false
+	end
+	ClientMsg.FireCurrentGuideTypeChanged()
+end
+
+function ClientGameInfo.IsInJumpRunwayEscapePhase(): boolean
+	return isInJumpRunwayEscapePhase
+end
+
+function ClientGameInfo.SetInJumpRunwayEscapePhase(value: boolean)
+	isInJumpRunwayEscapePhase = value
+end
+
 -- 移除其他玩家信息 (当玩家离开时)
 function ClientGameInfo.RemoveOtherPlayer(playerId: number)
 	otherPlayerInfoMap[playerId] = nil
 	--print("[ClientGameInfo] RemoveOtherPlayer for playerId", playerId)
 end
-
 return ClientGameInfo

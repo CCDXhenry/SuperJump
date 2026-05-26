@@ -536,6 +536,10 @@ local function UpdateGuideArrow()
 end
 
 local function ResolveGuideType(): number
+	-- JumpRunway 跑道阶段隐藏非跑道引导
+	if ClientGameInfo.IsInJumpRunway() and not ClientGameInfo.IsInJumpRunwayEscapePhase() then
+		return GameConfig.GuideType.None
+	end
 	local info = ClientGameInfo.GetLocalPlayerInfo()
 	if info == nil then
 		return GameConfig.GuideType.None
