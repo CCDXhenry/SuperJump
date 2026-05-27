@@ -763,10 +763,14 @@ GameConfig.JumpRunwayDesigner = {
 	RUNWAY_FINAL_LAND_TOUCHDOWN_FEET_MAX_DIST_STUDS = 0,
 	-- 子阶段 B：趴滑沿轴速度衰减指数（每帧 exp(-brakeK * dt)）；越大停得越快
 	RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP = 1.6,
-	-- 子阶段 B：趴姿 HRP 相对地面下沉偏移（stud）；越大越贴地，负值则抬高
-	RUNWAY_FINAL_LAND_PRONE_GROUND_OFFSET = 1,
-	-- MISS 滑行：趴姿 HRP 相对地面下沉偏移（stud）；独立于终局趴滑偏移
-	RUNWAY_MISS_SLIDE_PRONE_GROUND_OFFSET = 0.3,
+	-- 终局趴滑：HRP 中心离地高度（stud）；越大玩家视角越高
+	RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT = 1.7,
+	-- MISS 趴滑：HRP 中心离地高度（stud）；独立于终局趴滑
+	RUNWAY_MISS_SLIDE_PRONE_HRP_GROUND_HEIGHT = 1,
+	-- 撞宝箱后趴姿回弹：HRP 中心离地高度（stud）；用于和滑行高度对齐
+	RUNWAY_CHEST_BOUNCE_PRONE_HRP_GROUND_HEIGHT = 1,
+	-- 撞宝箱后站立等待：额外站立高度偏移（stud）；默认 0 表示按 Humanoid + HRP 半高真实站立
+	RUNWAY_CHEST_STAND_HRP_GROUND_EXTRA_HEIGHT = 0,
 
 	-- ═══════════════════════════════════════
 	-- —— ⑥ 玩法摄像机 ——
@@ -996,10 +1000,14 @@ GameConfig.JumpRunway = {
 
 	-- 子阶段 B 滑行速度衰减指数（每帧 exp(-brakeK * dt)）
 	RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP = jumpRunwayDesigner.RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP,
-	-- 子阶段 B 趴姿 HRP 相对地面下沉偏移（stud）
-	RUNWAY_FINAL_LAND_PRONE_GROUND_OFFSET = jumpRunwayDesigner.RUNWAY_FINAL_LAND_PRONE_GROUND_OFFSET,
-	-- MISS 滑行趴姿 HRP 相对地面下沉偏移（stud）
-	RUNWAY_MISS_SLIDE_PRONE_GROUND_OFFSET = jumpRunwayDesigner.RUNWAY_MISS_SLIDE_PRONE_GROUND_OFFSET,
+	-- 终局趴滑：HRP 中心离地高度（stud）
+	RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT = jumpRunwayDesigner.RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT,
+	-- MISS 趴滑：HRP 中心离地高度（stud）
+	RUNWAY_MISS_SLIDE_PRONE_HRP_GROUND_HEIGHT = jumpRunwayDesigner.RUNWAY_MISS_SLIDE_PRONE_HRP_GROUND_HEIGHT,
+	-- 撞宝箱后趴姿回弹：HRP 中心离地高度（stud）
+	RUNWAY_CHEST_BOUNCE_PRONE_HRP_GROUND_HEIGHT = jumpRunwayDesigner.RUNWAY_CHEST_BOUNCE_PRONE_HRP_GROUND_HEIGHT,
+	-- 撞宝箱后站立等待：额外站立高度偏移（stud）
+	RUNWAY_CHEST_STAND_HRP_GROUND_EXTRA_HEIGHT = jumpRunwayDesigner.RUNWAY_CHEST_STAND_HRP_GROUND_EXTRA_HEIGHT,
 
 	-- 终局趴滑（子阶段 B）地面滑行痕迹：客户端克隆 ReplicatedStorage.Models.SlideTracePart（长方 Part，长边沿 Size.X 对齐跑道方向；内嵌 SurfaceGui 等 UI）。模板仅存在于 Studio 同步资源，仓库不存实例。
 	RUNWAY_SLIDE_TRACE_ENABLED = true,

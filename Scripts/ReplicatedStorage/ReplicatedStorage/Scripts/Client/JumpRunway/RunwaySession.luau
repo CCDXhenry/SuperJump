@@ -63,6 +63,11 @@ local StartTriggerCloseEnoughMinStuds = 24
 local StartTriggerRearmOutsideMinSec = 0.2
 local BestDistanceWallDestroyDelaySec = 3
 local BestDistanceWallLockedZ = 670.8
+local JumpWindowStumblePulseFrequencyHz = 2.4
+local JumpWindowStumblePulseStrength = 0.18
+local JumpWindowStumbleMinSpeedScale = 0.72
+local JumpWindowR15WalkAnimationId = "rbxassetid://507777826"
+local JumpWindowR6WalkAnimationId = "rbxassetid://180426354"
 
 local Refs: {
 	screenGui: ScreenGui?,
@@ -75,6 +80,8 @@ local Refs: {
 	jumpStateEnabledBeforeRunway: boolean?,
 	runningStateEnabledBeforeFinalSegment: boolean?,
 	flyingStateEnabledBeforeRunway: boolean?,
+	jumpWindowWalkAnimTrack: AnimationTrack?,
+	jumpWindowWalkAnimId: string?,
 	runwayGravityAttachment: Attachment?,
 	runwayGravityVectorForce: VectorForce?,
 	startTriggerConn: RBXScriptConnection?,
@@ -659,6 +666,67 @@ function RunwaySession.GetBoostedVerticalY(rawY: number): number
 	return rawY
 end
 
+function RunwaySession.ResolveJumpWindowWalkAnimationId(humanoid: Humanoid): string
+	local character = humanoid.Parent
+	if character ~= nil and character:IsA("Model") then
+		local animate = character:FindFirstChild("Animate")
+		if animate ~= nil then
+			for _, groupName in ipairs({ "walk", "run" }) do
+				local group = animate:FindFirstChild(groupName)
+				if group ~= nil then
+					for _, inst in group:GetDescendants() do
+						if inst:IsA("Animation") and inst.AnimationId ~= "" then
+							return inst.AnimationId
+						end
+					end
+				end
+			end
+		end
+	end
+	if humanoid.RigType == Enum.HumanoidRigType.R6 then
+		return JumpWindowR6WalkAnimationId
+	end
+	return JumpWindowR15WalkAnimationId
+end
+
+function RunwaySession.StopJumpWindowWalkAnimation()
+	if Refs.jumpWindowWalkAnimTrack ~= nil then
+		Refs.jumpWindowWalkAnimTrack:Stop(0.08)
+	end
+	Refs.jumpWindowWalkAnimTrack = nil
+	Refs.jumpWindowWalkAnimId = nil
+end
+
+function RunwaySession.EnsureJumpWindowWalkAnimation(humanoid: Humanoid, speedScale: number)
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if animator == nil then
+		animator = Instance.new("Animator")
+		animator.Parent = humanoid
+	end
+
+	local animationId = RunwaySession.ResolveJumpWindowWalkAnimationId(humanoid)
+	if Refs.jumpWindowWalkAnimTrack ~= nil and Refs.jumpWindowWalkAnimId ~= animationId then
+		RunwaySession.StopJumpWindowWalkAnimation()
+	end
+	if Refs.jumpWindowWalkAnimTrack == nil then
+		local animation = Instance.new("Animation")
+		animation.AnimationId = animationId
+		local track = animator:LoadAnimation(animation)
+		track.Priority = Enum.AnimationPriority.Movement
+		Refs.jumpWindowWalkAnimTrack = track
+		Refs.jumpWindowWalkAnimId = animationId
+	end
+
+	local track = Refs.jumpWindowWalkAnimTrack
+	if track == nil then
+		return
+	end
+	if not track.IsPlaying then
+		track:Play(0.08, 1, 0.9)
+	end
+	track:AdjustSpeed(math.clamp(0.85 + (1 - speedScale) * 1.4, 0.75, 1.25))
+end
+
 function RunwaySession.ClearJumpBoostIfNeeded(phase: number)
 	if
 		phase == Ph.Airborne
@@ -755,10 +823,24 @@ function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt
 	hrp.AssemblyLinearVelocity = fwdH * forwardSpeed + Vector3.new(0, vy, 0) + perpH * perpDamp
 end
 
-function RunwaySession.ApplyJumpWindowWalkPhysics(_humanoid: Humanoid, hrp: BasePart, _forward: Vector3)
+function RunwaySession.ApplyJumpWindowWalkPhysics(humanoid: Humanoid, hrp: BasePart, forward: Vector3)
 	local v = hrp.AssemblyLinearVelocity
 	local vy = RunwaySession.GetBoostedVerticalY(v.Y)
-	hrp.AssemblyLinearVelocity = Vector3.new(v.X, vy, v.Z)
+	local fwdH = Vector3.new(forward.X, 0, forward.Z)
+	if fwdH.Magnitude < 1e-4 then
+		hrp.AssemblyLinearVelocity = Vector3.new(v.X, vy, v.Z)
+		return
+	end
+	fwdH = fwdH.Unit
+	local horiz = HorizontalVelocity(v)
+	local along = horiz:Dot(fwdH)
+	local perpH = horiz - fwdH * along
+	local stumbleWave = math.abs(math.sin(os.clock() * math.pi * 2 * JumpWindowStumblePulseFrequencyHz))
+	local speedScale = math.max(JumpWindowStumbleMinSpeedScale, 1 - stumbleWave * JumpWindowStumblePulseStrength)
+	RunwaySession.EnsureHumanoidWalkingState(humanoid)
+	RunwaySession.EnsureJumpWindowWalkAnimation(humanoid, speedScale)
+	humanoid:Move(fwdH, false)
+	hrp.AssemblyLinearVelocity = fwdH * cfg.JUMP_WINDOW_WALK_SPEED * speedScale + Vector3.new(0, vy, 0) + perpH
 end
 
 function RunwaySession.UpdateSlideVelocity(hrp: BasePart, forward: Vector3, nowClock: number)
@@ -826,6 +908,55 @@ function RunwaySession.BuildProneRunwayCFrame(pos: Vector3, runwayForward: Vecto
 		right = right.Unit
 	end
 	return CFrame.fromMatrix(pos, right, f)
+end
+
+function RunwaySession.ResolveFiniteNumber(raw: any, fallback: number): number
+	if typeof(raw) == "number" and raw == raw then
+		return raw
+	end
+	return fallback
+end
+
+function RunwaySession.GetHumanoidRootGroundHeight(humanoid: Humanoid, hrp: BasePart): number
+	local hipHeight = RunwaySession.ResolveFiniteNumber(humanoid.HipHeight, 2)
+	local rootHalfHeight = math.max(0, hrp.Size.Y * 0.5)
+	return math.max(0, hipHeight + rootHalfHeight)
+end
+
+function RunwaySession.GetRunwayGroundYUnderHrp(humanoid: Humanoid, hrp: BasePart): number?
+	local character = hrp:FindFirstAncestorOfClass("Model")
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	if character ~= nil then
+		rayParams.FilterDescendantsInstances = { character }
+	end
+	local rayOrigin = hrp.Position + Vector3.new(0, 8, 0)
+	local rayResult = workspace:Raycast(rayOrigin, Vector3.new(0, -64, 0), rayParams)
+	if rayResult == nil or rayResult.Normal.Y < cfg.RUNWAY_GROUND_MIN_NORMAL_Y then
+		return nil
+	end
+	return rayResult.Position.Y
+end
+
+function RunwaySession.ResolveProneHrpGroundHeight(rawHeight: any, fallbackHeight: number): number
+	local height = RunwaySession.ResolveFiniteNumber(rawHeight, fallbackHeight)
+	return math.max(0, height)
+end
+
+function RunwaySession.BuildProneRunwayCFrameAtGroundHeight(
+	humanoid: Humanoid,
+	hrp: BasePart,
+	runwayForward: Vector3,
+	heightRaw: any,
+	fallbackHeight: number
+): CFrame
+	local height = RunwaySession.ResolveProneHrpGroundHeight(heightRaw, fallbackHeight)
+	local groundY = RunwaySession.GetRunwayGroundYUnderHrp(humanoid, hrp)
+	local pos = hrp.Position
+	if groundY ~= nil then
+		pos = Vector3.new(pos.X, groundY + height, pos.Z)
+	end
+	return RunwaySession.BuildProneRunwayCFrame(pos, runwayForward)
 end
 
 function RunwaySession.RotateCFrameAroundWorldAxisAtPoint(cf: CFrame, point: Vector3, axis: Vector3, angle: number): CFrame
@@ -1159,22 +1290,31 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 	hrp.AssemblyLinearVelocity = fwdH * alongSpd + Vector3.new(0, vyPhaseA, 0) + perpH * perpMulFrame
 end
 
-function RunwaySession.ApplyFinalLandingRenderOrientation(_humanoid: Humanoid, hrp: BasePart, forward: Vector3, dt: number, _nowClock: number, proneOffsetOverride: number?)
+function RunwaySession.ApplyFinalLandingRenderOrientation(
+	humanoid: Humanoid,
+	hrp: BasePart,
+	forward: Vector3,
+	dt: number,
+	_nowClock: number,
+	proneHeightOverride: number?
+)
 	local pos = hrp.Position
 	local linVel = hrp.AssemblyLinearVelocity
 	if Refs.finalLandTumbleStartHrpCf == nil then
 		Refs.finalLandTumbleStartHrpCf = hrp.CFrame
 	end
 	if localState.finalLandSubPhase == 2 then
-		local proneOffset = proneOffsetOverride
-		if typeof(proneOffset) ~= "number" or proneOffset ~= proneOffset then
-			proneOffset = cfg.RUNWAY_FINAL_LAND_PRONE_GROUND_OFFSET
-			if typeof(proneOffset) ~= "number" or proneOffset ~= proneOffset then
-				proneOffset = 0
-			end
-		end
-		local pronePos = Vector3.new(pos.X, pos.Y - proneOffset, pos.Z)
-		local proneLocked = RunwaySession.BuildProneRunwayCFrame(pronePos, forward)
+		local fallbackHeight = RunwaySession.ResolveProneHrpGroundHeight(
+			cfg.RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT,
+			2.8
+		)
+		local proneLocked = RunwaySession.BuildProneRunwayCFrameAtGroundHeight(
+			humanoid,
+			hrp,
+			forward,
+			proneHeightOverride or cfg.RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT,
+			fallbackHeight
+		)
 		hrp.CFrame = proneLocked
 		hrp.AssemblyLinearVelocity = linVel
 		hrp.AssemblyAngularVelocity = hrp.AssemblyAngularVelocity * math.exp(-18 * dt)
@@ -1537,11 +1677,13 @@ end
 
 function RunwaySession.ApplyRunwayLocomotionAnimation(humanoid: Humanoid, forward: Vector3, nowClock: number, hrp: BasePart?)
 	if not RunwaySession.IsRunwayActivePhase(localState.phase) then
+		RunwaySession.StopJumpWindowWalkAnimation()
 		humanoid:Move(Vector3.zero, false)
 		return
 	end
 	local mode = RunwaySession.ResolveRunwayLocomotionMode(humanoid, nowClock)
 	if mode == RUNWAY_LOCOMOTION_NONE then
+		RunwaySession.StopJumpWindowWalkAnimation()
 		if Refs.chestRewardWaitPose ~= true then
 			RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoid)
 		end
@@ -1549,6 +1691,7 @@ function RunwaySession.ApplyRunwayLocomotionAnimation(humanoid: Humanoid, forwar
 		return
 	end
 	if mode == RUNWAY_LOCOMOTION_FREEFALL then
+		RunwaySession.StopJumpWindowWalkAnimation()
 		RunwaySession.EnsureHumanoidFreefallState(humanoid)
 		humanoid:Move(Vector3.zero, false)
 		return
@@ -1559,6 +1702,7 @@ function RunwaySession.ApplyRunwayLocomotionAnimation(humanoid: Humanoid, forwar
 		return
 	end
 	if mode == RUNWAY_LOCOMOTION_RUN then
+		RunwaySession.StopJumpWindowWalkAnimation()
 		RunwaySession.EnsureHumanoidRunningState(humanoid)
 		humanoid:Move(forward, false)
 		if hrp ~= nil then
@@ -1566,6 +1710,7 @@ function RunwaySession.ApplyRunwayLocomotionAnimation(humanoid: Humanoid, forwar
 		end
 		return
 	end
+	RunwaySession.StopJumpWindowWalkAnimation()
 	humanoid:Move(Vector3.zero, false)
 end
 
@@ -2928,6 +3073,7 @@ function RunwaySession.ResetLocalRunToIdle()
 	local _, humanoid, hrp = RunwaySession.GetCharacterParts()
 	ClientGameInfo.SetInJumpRunway(false)
 	-- 先同步清理资源和状态（避免异步延迟导致新一局启动后资源混乱）
+	RunwaySession.StopJumpWindowWalkAnimation()
 	RunwaySession.DestroyJumpRunwayRocketBackpack()
 	RunwayCameraController.Disable(workspace, GetCharacterParts)
 	RunwaySession.DestroyRunwayGravityForce()
@@ -3259,7 +3405,7 @@ function RunwaySession.OnPostSimulationLocomotion(dt: number)
 	elseif hrp ~= nil and localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindMiss then
 		if not RunwaySession.IsLittleElfChestRunwayFlowActive() then
 			RunwaySession.EnsureHumanoidAutoRotateOffForFinalPitch(humanoid)
-			RunwaySession.ApplyFinalLandingRenderOrientation(humanoid, hrp, forward, dt, nowClock, cfg.RUNWAY_MISS_SLIDE_PRONE_GROUND_OFFSET)
+			RunwaySession.ApplyFinalLandingRenderOrientation(humanoid, hrp, forward, dt, nowClock, cfg.RUNWAY_MISS_SLIDE_PRONE_HRP_GROUND_HEIGHT)
 			RunwaySession.SlideTraceUpdate(humanoid, hrp)
 		end
 	end
@@ -3298,7 +3444,7 @@ function RunwaySession.OnJumpRunwayFinalTiltRenderStep(dt: number)
 		if RunwaySession.IsLittleElfChestRunwayFlowActive() then
 			RunwaySession.EnsureHumanoidAutoRotateOffForFinalPitch(humanoid)
 			if Refs.chestBounceActive == true then
-				RunwaySession.ApplyLittleElfChestProneBounceOrientation(hrp, forward, dt)
+				RunwaySession.ApplyLittleElfChestProneBounceOrientation(humanoid, hrp, forward, dt)
 			else
 				RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoid, hrp, forward)
 			end
@@ -3931,35 +4077,26 @@ function RunwaySession.EndChestProneBounceAndWaitForReward()
 end
 
 function RunwaySession.SnapCharacterHrpToGround(humanoid: Humanoid, hrp: BasePart, fwdStand: Vector3)
-	local character = hrp:FindFirstAncestorOfClass("Model")
-	local rayParams = RaycastParams.new()
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	if character then
-		rayParams.FilterDescendantsInstances = { character }
-	end
-	local rayOrigin = hrp.Position + Vector3.new(0, 3, 0)
-	local rayResult = workspace:Raycast(rayOrigin, Vector3.new(0, -25, 0), rayParams)
-	if rayResult then
-		local hipHeight = humanoid.HipHeight
-		if typeof(hipHeight) ~= "number" or hipHeight ~= hipHeight or hipHeight < 0 then
-			hipHeight = 2
-		end
-		local groundPos = Vector3.new(hrp.Position.X, rayResult.Position.Y + hipHeight, hrp.Position.Z)
+	local groundY = RunwaySession.GetRunwayGroundYUnderHrp(humanoid, hrp)
+	if groundY ~= nil then
+		local standExtra = RunwaySession.ResolveFiniteNumber(cfg.RUNWAY_CHEST_STAND_HRP_GROUND_EXTRA_HEIGHT, 0)
+		local standHeight = RunwaySession.GetHumanoidRootGroundHeight(humanoid, hrp) + standExtra
+		local groundPos = Vector3.new(hrp.Position.X, groundY + standHeight, hrp.Position.Z)
 		hrp.CFrame = CFrame.lookAt(groundPos, groundPos + fwdStand, Vector3.yAxis)
 	end
 end
 
-function RunwaySession.ApplyLittleElfChestProneBounceOrientation(hrp: BasePart, forward: Vector3, dt: number)
+function RunwaySession.ApplyLittleElfChestProneBounceOrientation(humanoid: Humanoid, hrp: BasePart, forward: Vector3, dt: number)
 	local slideFwd = Refs.chestSlideFwdH or forward
-	local pos = hrp.Position
 	local linVel = hrp.AssemblyLinearVelocity
-	local proneOffset = cfg.RUNWAY_FINAL_LAND_PRONE_GROUND_OFFSET
-	if typeof(proneOffset) ~= "number" or proneOffset ~= proneOffset then
-		proneOffset = 0
-	end
-	-- 与子阶段 B 趴滑一致：相对当前 HRP 做 prone 偏移，勿射线钳到地面（会把趴滑高度压进地底）
-	local pronePos = Vector3.new(pos.X, pos.Y - proneOffset, pos.Z)
-	local proneLocked = RunwaySession.BuildProneRunwayCFrame(pronePos, slideFwd)
+	local fallbackHeight = RunwaySession.ResolveProneHrpGroundHeight(cfg.RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT, 2.8)
+	local proneLocked = RunwaySession.BuildProneRunwayCFrameAtGroundHeight(
+		humanoid,
+		hrp,
+		slideFwd,
+		cfg.RUNWAY_CHEST_BOUNCE_PRONE_HRP_GROUND_HEIGHT,
+		fallbackHeight
+	)
 	hrp.CFrame = proneLocked
 	local slideFwdUnit = slideFwd
 	if slideFwdUnit.Magnitude < 1e-4 then
