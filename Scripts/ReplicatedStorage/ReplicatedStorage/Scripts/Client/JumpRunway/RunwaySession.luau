@@ -38,7 +38,7 @@ local cfg = GameConfig.JumpRunway
 
 local function GetJumpPowerBaseSpeed(): number
 	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
-	return if localPlayerInfo then localPlayerInfo.jumpPower else GameConfig.JumpPowerDefaultValue
+	return if localPlayerInfo then GameConfig.GetJumpPowerAbility(localPlayerInfo.jumpPower) else GameConfig.JumpPowerDefaultValue
 end
 
 local Ph = RunwayConstants.Ph
@@ -4564,8 +4564,7 @@ function RunwaySession.JumpComputeSessionVy(): (number, number, number)
 		gBase = 196.2
 	end
 	local gGrav = gBase * cfg.RUNWAY_SESSION_EFFECTIVE_GRAVITY_SCALE
-	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
-	local jumpPower = if localPlayerInfo then localPlayerInfo.jumpPower else GameConfig.JumpPowerDefaultValue
+	local jumpPower = GetJumpPowerBaseSpeed()
 	local vy = jumpPower * cfg.JUMP_VERTICAL_RATIO
 	return jumpPower, vy, gGrav
 end

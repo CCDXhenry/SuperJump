@@ -159,9 +159,8 @@ local function OnSetJumpPowerCommandTriggered(originTextSource: TextSource, unfi
 		return
 	end
 
-	local addAmount = newValue - playerInfo.jumpPower
-	ServerGameInfo.UpdatePlayerJumpPower(player, addAmount)
-	print("[PlayerChatCommandManager] Set JumpPower to", newValue, "for", player.Name, "(delta:", addAmount, ")")
+	ServerGameInfo.SetPlayerJumpPowerLevel(player, newValue)
+	print("[PlayerChatCommandManager] Set JumpPower level to", newValue, "for", player.Name)
 end
 
 clearDataStoreCommand.Triggered:Connect(OnClearDataStoreCommandTrigged)

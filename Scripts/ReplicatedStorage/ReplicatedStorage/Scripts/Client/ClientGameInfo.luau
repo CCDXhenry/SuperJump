@@ -389,10 +389,10 @@ function ClientGameInfo.UpdateJetpackInventory(jetpackInventory: GameConfig.Jetp
 end
 
 -- JumpPower 更新
-function ClientGameInfo.UpdateJumpPower(newValue: number, addAmount: number)
+function ClientGameInfo.UpdateJumpPower(jumpPowerInfo: GameConfig.JumpPowerInfo, addExp: number)
 	if localPlayerInfo then
-		localPlayerInfo.jumpPower = newValue
-		ClientMsg.FireLocalPlayerJumpPowerUpdate(newValue, addAmount)
+		localPlayerInfo.jumpPower = jumpPowerInfo
+		ClientMsg.FireLocalPlayerJumpPowerUpdate(jumpPowerInfo, addExp)
 	end
 end
 

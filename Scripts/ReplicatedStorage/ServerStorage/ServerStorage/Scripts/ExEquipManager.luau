@@ -21,6 +21,16 @@ local function LogInfo(message: string)
 	print(string.format("%s %s", LOG_PREFIX, message))
 end
 
+local function StopExerciseForPlayer(player: Player, logReason: string)
+	local userId = player.UserId
+	if not exerciseRunningMap[userId] then
+		return
+	end
+	exerciseRunningMap[userId] = nil
+	NetMsg.FireNotifyExerciseEnd(player)
+	LogInfo(string.format("ExerciseStopped userId=%d reason=%s", userId, logReason))
+end
+
 local function CanAffordExEquip(playerInfo: GameConfig.PlayerInfo, equipData: GameConfig.ExEquipData): boolean
 	local coinKey = tostring(GameConfig.CurrencyType.Coin)
 	local currentCoins = playerInfo.currencies[coinKey] or 0
@@ -101,6 +111,7 @@ function ExEquipManager.OnRequestUpdateExEquipUsing(player: Player, equipId: num
 	end
 
 	LogInfo(string.format("EquipAccepted userId=%d equipId=%d", player.UserId, equipId))
+	StopExerciseForPlayer(player, "switch_equip")
 	ServerGameInfo.SetCurrentExEquip(player, equipIdStr)
 end
 
@@ -182,10 +193,7 @@ end
 
 -- 处理客户端请求结束锻炼
 function ExEquipManager.OnRequestStopExercise(player: Player)
-	local userId = player.UserId
-	exerciseRunningMap[userId] = nil
-	NetMsg.FireNotifyExerciseEnd(player)
-	LogInfo(string.format("ExerciseStopped userId=%d", userId))
+	StopExerciseForPlayer(player, "request")
 end
 
 function ExEquipManager.Init()

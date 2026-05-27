@@ -935,14 +935,14 @@ local notifyPlayerJetpackInventoryUpdateEvent: RemoteEvent? = remoteEventsFolder
 local requestClaimJetpackGroupRewardEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestClaimJetpackGroupReward") :: RemoteEvent?
 
 -- JumpPower 更新（服务端→客户端）
-function NetMsg.FireNotifyPlayerJumpPowerUpdate(player: Player, newValue: number, addAmount: number)
+function NetMsg.FireNotifyPlayerJumpPowerUpdate(player: Player, jumpPowerInfo: GameConfig.JumpPowerInfo, addExp: number)
 	if notifyJumpPowerUpdateEvent == nil then
 		return
 	end
-	notifyJumpPowerUpdateEvent:FireClient(player, newValue, addAmount)
+	notifyJumpPowerUpdateEvent:FireClient(player, jumpPowerInfo, addExp)
 end
 
-function NetMsg.ConnectNotifyPlayerJumpPowerUpdate(callback: (newValue: number, addAmount: number) -> ())
+function NetMsg.ConnectNotifyPlayerJumpPowerUpdate(callback: (jumpPowerInfo: GameConfig.JumpPowerInfo, addExp: number) -> ())
 	if notifyJumpPowerUpdateEvent == nil then
 		return
 	end

@@ -57,7 +57,7 @@ local jumpPowerFrame: Frame? = lobbyFrame:FindFirstChild("JumpPowerFrame") :: Fr
 local jumpPowerText: TextLabel? = if jumpPowerFrame then jumpPowerFrame:FindFirstChild("NumberText") :: TextLabel? else nil
 local jumpPowerAddButton: GuiButton? = if jumpPowerFrame then jumpPowerFrame:FindFirstChild("AddButton") :: any else nil
 local jumpPowerFloatingText: TextLabel? = if jumpPowerFrame then jumpPowerFrame:FindFirstChild("FloatingText") :: TextLabel? else nil
-local jumpPowerFloatingTemplate: TextLabel? = if jumpPowerFrame then jumpPowerFrame:FindFirstChild("FloatingTemplate") :: TextLabel? else nil
+--local jumpPowerFloatingTemplate: TextLabel? = if jumpPowerFrame then jumpPowerFrame:FindFirstChild("FloatingTemplate") :: TextLabel? else nil
 
 local defaultWalkSpeedColor = walkSpeedText.TextColor3
 local humSpeedConnection: RBXScriptConnection? = nil
@@ -294,47 +294,47 @@ local function RefreshUpgradeValues()
 
 	-- JumpPower
 	if jumpPowerText then
-		local jumpPowerValue = localPlayerInfo.jumpPower or GameConfig.JumpPowerDefaultValue
+		local jumpPowerValue = GameConfig.GetJumpPowerAbility(localPlayerInfo.jumpPower)
 		jumpPowerText.Text = NumberExtension.FormatBigNumberAA(jumpPowerValue)
 	end
 end
 
-local function ShowJumpPowerFloatingText(addAmount: number)
-	if jumpPowerFloatingTemplate == nil or jumpPowerFrame == nil then
-		return
-	end
-	local displayText = string.format("+%s", NumberExtension.FormatBigNumberAA(addAmount))
+-- local function ShowJumpPowerFloatingText(addAmount: number)
+-- 	if jumpPowerFloatingTemplate == nil or jumpPowerFrame == nil then
+-- 		return
+-- 	end
+-- 	local displayText = string.format("+%s", NumberExtension.FormatBigNumberAA(addAmount))
 
-	local floatingText: TextLabel = jumpPowerFloatingTemplate:Clone()
-	floatingText.Name = "FloatingText"
-	floatingText.Text = displayText
-	floatingText.TextTransparency = 0
-	floatingText.Visible = true
-	floatingText.ZIndex = 10
-	floatingText.Parent = jumpPowerFrame
+-- 	local floatingText: TextLabel = jumpPowerFloatingTemplate:Clone()
+-- 	floatingText.Name = "FloatingText"
+-- 	floatingText.Text = displayText
+-- 	floatingText.TextTransparency = 0
+-- 	floatingText.Visible = true
+-- 	floatingText.ZIndex = 10
+-- 	floatingText.Parent = jumpPowerFrame
 
-	local uiStroke: UIStroke? = floatingText:FindFirstChildOfClass("UIStroke") :: UIStroke?
-	if uiStroke then
-		uiStroke.Transparency = 0
-	end
+-- 	local uiStroke: UIStroke? = floatingText:FindFirstChildOfClass("UIStroke") :: UIStroke?
+-- 	if uiStroke then
+-- 		uiStroke.Transparency = 0
+-- 	end
 
-	local startPos = floatingText.Position
-	local tweenInfo = TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	local goal: { [string]: any } = {
-		Position = UDim2.new(startPos.X.Scale, startPos.X.Offset, startPos.Y.Scale, startPos.Y.Offset - 40),
-		TextTransparency = 1,
-	}
-	local tween = tweenService:Create(floatingText, tweenInfo, goal)
-	tween.Completed:Connect(function()
-		floatingText:Destroy()
-	end)
-	tween:Play()
+-- 	local startPos = floatingText.Position
+-- 	local tweenInfo = TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+-- 	local goal: { [string]: any } = {
+-- 		Position = UDim2.new(startPos.X.Scale, startPos.X.Offset, startPos.Y.Scale, startPos.Y.Offset - 40),
+-- 		TextTransparency = 1,
+-- 	}
+-- 	local tween = tweenService:Create(floatingText, tweenInfo, goal)
+-- 	tween.Completed:Connect(function()
+-- 		floatingText:Destroy()
+-- 	end)
+-- 	tween:Play()
 
-	if uiStroke then
-		local strokeTween = tweenService:Create(uiStroke, tweenInfo, { Transparency = 1 })
-		strokeTween:Play()
-	end
-end
+-- 	if uiStroke then
+-- 		local strokeTween = tweenService:Create(uiStroke, tweenInfo, { Transparency = 1 })
+-- 		strokeTween:Play()
+-- 	end
+-- end
 
 local function RefreshView()
 	RefreshCoinCountText()
@@ -408,11 +408,11 @@ RefreshRebirthRedPointView()
 ClientMsg.ConnectLocalPlayerCurrencyUpdate(OnLocalPlayerCoinCountChanged)
 ClientMsg.ConnectLocalPlayerInfoInit(OnLocalPlayerInfoInit)
 ClientMsg.ConnectLocalPlayerSkillLevelUpdate(OnLocalPlayerSkillLevelChanged)
-ClientMsg.ConnectLocalPlayerJumpPowerUpdate(function(newValue: number, addAmount: number)
+ClientMsg.ConnectLocalPlayerJumpPowerUpdate(function(jumpPowerInfo: GameConfig.JumpPowerInfo, addAmount: number)
 	if jumpPowerText then
-		jumpPowerText.Text = NumberExtension.FormatBigNumberAA(newValue)
+		jumpPowerText.Text = NumberExtension.FormatBigNumberAA(GameConfig.GetJumpPowerAbility(jumpPowerInfo))
 	end
-	ShowJumpPowerFloatingText(addAmount)
+	--ShowJumpPowerFloatingText(addAmount)
 end)
 
 -- 火箭背包库存更新时刷新显示

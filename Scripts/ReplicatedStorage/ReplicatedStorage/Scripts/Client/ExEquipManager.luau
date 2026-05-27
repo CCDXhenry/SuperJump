@@ -54,6 +54,7 @@ local modelsFolder = replicatedStorage:FindFirstChild("Models")
 local exEquipModelsFolder: Folder? = if modelsFolder ~= nil then modelsFolder:FindFirstChild("ExEquip") :: Folder? else nil
 local uiFolder = replicatedStorage:WaitForChild("UI")
 local exercisePopupGuiTemplate = uiFolder:WaitForChild("ExerciseJumpPowerPopupGui") :: BillboardGui
+local exInfoGuiTemplate = uiFolder:WaitForChild("ExInfoUI") :: BillboardGui
 
 -- 锻炼模式常量
 -- 人物躯干高度（HumanoidRootPart 到脚底的参考偏移）
@@ -86,6 +87,9 @@ local exerciseInputConnection: RBXScriptConnection? = nil
 local exercisePrompt: ProximityPrompt? = nil
 local exerciseBikeAnimTrack: AnimationTrack? = nil
 local exercisePopupRandom = Random.new()
+local exerciseInfoGui: BillboardGui? = nil
+local exerciseInfoAttachment: Attachment? = nil
+local exerciseEquipId: number? = nil
 
 type ExercisePopupItem = {
 	gui: BillboardGui,
@@ -102,6 +106,9 @@ type ExercisePopupItem = {
 }
 
 local exercisePopupPool: { ExercisePopupItem } = {}
+local GetExercisePopupParent: () -> PlayerGui? = function()
+	return nil
+end
 
 --------------------------------------------------------------------
 -- 锻炼模式逻辑
@@ -113,6 +120,109 @@ local function GetExercisePopupText(gui: BillboardGui): TextLabel?
 		return nil
 	end
 	return controllerFrame:FindFirstChild("JumpPowerPopupText") :: TextLabel?
+end
+
+local function GetExerciseInfoControllerFrame(): Frame?
+	if exerciseInfoGui == nil then
+		return nil
+	end
+	return exerciseInfoGui:FindFirstChild("ControllerFrame") :: Frame?
+end
+
+local function SetExerciseInfoScaleBar(ratio: number)
+	local controllerFrame = GetExerciseInfoControllerFrame()
+	if controllerFrame == nil then
+		return
+	end
+
+	local expImage = controllerFrame:FindFirstChild("ExpImage")
+	if expImage == nil or not expImage:IsA("ImageLabel") then
+		return
+	end
+	local scaleBar = expImage:FindFirstChild("ScaleBar")
+	if scaleBar == nil or not scaleBar:IsA("ImageLabel") then
+		return
+	end
+	local scaleImage = scaleBar:FindFirstChild("Scale")
+	if scaleImage == nil or not scaleImage:IsA("ImageLabel") then
+		return
+	end
+
+	local currentSize = scaleImage.Size
+	scaleImage.Size = UDim2.new(math.clamp(ratio, 0, 1), currentSize.X.Offset, currentSize.Y.Scale, currentSize.Y.Offset)
+end
+
+local function UpdateExerciseInfoView()
+	local controllerFrame = GetExerciseInfoControllerFrame()
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if controllerFrame == nil or localPlayerInfo == nil then
+		return
+	end
+
+	local equipData = if exerciseEquipId ~= nil then GameConfig.ExEquipDataMap[exerciseEquipId] else nil
+	local speedLabel = controllerFrame:FindFirstChild("ExSpeedLabel") :: TextLabel?
+	if speedLabel ~= nil then
+		local speedValue = if equipData ~= nil then equipData.ability else 0
+		speedLabel.Text = string.format("%s Speed", NumberExtension.FormatBigNumberAA(speedValue))
+	end
+
+	local expImage = controllerFrame:FindFirstChild("ExpImage")
+	if expImage == nil or not expImage:IsA("ImageLabel") then
+		return
+	end
+
+	local jumpPowerInfo = localPlayerInfo.jumpPower
+	local requiredExp = GameConfig.GetJumpPowerRequiredExp(jumpPowerInfo)
+	local lvLabel = expImage:FindFirstChild("LvLabel") :: TextLabel?
+	local expLabel = expImage:FindFirstChild("ExpLabel") :: TextLabel?
+	if lvLabel ~= nil then
+		lvLabel.Text = string.format("Lv%d", jumpPowerInfo.lv)
+	end
+	if expLabel ~= nil then
+		expLabel.Text = string.format(
+			"%s/%s",
+			NumberExtension.FormatBigNumberAA(jumpPowerInfo.exp),
+			NumberExtension.FormatBigNumberAA(requiredExp)
+		)
+	end
+	SetExerciseInfoScaleBar(if requiredExp > 0 then jumpPowerInfo.exp / requiredExp else 0)
+end
+
+local function RemoveExerciseInfoGui()
+	if exerciseInfoGui ~= nil then
+		BillboardManager.Untrack(exerciseInfoGui)
+		exerciseInfoGui:Destroy()
+		exerciseInfoGui = nil
+	end
+	if exerciseInfoAttachment ~= nil then
+		exerciseInfoAttachment:Destroy()
+		exerciseInfoAttachment = nil
+	end
+end
+
+local function ShowExerciseInfoGui(adornee: BasePart)
+	RemoveExerciseInfoGui()
+
+	local playerGui = GetExercisePopupParent()
+	if playerGui == nil then
+		return
+	end
+
+	local infoAttachment = Instance.new("Attachment")
+	infoAttachment.Name = "ExerciseInfoAttachment"
+	infoAttachment.Position = Vector3.new(0, EXERCISE_POPUP_START_HEIGHT + 1.2, 0)
+	infoAttachment.Parent = adornee
+
+	local infoGui = exInfoGuiTemplate:Clone()
+	infoGui.Name = "ExInfoUI"
+	infoGui.Adornee = infoAttachment
+	infoGui.Enabled = true
+	infoGui.Parent = playerGui
+
+	exerciseInfoAttachment = infoAttachment
+	exerciseInfoGui = infoGui
+	UpdateExerciseInfoView()
+	BillboardManager.Track(infoGui)
 end
 
 local function StopExercisePopupTweens(item: ExercisePopupItem)
@@ -219,7 +329,7 @@ local function GetExercisePopupAdornee(): BasePart?
 	return character:FindFirstChild("HumanoidRootPart") :: BasePart?
 end
 
-local function GetExercisePopupParent(): PlayerGui?
+GetExercisePopupParent = function(): PlayerGui?
 	return localPlayer:FindFirstChildOfClass("PlayerGui")
 end
 
@@ -376,11 +486,20 @@ local function StopExerciseInternal()
 	-- 关闭锻炼 UI
 	UIManager.CloseWindow(UIManager.WindowId.ExEquipFrame)
 	CleanupExercisePopups()
+	RemoveExerciseInfoGui()
 
 	isExercising = false
 	exerciseHumanoid = nil
 	exerciseHrp = nil
 	exerciseForward = Vector3.zero
+	exerciseEquipId = nil
+end
+
+local function StopExerciseWithServerRequest()
+	if isExercising then
+		NetMsg.FireRequestStopExercise()
+	end
+	StopExerciseInternal()
 end
 
 --------------------------------------------------------------------
@@ -469,7 +588,7 @@ end
 local function ReplaceExEquipModel(exEquipId: number)
 	-- 切换器材时自动退出当前锻炼模式
 	if isExercising then
-		StopExerciseInternal()
+		StopExerciseWithServerRequest()
 	end
 
 	local equipData = GameConfig.ExEquipDataMap[exEquipId]
@@ -624,7 +743,9 @@ local function StartExercise(equipId: number)
 	exerciseHumanoid = humanoid
 	exerciseHrp = hrp
 	exerciseForward = forwardZ
+	exerciseEquipId = equipId
 	EnsureExercisePopupPool()
+	ShowExerciseInfoGui(hrp)
 
 	-- 打开锻炼 UI
 	UIManager.OpenWindow(UIManager.WindowId.ExEquipFrame)
@@ -725,19 +846,20 @@ function ExEquipManager.Init()
 	end)
 
 	-- 监听 JumpPower 更新
-	NetMsg.ConnectNotifyPlayerJumpPowerUpdate(function(newValue: number, addAmount: number)
-		ClientGameInfo.UpdateJumpPower(newValue, addAmount)
-		ShowExerciseJumpPowerPopup(addAmount)
+	NetMsg.ConnectNotifyPlayerJumpPowerUpdate(function(jumpPowerInfo: GameConfig.JumpPowerInfo, addExp: number)
+		ClientGameInfo.UpdateJumpPower(jumpPowerInfo, addExp)
+		UpdateExerciseInfoView()
+		ShowExerciseJumpPowerPopup(addExp)
 	end)
 
 	-- 角色死亡/移除时退出锻炼模式
 	localPlayer.CharacterRemoving:Connect(function()
-		StopExercise()
+		StopExerciseWithServerRequest()
 		CleanupExercisePopups()
 	end)
 	localPlayer.CharacterAdded:Connect(function(_character: Model)
 		-- 如果还在锻炼状态（实际不应发生），清理状态
-		StopExercise()
+		StopExerciseWithServerRequest()
 		CleanupExercisePopups()
 	end)
 end

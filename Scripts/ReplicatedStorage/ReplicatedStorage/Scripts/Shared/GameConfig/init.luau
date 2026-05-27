@@ -12,6 +12,7 @@ local LittleElfChestDataModule = require(script:WaitForChild("LittleElfChestData
 local LittleElfChestRewardPoolDataModule = require(script:WaitForChild("LittleElfChestRewardPoolData"))
 local UpgradeShopRawData = require(script:WaitForChild("UpgradeShopData"))
 local ExEquipDataModule = require(script:WaitForChild("ExEquipData"))
+local ExStatsDataModule = require(script:WaitForChild("ExStatsData"))
 local JetpackDataModule = require(script:WaitForChild("JetpackData"))
 local MonsterDataModule = require(script:WaitForChild("MonsterData"))
 
@@ -125,6 +126,10 @@ GameConfig.ShopAbilityByType[GameConfig.SkillType.WalkSpeed] = {
 GameConfig.ExEquipType = {
 	Treadmill = 1,
 	Bike = 2,
+}
+
+GameConfig.ExStatsType = {
+	JumpPower = 1,
 }
 
 GameConfig.JetpackType = {
@@ -433,6 +438,56 @@ export type ExEquipInventory = {
 GameConfig.ExEquipDataMap = {} :: { [number]: ExEquipData }
 for _, data in ExEquipDataModule do
 	GameConfig.ExEquipDataMap[data.id] = data :: ExEquipData
+end
+
+export type ExStatsData = {
+	type: number,
+	exp: number,
+	ability: number,
+	lv: number,
+	name_t: string,
+}
+
+export type JumpPowerInfo = {
+	type: number,
+	lv: number,
+	exp: number,
+}
+
+GameConfig.ExStats = ExStatsDataModule
+GameConfig.ExStatsDataByTypeLvMap = {} :: { [number]: { [number]: ExStatsData } }
+for _, data in ExStatsDataModule do
+	local exStatsData = data :: ExStatsData
+	if GameConfig.ExStatsDataByTypeLvMap[exStatsData.type] == nil then
+		GameConfig.ExStatsDataByTypeLvMap[exStatsData.type] = {}
+	end
+	GameConfig.ExStatsDataByTypeLvMap[exStatsData.type][exStatsData.lv] = exStatsData
+end
+
+function GameConfig.CreateDefaultJumpPowerInfo(): JumpPowerInfo
+	return {
+		type = GameConfig.ExStatsType.JumpPower,
+		lv = 1,
+		exp = 0,
+	}
+end
+
+function GameConfig.GetJumpPowerStatsData(jumpPowerInfo: JumpPowerInfo): ExStatsData?
+	local statsMap = GameConfig.ExStatsDataByTypeLvMap[jumpPowerInfo.type]
+	if statsMap == nil then
+		return nil
+	end
+	return statsMap[jumpPowerInfo.lv]
+end
+
+function GameConfig.GetJumpPowerAbility(jumpPowerInfo: JumpPowerInfo): number
+	local statsData = GameConfig.GetJumpPowerStatsData(jumpPowerInfo)
+	return if statsData ~= nil then statsData.ability else GameConfig.JumpPowerDefaultValue
+end
+
+function GameConfig.GetJumpPowerRequiredExp(jumpPowerInfo: JumpPowerInfo): number
+	local statsData = GameConfig.GetJumpPowerStatsData(jumpPowerInfo)
+	return if statsData ~= nil then statsData.exp else 0
 end
 
 export type JetpackData = {
@@ -1242,7 +1297,7 @@ export type PlayerSaveInfo = {
 		placedModels: { [string]: ModelInfo },
 	},
 	shopInfo: ShopInfo,
-	jumpPower: number,
+	jumpPower: JumpPowerInfo,
 	jumpRunwayBestDistance: number,
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },
@@ -1304,7 +1359,7 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 			walkSpeedLevel = 1,
 			rebirthLevel = 0,
 		},
-		jumpPower = GameConfig.JumpPowerDefaultValue,
+		jumpPower = GameConfig.CreateDefaultJumpPowerInfo(),
 		jumpRunwayBestDistance = 0,
 		brainrotsInfo = {
 			ownedBrainrots = {},
@@ -1339,7 +1394,7 @@ export type ClientLocalPlayerSaveInfo = {
 		placedModels: { [string]: ModelInfo },
 	},
 	shopInfo: ShopInfo,
-	jumpPower: number,
+	jumpPower: JumpPowerInfo,
 	jumpRunwayBestDistance: number,
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },

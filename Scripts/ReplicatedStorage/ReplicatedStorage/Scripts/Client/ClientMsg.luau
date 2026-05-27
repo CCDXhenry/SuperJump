@@ -255,13 +255,13 @@ function ClientMsg.ConnectResumeFalling(callback: () -> ())
 end
 
 -- JumpPower 更新
-function ClientMsg.FireLocalPlayerJumpPowerUpdate(newValue: number, addAmount: number)
+function ClientMsg.FireLocalPlayerJumpPowerUpdate(jumpPowerInfo: GameConfig.JumpPowerInfo, addExp: number)
 	if localPlayerJumpPowerUpdateEvent then
-		localPlayerJumpPowerUpdateEvent:Fire(newValue, addAmount)
+		localPlayerJumpPowerUpdateEvent:Fire(jumpPowerInfo, addExp)
 	end
 end
 
-function ClientMsg.ConnectLocalPlayerJumpPowerUpdate(callback: (newValue: number, addAmount: number) -> ())
+function ClientMsg.ConnectLocalPlayerJumpPowerUpdate(callback: (jumpPowerInfo: GameConfig.JumpPowerInfo, addExp: number) -> ())
 	if localPlayerJumpPowerUpdateEvent then
 		localPlayerJumpPowerUpdateEvent.Event:Connect(callback)
 	end

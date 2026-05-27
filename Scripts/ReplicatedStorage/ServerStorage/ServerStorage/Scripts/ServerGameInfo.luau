@@ -1065,14 +1065,59 @@ function ServerGameInfo.SetCurrentJetpack(player: Player, jetpackId: string)
 end
 
 -- 更新玩家 JumpPower 值
-function ServerGameInfo.UpdatePlayerJumpPower(player: Player, addAmount: number)
+function ServerGameInfo.UpdatePlayerJumpPowerExp(player: Player, addExp: number)
 	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
 	if playerInfo == nil then
 		return
 	end
-	playerInfo.jumpPower += addAmount
+	if addExp <= 0 then
+		return
+	end
+	local jumpPowerInfo = playerInfo.jumpPower
+	jumpPowerInfo.exp += addExp
+
+	while true do
+		local requiredExp = GameConfig.GetJumpPowerRequiredExp(jumpPowerInfo)
+		local nextStatsMap = GameConfig.ExStatsDataByTypeLvMap[jumpPowerInfo.type]
+		local hasNextLevel = nextStatsMap ~= nil and nextStatsMap[jumpPowerInfo.lv + 1] ~= nil
+		if requiredExp <= 0 or jumpPowerInfo.exp < requiredExp or not hasNextLevel then
+			if not hasNextLevel and requiredExp > 0 then
+				jumpPowerInfo.exp = math.min(jumpPowerInfo.exp, requiredExp)
+			end
+			break
+		end
+		jumpPowerInfo.exp -= requiredExp
+		jumpPowerInfo.lv += 1
+	end
+
+	playerInfo.jumpPower = jumpPowerInfo
 	playerInfo.playerInfoChanged = true
-	NetMsg.FireNotifyPlayerJumpPowerUpdate(player, playerInfo.jumpPower, addAmount)
+	NetMsg.FireNotifyPlayerJumpPowerUpdate(player, jumpPowerInfo, addExp)
+end
+
+function ServerGameInfo.UpdatePlayerJumpPower(player: Player, addAmount: number)
+	ServerGameInfo.UpdatePlayerJumpPowerExp(player, addAmount)
+end
+
+function ServerGameInfo.SetPlayerJumpPowerLevel(player: Player, level: number)
+	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	if playerInfo == nil then
+		return
+	end
+	local maxLevel = 1
+	local statsMap = GameConfig.ExStatsDataByTypeLvMap[GameConfig.ExStatsType.JumpPower]
+	if statsMap ~= nil then
+		for statsLevel in statsMap do
+			maxLevel = math.max(maxLevel, statsLevel)
+		end
+	end
+	playerInfo.jumpPower = {
+		type = GameConfig.ExStatsType.JumpPower,
+		lv = math.clamp(math.floor(level + 0.5), 1, maxLevel),
+		exp = 0,
+	}
+	playerInfo.playerInfoChanged = true
+	NetMsg.FireNotifyPlayerJumpPowerUpdate(player, playerInfo.jumpPower, 0)
 end
 
 
