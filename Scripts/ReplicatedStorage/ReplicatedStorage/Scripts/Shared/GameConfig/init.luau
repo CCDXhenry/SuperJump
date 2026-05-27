@@ -926,7 +926,7 @@ GameConfig.JumpRunway = {
 	-- 起点触发器偏大、玩家从边缘切入时水平偏离常 >18；过严会导致首包起永久拒收、maxAlong 永远不涨。
 	ANTI_CHEAT_MAX_PERP_DEVIATION = 48,
 	-- 防作弊：单局沿轴成绩硬上限，避免序列化异常或外挂虚报
-	ANTI_CHEAT_DISTANCE_HARD_CAP = 4000,
+	ANTI_CHEAT_DISTANCE_HARD_CAP = 45000,
 	-- 防作弊：单次样本相对上次「已接受」样本的最大沿轴正向位移余量（与 MAX_ALONG_SPEED 同步放宽）
 	ANTI_CHEAT_MAX_DELTA_PER_SAMPLE = 36,
 
