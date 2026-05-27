@@ -3720,6 +3720,8 @@ function RunwaySession.UpdateStartTriggerReentryState()
 	if enteredNow then
 		if character and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
 			RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger)
+		elseif Refs.chestCarryReturnActive == true then
+			RunwaySession.TryExitEscapePhaseAtStartTrigger(startTrigger)
 		elseif Refs.chestCarryReturnActive ~= true and Refs.startTriggerStartArmed == true then
 			if humanoid and not RunwaySession.IsRunwayActivePhase(localState.phase) then
 				if RunwaySession.SnapLocalPlayerToRunwayGroundIfAirborne(startTrigger, humanoid, hrp) then
@@ -3729,6 +3731,8 @@ function RunwaySession.UpdateStartTriggerReentryState()
 		end
 	elseif insideNow and character and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
 		RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger)
+	elseif insideNow and Refs.chestCarryReturnActive == true then
+		RunwaySession.TryExitEscapePhaseAtStartTrigger(startTrigger)
 	end
 
 	Refs.startTriggerPlayerWasInsideVolume = insideNow
@@ -3811,6 +3815,7 @@ function RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger: Part
 	Refs.chestCarryReturnActive = false
 	ChaserClientManager.StopAndFadeChaser()
 	NetMsg.FireRequestJumpRunwayLittleElfChestGrant()
+	ClientGameInfo.SetInJumpRunway(false)
 	task.delay(1, function()
 		if Refs.chestBackpackDeliverRequested ~= true then
 			return
@@ -3820,6 +3825,27 @@ function RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger: Part
 			Refs.chestBackpackDeliverRequested = false
 		end
 	end)
+end
+
+function RunwaySession.TryExitEscapePhaseAtStartTrigger(startTrigger: Part)
+	if Refs.chestCarryReturnActive ~= true then
+		return
+	end
+
+	local _character, _humanoid, hrp = RunwaySession.GetCharacterParts()
+	if hrp == nil then
+		return
+	end
+	if not RunwaySession.IsPlayerCloseEnoughToStartTrigger(startTrigger, hrp) then
+		return
+	end
+
+	Refs.chestCarryReturnActive = false
+	Refs.startTriggerStartArmed = false
+	Refs.startTriggerPlayerWasInsideVolume = true
+	Refs.startTriggerOutsideVolumeClock = nil
+	ChaserClientManager.StopAndFadeChaser()
+	RunwaySession.ResetLocalRunToIdle()
 end
 
 function RunwaySession.DeliverLittleElfChestRewardToBackpackAfterOpenAnim()
@@ -5001,6 +5027,7 @@ function RunwaySession.BindSceneTriggers()
 					return
 				end
 				if Refs.chestCarryReturnActive == true then
+					RunwaySession.TryExitEscapePhaseAtStartTrigger(startTrigger)
 					return
 				end
 				if Refs.startTriggerStartArmed ~= true then

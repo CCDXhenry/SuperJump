@@ -11,6 +11,7 @@ local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local clientScripts = scripts:WaitForChild("Client")
 local GameConfig = require(sharedScripts:WaitForChild("GameConfig"))
+local NetMsg = require(sharedScripts:WaitForChild("NetMsg"))
 local ClientMsg = require(clientScripts:WaitForChild("ClientMsg"))
 local ClientGameInfo = require(clientScripts:WaitForChild("ClientGameInfo"))
 local BackpackInputManager = require(clientScripts:WaitForChild("BackpackInputManager"))
@@ -32,6 +33,8 @@ local SlotTweenInfo: TweenInfo = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum
 -- 状态
 local activeSlots: { ImageButton } = {}
 local currentEquippedIndex: number = 0
+local activeExEquipSlotIndex: number = 0
+local isExEquipExercising: boolean = false
 
 -- 获取手持 Tool 的 UID
 local function GetEquippedUid(): string?
@@ -99,6 +102,15 @@ local function GetCoilDescription(configId: number): string
 		return coilConfig.description_t	
 	end
 	return ""
+end
+
+local function GetCurrentExEquipData(): GameConfig.ExEquipData?
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if localPlayerInfo == nil then
+		return nil
+	end
+	local equipId = tonumber(localPlayerInfo.exEquipInventory.currentId) or 1
+	return GameConfig.ExEquipDataMap[equipId]
 end
 
 -- 获取分辨色
@@ -191,6 +203,7 @@ local function CreateSlot(index: number, item: GameConfig.BrainrotQueueItem): Im
 	-- 存储 uid和索引
 	slot:SetAttribute("uid", item.uid)
 	slot:SetAttribute("slotIndex", index)
+	slot:SetAttribute("slotType", "Brainrot")
 	slot.Parent = bottomButtonsFrame
 	
 	-- 点击事件 (点击格子装备/卸装)
@@ -216,12 +229,93 @@ local function CreateSlot(index: number, item: GameConfig.BrainrotQueueItem): Im
 	return slot
 end
 
+local function CreateExEquipSlot(index: number, equipData: GameConfig.ExEquipData): ImageButton
+	local slot = toolButtonTemplate:Clone()
+	slot.Name = "Slot_ExEquip"
+	slot.LayoutOrder = index
+	slot.Visible = true
+
+	local toolNameText = slot:FindFirstChild("ToolNameText") :: TextLabel
+	local toolLvText = slot:FindFirstChild("ToolLvText") :: TextLabel
+	local keyCodeText = slot:FindFirstChild("KeyCodeText") :: TextLabel
+	local toolIconImage = slot:FindFirstChild("ToolIconImage") :: ImageLabel
+	local qualityImage = slot:FindFirstChild("QualityImage") :: ImageLabel
+	local equippedImage = slot:FindFirstChild("EquippedImage") :: ImageLabel
+	local toolUsageEffectFrame = slot:FindFirstChild("ToolUsageEffectFrame") :: Frame?
+	local toolUsageEffectText = if toolUsageEffectFrame then (toolUsageEffectFrame:FindFirstChild("ToolUsageEffectText") :: TextLabel?) else nil
+	local qualityColor = GetQualityColor(equipData.quality)
+
+	if toolIconImage then
+		toolIconImage.Image = equipData.iconImageId
+	end
+	if toolNameText then
+		toolNameText.Text = equipData.name_t
+		toolNameText.TextColor3 = qualityColor
+	end
+	if toolLvText then
+		toolLvText.Text = ""
+	end
+	if keyCodeText then
+		keyCodeText.Text = tostring(index)
+	end
+	if qualityImage then
+		qualityImage.ImageColor3 = qualityColor
+	end
+	if equippedImage then
+		equippedImage.Visible = false
+	end
+	if toolUsageEffectFrame then
+		toolUsageEffectFrame.Visible = false
+	end
+	if toolUsageEffectText then
+		toolUsageEffectText.Text = string.format("+%s Speed", tostring(equipData.ability))
+	end
+
+	slot:SetAttribute("equipId", equipData.id)
+	slot:SetAttribute("slotIndex", index)
+	slot:SetAttribute("slotType", "ExEquip")
+	slot.Parent = bottomButtonsFrame
+
+	slot.Activated:Connect(function()
+		BackpackInputManager.ToggleTool(index)
+	end)
+	slot.MouseEnter:Connect(function()
+		if toolUsageEffectFrame then
+			toolUsageEffectFrame.Visible = true
+		end
+	end)
+	slot.MouseLeave:Connect(function()
+		if toolUsageEffectFrame then
+			toolUsageEffectFrame.Visible = false
+		end
+	end)
+
+	return slot
+end
+
 -- 刷新每帧状态 (自动高亮)
 local function OnRenderStepped()
+	if ClientGameInfo.IsInJumpRunway() then
+		if bottomButtonsFrame.Visible then
+			bottomButtonsFrame.Visible = false
+		end
+		return
+	end
 	local equippedUid = GetEquippedUid()
 	local foundIndex = 0
 	
 	for i, slot in ipairs(activeSlots) do
+		local slotType = slot:GetAttribute("slotType")
+		if slotType == "ExEquip" then
+			local equippedImage = slot:FindFirstChild("EquippedImage") :: ImageLabel?
+			if equippedImage and equippedImage.Visible ~= isExEquipExercising then
+				equippedImage.Visible = isExEquipExercising
+				tweenService:Create(slot, SlotTweenInfo, {
+					BackgroundColor3 = if isExEquipExercising then EquippedSlotColor else NormalSlotColor,
+				}):Play()
+			end
+			continue
+		end
 		local uid = slot:GetAttribute("uid")
 		local isEquipped = (uid ~= nil and uid == equippedUid)
 		if isEquipped then
@@ -251,11 +345,15 @@ local function RefreshBackpackUI(queue: { GameConfig.BrainrotQueueItem })
 	end
 	activeSlots = {}
 	currentEquippedIndex = 0
+	activeExEquipSlotIndex = 0
 
 	local MAX_UI_SLOTS = 9
+	local equipData = GetCurrentExEquipData()
+	local shouldShowExEquip = equipData ~= nil and not ClientGameInfo.IsInJumpRunway()
+	local maxBrainrotSlots = if shouldShowExEquip then MAX_UI_SLOTS - 1 else MAX_UI_SLOTS
 
 	-- 创建新格子
-	local shownCount = math.min(#queue, MAX_UI_SLOTS)
+	local shownCount = math.min(#queue, maxBrainrotSlots)
 	for i = 1, shownCount do
 		local item = queue[i]
 		if item then
@@ -263,9 +361,14 @@ local function RefreshBackpackUI(queue: { GameConfig.BrainrotQueueItem })
 			table.insert(activeSlots, slot)
 		end
 	end
+	if shouldShowExEquip and equipData ~= nil then
+		activeExEquipSlotIndex = shownCount + 1
+		local slot = CreateExEquipSlot(activeExEquipSlotIndex, equipData)
+		table.insert(activeSlots, slot)
+	end
 
 	-- 显示/隐藏整个容器
-	bottomButtonsFrame.Visible = shownCount > 0
+	bottomButtonsFrame.Visible = #activeSlots > 0 and not ClientGameInfo.IsInJumpRunway()
 end
 
 -- 公开接口：更新当前装备索引
@@ -280,6 +383,15 @@ function BackpackFrameManager.GetEquippedIndex(): number
 	return currentEquippedIndex
 end
 
+function BackpackFrameManager.IsExEquipSlotIndex(index: number): boolean
+	return activeExEquipSlotIndex > 0 and index == activeExEquipSlotIndex
+end
+
+function BackpackFrameManager.Refresh()
+	local queue = ClientGameInfo.GetBrainrotQueue()
+	RefreshBackpackUI(queue)
+end
+
 -- 把 Manager 挂到一个固定的地方供其他脚本访问
 -- 由于 BackpackFrame UI 可能被移除，我们挂在 _G 或 LobbyFrame 上
 lobbyFrame:SetAttribute("_backpackManagerRef", "BackpackFrameManager")
@@ -287,6 +399,22 @@ lobbyFrame:SetAttribute("_backpackManagerRef", "BackpackFrameManager")
 -- 监听背包更新
 ClientMsg.ConnectBrainrotQueueUpdate(function(queue: { GameConfig.BrainrotQueueItem })
 	RefreshBackpackUI(queue)
+end)
+
+ClientMsg.ConnectLocalPlayerExEquipInventoryUpdate(function()
+	RefreshBackpackUI(ClientGameInfo.GetBrainrotQueue())
+end)
+
+ClientMsg.ConnectCurrentGuideTypeChanged(function()
+	RefreshBackpackUI(ClientGameInfo.GetBrainrotQueue())
+end)
+
+NetMsg.ConnectNotifyExerciseStart(function()
+	isExEquipExercising = true
+end)
+
+NetMsg.ConnectNotifyExerciseEnd(function()
+	isExEquipExercising = false
 end)
 
 -- 初始化：读取现有队列
@@ -306,4 +434,3 @@ _G.BackpackFrameManager = BackpackFrameManager
 
 -- 绑定心跳检测
 runService.RenderStepped:Connect(OnRenderStepped)
-

@@ -90,6 +90,7 @@ local exercisePopupRandom = Random.new()
 local exerciseInfoGui: BillboardGui? = nil
 local exerciseInfoAttachment: Attachment? = nil
 local exerciseEquipId: number? = nil
+local activeExerciseModel: Model? = nil
 
 type ExercisePopupItem = {
 	gui: BillboardGui,
@@ -476,6 +477,11 @@ local function StopExerciseInternal()
 		exercisePrompt = nil
 	end
 
+	if activeExerciseModel ~= nil then
+		activeExerciseModel:Destroy()
+		activeExerciseModel = nil
+	end
+
 	-- 停止 Bike 专属动画
 	if exerciseBikeAnimTrack ~= nil then
 		exerciseBikeAnimTrack:Stop()
@@ -502,39 +508,6 @@ local function StopExerciseWithServerRequest()
 	StopExerciseInternal()
 end
 
---------------------------------------------------------------------
--- 模型替换逻辑
---------------------------------------------------------------------
-
-local function GetExercise1Model(): Model?
-	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
-	if localPlayerInfo == nil then
-		return nil
-	end
-
-	local homeSlot = localPlayerInfo.homeSlot
-	if homeSlot == nil or homeSlot == "" then
-		return nil
-	end
-
-	local homesFolder = workspace:FindFirstChild("PlayersHome")
-	if homesFolder == nil then
-		return nil
-	end
-
-	local slotModel: Model? = homesFolder:FindFirstChild(homeSlot) :: Model?
-	if slotModel == nil then
-		return nil
-	end
-
-	local exerciseArea: Model? = slotModel:FindFirstChild("ExerciseArea") :: Model?
-	if exerciseArea == nil then
-		return nil
-	end
-
-	return exerciseArea:FindFirstChild("Exercise1") :: Model?
-end
-
 local function GetExercisePromptFromModel(exerciseModel: Model): ProximityPrompt?
 	local promptAttachment: Attachment? = exerciseModel:FindFirstChild("Attachment") :: Attachment?
 	if promptAttachment == nil then
@@ -543,119 +516,7 @@ local function GetExercisePromptFromModel(exerciseModel: Model): ProximityPrompt
 	return promptAttachment:FindFirstChild("ProximityPrompt") :: ProximityPrompt?
 end
 
-local function DoReplace(exEquipId: number, equipData: GameConfig.ExEquipData, exercise1: Model)
-	if exEquipModelsFolder == nil then
-		return
-	end
-
-	local sourceModel = exEquipModelsFolder:FindFirstChild(equipData.resourceName) :: Model?
-	if sourceModel == nil then
-		return
-	end
-
-	-- 记录 Exercise1 的 Parent 和完整变换（位置+朝向）
-	local exerciseArea: Instance? = exercise1.Parent
-	local targetCf: CFrame = exercise1:GetPivot()
-
-	-- 将源模型 Clone 到 Workspace，原封不动对齐到旧模型的位置和朝向
-	local newModel: Model = sourceModel:Clone()
-	newModel.Name = "Exercise1"
-	newModel.Parent = exerciseArea
-	newModel:PivotTo(targetCf)
-
-	-- 销毁旧的 Exercise1
-	exercise1:Destroy()
-
-	-- 绑定锻炼 Prompt
-	local promptAttachment: Attachment? = newModel:FindFirstChild("Attachment") :: Attachment?
-	if promptAttachment ~= nil then
-		local prompt: ProximityPrompt? = promptAttachment:FindFirstChild("ProximityPrompt") :: ProximityPrompt?
-		if prompt ~= nil then
-			prompt.Triggered:Connect(function(triggerPlayer: Player)
-				if triggerPlayer ~= localPlayer then
-					return
-				end
-				if isExercising then
-					NetMsg.FireRequestStopExercise()
-				else
-					NetMsg.FireRequestStartExercise(exEquipId)
-				end
-			end)
-		end
-	end
-end
-
-local function ReplaceExEquipModel(exEquipId: number)
-	-- 切换器材时自动退出当前锻炼模式
-	if isExercising then
-		StopExerciseWithServerRequest()
-	end
-
-	local equipData = GameConfig.ExEquipDataMap[exEquipId]
-	if equipData == nil then
-		return
-	end
-
-	local exercise1 = GetExercise1Model()
-	if exercise1 == nil then
-		-- Exercise1 还没准备好，延迟重试
-		task.spawn(function()
-			local retryCount = 0
-			while retryCount < 60 do
-				task.wait(0.5)
-				exercise1 = GetExercise1Model()
-				if exercise1 ~= nil then
-					break
-				end
-				retryCount += 1
-			end
-			if exercise1 == nil then
-				return
-			end
-			DoReplace(exEquipId, equipData, exercise1)
-		end)
-		return
-	end
-
-	DoReplace(exEquipId, equipData, exercise1)
-end
-
---------------------------------------------------------------------
--- 锻炼模式逻辑
---------------------------------------------------------------------
-
-local function StartExercise(equipId: number)
-	-- 如果已在锻炼中，则忽略后续的开始请求，防止竞态条件
-	if isExercising then
-		return
-	end
-	isExercising = true
-
-	local character: Model? = localPlayer.Character
-	if character == nil then
-		return
-	end
-
-	local humanoid: Humanoid? = character:FindFirstChildOfClass("Humanoid")
-	local hrp: BasePart? = character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if humanoid == nil or hrp == nil then
-		return
-	end
-
-	local equipData = GameConfig.ExEquipDataMap[equipId]
-	if equipData == nil then
-		return
-	end
-
-	-- 从 Exercise1 下找到实际克隆的器材模型来计算位置
-	local exercise1 = GetExercise1Model()
-	if exercise1 == nil then
-		return
-	end
-
-	local equipmentModel: Model = exercise1
-
-	-- 计算器材模型的实际位置和 Z 轴正方向
+local function GetExerciseStandCFrame(equipmentModel: Model, equipData: GameConfig.ExEquipData, character: Model, hrp: BasePart): CFrame
 	local modelRootPart: BasePart? = equipmentModel.PrimaryPart
 	local rootCf: CFrame
 	if modelRootPart ~= nil then
@@ -712,9 +573,117 @@ local function StartExercise(equipId: number)
 		end
 		standPos = Vector3.new(rootPos.X, modelTopY + CHARACTER_TORSO_HEIGHT, rootPos.Z)
 	end
+	return CFrame.lookAt(standPos, standPos + forwardZ)
+end
+
+local function DisableExerciseModelPrompts(equipmentModel: Model)
+	for _, descendant in equipmentModel:GetDescendants() do
+		if descendant:IsA("ProximityPrompt") then
+			descendant.Enabled = false
+		end
+	end
+end
+
+local function MoveExerciseModelStandXzToPlayer(equipmentModel: Model, equipData: GameConfig.ExEquipData, character: Model, hrp: BasePart)
+	local standCf = GetExerciseStandCFrame(equipmentModel, equipData, character, hrp)
+	local deltaXz = Vector3.new(hrp.Position.X - standCf.Position.X, 0, hrp.Position.Z - standCf.Position.Z)
+	equipmentModel:PivotTo(equipmentModel:GetPivot() + deltaXz)
+end
+
+local function MoveExerciseModelPrimaryPartToGround(equipmentModel: Model, character: Model)
+	local primaryPart = equipmentModel.PrimaryPart
+	if primaryPart == nil then
+		warn("[ExEquipManager] Active exercise equipment missing PrimaryPart")
+		return
+	end
+
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	rayParams.FilterDescendantsInstances = { equipmentModel, character }
+
+	local rayOrigin = primaryPart.Position + Vector3.new(0, primaryPart.Size.Y + 20, 0)
+	local rayDirection = Vector3.new(0, -(primaryPart.Size.Y + 80), 0)
+	local rayResult = workspace:Raycast(rayOrigin, rayDirection, rayParams)
+	if rayResult == nil then
+		return
+	end
+
+	local targetPrimaryPartY = rayResult.Position.Y + primaryPart.Size.Y * 0.5
+	local deltaY = targetPrimaryPartY - primaryPart.Position.Y
+	equipmentModel:PivotTo(equipmentModel:GetPivot() + Vector3.new(0, deltaY, 0))
+end
+
+local function CreateExerciseModelAtPlayer(equipData: GameConfig.ExEquipData, character: Model, hrp: BasePart): Model?
+	if exEquipModelsFolder == nil then
+		return nil
+	end
+
+	local sourceModel = exEquipModelsFolder:FindFirstChild(equipData.resourceName) :: Model?
+	if sourceModel == nil then
+		return nil
+	end
+
+	local lookVector = hrp.CFrame.LookVector
+	local flatLook = Vector3.new(lookVector.X, 0, lookVector.Z)
+	if flatLook.Magnitude <= 0 then
+		flatLook = Vector3.new(0, 0, -1)
+	end
+
+	local equipmentModel = sourceModel:Clone()
+	equipmentModel.Name = "ActiveExerciseEquip"
+	equipmentModel.Parent = workspace
+	equipmentModel:PivotTo(CFrame.lookAt(hrp.Position, hrp.Position + flatLook.Unit))
+	DisableExerciseModelPrompts(equipmentModel)
+	MoveExerciseModelStandXzToPlayer(equipmentModel, equipData, character, hrp)
+	MoveExerciseModelPrimaryPartToGround(equipmentModel, character)
+	return equipmentModel
+end
+
+--------------------------------------------------------------------
+-- 锻炼模式逻辑
+--------------------------------------------------------------------
+
+local function StartExercise(equipId: number)
+	if ClientGameInfo.IsInJumpRunway() then
+		NetMsg.FireRequestStopExercise()
+		return
+	end
+
+	-- 如果已在锻炼中，则忽略后续的开始请求，防止竞态条件
+	if isExercising then
+		return
+	end
+
+	local character: Model? = localPlayer.Character
+	if character == nil then
+		return
+	end
+
+	local humanoid: Humanoid? = character:FindFirstChildOfClass("Humanoid")
+	local hrp: BasePart? = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if humanoid == nil or hrp == nil then
+		return
+	end
+
+	local equipData = GameConfig.ExEquipDataMap[equipId]
+	if equipData == nil then
+		return
+	end
+
+	local equipmentModel = CreateExerciseModelAtPlayer(equipData, character, hrp)
+	if equipmentModel == nil then
+		return
+	end
+
+	isExercising = true
+	activeExerciseModel = equipmentModel
+
+	local standCf = GetExerciseStandCFrame(equipmentModel, equipData, character, hrp)
+	local standPos: Vector3 = standCf.Position
+	local forwardZ: Vector3 = standCf.LookVector
 
 	-- 直接通过 CFrame 精确定位，避免物理碰撞导致穿模
-	hrp.CFrame = CFrame.lookAt(standPos, standPos + forwardZ)
+	hrp.CFrame = standCf
 	hrp.AssemblyLinearVelocity = Vector3.zero
 	hrp.AssemblyAngularVelocity = Vector3.zero
 
@@ -733,7 +702,7 @@ local function StartExercise(equipId: number)
 	end
 
 	-- 隐藏器材 Prompt 按钮
-	exercisePrompt = GetExercisePromptFromModel(exercise1)
+	exercisePrompt = GetExercisePromptFromModel(equipmentModel)
 	if exercisePrompt ~= nil then
 		exercisePrompt.Enabled = false
 	end
@@ -817,23 +786,14 @@ end
 --------------------------------------------------------------------
 
 function ExEquipManager.Init()
-	-- 立即尝试初始替换（此时 LocalPlayerInfoInit 已触发，直接使用当前信息）
-	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
-	if localPlayerInfo ~= nil then
-		ReplaceExEquipModel(tonumber(localPlayerInfo.exEquipInventory.currentId) or 1)
-	end
-
 	-- 监听库存更新
 	NetMsg.ConnectNotifyPlayerExEquipInventoryUpdate(function(inventory: GameConfig.ExEquipInventory)
 		ClientGameInfo.UpdateExEquipInventory(inventory)
-		ReplaceExEquipModel(tonumber(inventory.currentId) or 1)
-	end)
-
-	-- 监听家园信息更新（homeSlot 可能异步就绪）
-	ClientMsg.ConnectPlayerHomeInfoUpdate(function(_playerId: number, _homeSlot: string, _homeInfo: any, _rebirthLevel: number?)
-		local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
-		if localPlayerInfo ~= nil then
-			ReplaceExEquipModel(tonumber(localPlayerInfo.exEquipInventory.currentId) or 1)
+		if isExercising then
+			local currentId = tonumber(inventory.currentId) or 1
+			if exerciseEquipId ~= currentId then
+				StopExerciseWithServerRequest()
+			end
 		end
 	end)
 
@@ -850,6 +810,12 @@ function ExEquipManager.Init()
 		ClientGameInfo.UpdateJumpPower(jumpPowerInfo, addExp)
 		UpdateExerciseInfoView()
 		ShowExerciseJumpPowerPopup(addExp)
+	end)
+
+	ClientMsg.ConnectCurrentGuideTypeChanged(function()
+		if ClientGameInfo.IsInJumpRunway() then
+			StopExerciseWithServerRequest()
+		end
 	end)
 
 	-- 角色死亡/移除时退出锻炼模式

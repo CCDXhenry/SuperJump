@@ -173,6 +173,16 @@ function ExEquipManager.OnRequestStartExercise(player: Player, equipId: number)
 		return
 	end
 
+	local equipIdStr = tostring(equipId)
+	if playerInfo.exEquipInventory.currentId ~= equipIdStr then
+		LogInfo(string.format("StartRejected userId=%d reason=not_current equipId=%d", userId, equipId))
+		return
+	end
+	if not playerInfo.exEquipInventory.ownedList[equipIdStr] then
+		LogInfo(string.format("StartRejected userId=%d reason=not_owned equipId=%d", userId, equipId))
+		return
+	end
+
 	local equipData = GameConfig.ExEquipDataMap[equipId]
 	if equipData == nil then
 		return

@@ -10,6 +10,8 @@ local replicatedStorage = game:GetService("ReplicatedStorage")
 
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local clientScripts = scripts:WaitForChild("Client")
+local sharedScripts = scripts:WaitForChild("Shared")
+local NetMsg = require(sharedScripts:WaitForChild("NetMsg"))
 local ClientGameInfo = require(clientScripts:WaitForChild("ClientGameInfo"))
 
 local localPlayer = players.LocalPlayer
@@ -19,6 +21,7 @@ local DebugLogMissingTool = false
 
 local ToolLookupRetryCount = 4
 local ToolLookupRetryDelaySec = 0.05
+local isExercising = false
 
 -- 数字键映射
 local KeyIndexMap: { [Enum.KeyCode]: number } = {
@@ -75,6 +78,9 @@ end
 
 -- 供数字键防抖：本次按下是否会执行收起（已装备该槽 uid 的 Tool）
 local function WouldUnequipForSlotIndex(index: number): boolean
+	if ClientGameInfo.IsInJumpRunway() then
+		return false
+	end
 	local character = localPlayer.Character
 	if not character then
 		return false
@@ -91,8 +97,43 @@ local function WouldUnequipForSlotIndex(index: number): boolean
 	return equipped ~= nil and ToolBrainrotUidEquals(equipped, queue[index].uid)
 end
 
+local function IsExEquipSlotIndex(index: number): boolean
+	if _G.BackpackFrameManager == nil then
+		return false
+	end
+	local manager = _G.BackpackFrameManager :: any
+	if manager.IsExEquipSlotIndex == nil then
+		return false
+	end
+	return manager.IsExEquipSlotIndex(index) == true
+end
+
+local function ToggleCurrentExEquip()
+	if ClientGameInfo.IsInJumpRunway() then
+		return
+	end
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if localPlayerInfo == nil then
+		return
+	end
+	if isExercising then
+		NetMsg.FireRequestStopExercise()
+		return
+	end
+	local equipId = tonumber(localPlayerInfo.exEquipInventory.currentId) or 1
+	NetMsg.FireRequestStartExercise(equipId)
+end
+
 -- 切换指定索引的 Tool
 function BackpackInputManager.ToggleTool(index: number)
+	if ClientGameInfo.IsInJumpRunway() then
+		return
+	end
+	if IsExEquipSlotIndex(index) then
+		ToggleCurrentExEquip()
+		return
+	end
+
 	local character = localPlayer.Character
 	if not character then
 		return
@@ -180,6 +221,12 @@ function BackpackInputManager.Init()
 
 			BackpackInputManager.ToggleTool(index)
 		end
+	end)
+	NetMsg.ConnectNotifyExerciseStart(function()
+		isExercising = true
+	end)
+	NetMsg.ConnectNotifyExerciseEnd(function()
+		isExercising = false
 	end)
 	--print("[BackpackInputManager] Initialized, listening keys 1-9 with debounce")
 end
