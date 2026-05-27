@@ -769,7 +769,9 @@ GameConfig.JumpRunwayDesigner = {
 	RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT = 1.7,
 	-- MISS 趴滑：HRP 中心离地高度（stud）；独立于终局趴滑
 	RUNWAY_MISS_SLIDE_PRONE_HRP_GROUND_HEIGHT = 1,
-	-- 撞宝箱后趴姿回弹：HRP 中心离地高度（stud）；用于和滑行高度对齐
+	-- 终局撞宝箱后趴姿回弹：HRP 中心离地高度（stud）；独立于 MISS 回弹
+	RUNWAY_FINAL_LAND_CHEST_BOUNCE_PRONE_HRP_GROUND_HEIGHT = 1.7,
+	-- MISS 撞宝箱后趴姿回弹：HRP 中心离地高度（stud）；用于和 MISS 滑行高度对齐
 	RUNWAY_CHEST_BOUNCE_PRONE_HRP_GROUND_HEIGHT = 1,
 	-- 撞宝箱后站立等待：额外站立高度偏移（stud）；默认 0 表示按 Humanoid + HRP 半高真实站立
 	RUNWAY_CHEST_STAND_HRP_GROUND_EXTRA_HEIGHT = 0,
@@ -1016,7 +1018,9 @@ GameConfig.JumpRunway = {
 	RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT = jumpRunwayDesigner.RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT,
 	-- MISS 趴滑：HRP 中心离地高度（stud）
 	RUNWAY_MISS_SLIDE_PRONE_HRP_GROUND_HEIGHT = jumpRunwayDesigner.RUNWAY_MISS_SLIDE_PRONE_HRP_GROUND_HEIGHT,
-	-- 撞宝箱后趴姿回弹：HRP 中心离地高度（stud）
+	-- 终局撞宝箱后趴姿回弹：HRP 中心离地高度（stud）
+	RUNWAY_FINAL_LAND_CHEST_BOUNCE_PRONE_HRP_GROUND_HEIGHT = jumpRunwayDesigner.RUNWAY_FINAL_LAND_CHEST_BOUNCE_PRONE_HRP_GROUND_HEIGHT,
+	-- MISS 撞宝箱后趴姿回弹：HRP 中心离地高度（stud）
 	RUNWAY_CHEST_BOUNCE_PRONE_HRP_GROUND_HEIGHT = jumpRunwayDesigner.RUNWAY_CHEST_BOUNCE_PRONE_HRP_GROUND_HEIGHT,
 	-- 撞宝箱后站立等待：额外站立高度偏移（stud）
 	RUNWAY_CHEST_STAND_HRP_GROUND_EXTRA_HEIGHT = jumpRunwayDesigner.RUNWAY_CHEST_STAND_HRP_GROUND_EXTRA_HEIGHT,

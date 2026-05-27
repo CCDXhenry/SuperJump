@@ -4421,11 +4421,15 @@ function RunwaySession.ApplyLittleElfChestProneBounceOrientation(humanoid: Human
 	local slideFwd = Refs.chestSlideFwdH or forward
 	local linVel = hrp.AssemblyLinearVelocity
 	local fallbackHeight = RunwaySession.ResolveProneHrpGroundHeight(cfg.RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT, 2.8)
+	local bounceHeight = cfg.RUNWAY_CHEST_BOUNCE_PRONE_HRP_GROUND_HEIGHT
+	if localState.runwaySlideKind == SlideKindFinalLanding then
+		bounceHeight = cfg.RUNWAY_FINAL_LAND_CHEST_BOUNCE_PRONE_HRP_GROUND_HEIGHT
+	end
 	local proneLocked = RunwaySession.BuildProneRunwayCFrameAtGroundHeight(
 		humanoid,
 		hrp,
 		slideFwd,
-		cfg.RUNWAY_CHEST_BOUNCE_PRONE_HRP_GROUND_HEIGHT,
+		bounceHeight,
 		fallbackHeight
 	)
 	hrp.CFrame = proneLocked
