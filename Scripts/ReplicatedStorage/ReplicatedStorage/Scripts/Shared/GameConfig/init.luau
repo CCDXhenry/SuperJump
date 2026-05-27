@@ -974,6 +974,10 @@ GameConfig.JumpRunway = {
 	RUNWAY_CHEST_BOUNCE_BACK_SPEED = jumpRunwayDesigner.RUNWAY_CHEST_BOUNCE_BACK_SPEED,
 	RUNWAY_CHEST_BOUNCE_DELAY_SEC = jumpRunwayDesigner.RUNWAY_CHEST_BOUNCE_DELAY_SEC,
 	RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC = jumpRunwayDesigner.RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC,
+	-- 最远距离记录墙体 Y 轴高度（stud）
+	BEST_DISTANCE_WALL_HEIGHT_Y = if typeof(jumpRunwayDesigner.BEST_DISTANCE_WALL_HEIGHT_Y) == "number"
+		then jumpRunwayDesigner.BEST_DISTANCE_WALL_HEIGHT_Y
+		else 1.14,
 
 	-- —— 追擊者 Chaser ——
 	CHASER_SPEED = 16,
@@ -1239,6 +1243,7 @@ export type PlayerSaveInfo = {
 	},
 	shopInfo: ShopInfo,
 	jumpPower: number,
+	jumpRunwayBestDistance: number,
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },
 	exEquipInventory: ExEquipInventory,
@@ -1300,6 +1305,7 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 			rebirthLevel = 0,
 		},
 		jumpPower = GameConfig.JumpPowerDefaultValue,
+		jumpRunwayBestDistance = 0,
 		brainrotsInfo = {
 			ownedBrainrots = {},
 			equippedBrainrots = {},
@@ -1334,6 +1340,7 @@ export type ClientLocalPlayerSaveInfo = {
 	},
 	shopInfo: ShopInfo,
 	jumpPower: number,
+	jumpRunwayBestDistance: number,
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },
 	exEquipInventory: ExEquipInventory,

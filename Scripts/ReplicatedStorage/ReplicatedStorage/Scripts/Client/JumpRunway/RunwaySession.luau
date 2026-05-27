@@ -61,6 +61,8 @@ local CHEST_FALL_MAX_HEIGHT_STUDS = 8
 local JumpRunwayLittleElfChestCarryAttr = "JumpRunwayLittleElfChestCarry"
 local StartTriggerCloseEnoughMinStuds = 24
 local StartTriggerRearmOutsideMinSec = 0.2
+local BestDistanceWallDestroyDelaySec = 3
+local BestDistanceWallLockedZ = 670.8
 
 local Refs: {
 	screenGui: ScreenGui?,
@@ -96,6 +98,10 @@ local Refs: {
 	jetpackFlame2IdleColor: Color3?,
 	jetpackDashParticleEmitters: { ParticleEmitter },
 	jetpackTemplateWarned: boolean,
+	bestDistanceWallModel: Model?,
+	bestDistanceWallDistance: number?,
+	bestDistanceWallPassed: boolean,
+	bestDistanceWallDestroyToken: number,
 	autoRotateSavedForFinalPitch: boolean?,
 	finalLandTumbleStartHrpCf: CFrame?,
 	platformStandSavedBeforeFinalLand: boolean?,
@@ -152,6 +158,10 @@ local Refs: {
 	rocketBackpackFallbackWarned = false,
 	jetpackDashParticleEmitters = {},
 	jetpackTemplateWarned = false,
+	bestDistanceWallModel = nil,
+	bestDistanceWallDistance = nil,
+	bestDistanceWallPassed = false,
+	bestDistanceWallDestroyToken = 0,
 	slideTraceTemplateWarned = false,
 	slideTraceAccumAlong = 0,
 	slideTraceSegmentList = {},
@@ -390,6 +400,23 @@ function RunwaySession.HudRefresh()
 		end
 		Refs.stateLabel.Text = string.format("State  ph=%d  slide=%s  finSub=%d  hState=%s", localState.phase, localState.runwaySlideKind, localState.finalLandSubPhase, humanoidState)
 	end
+	RunwaySession.RefreshJumpRunWayFrameStats(hrp)
+end
+
+function RunwaySession.RefreshJumpRunWayFrameStats(hrp: BasePart?)
+	local distanceStuds = 0
+	if hrp ~= nil and localState.runwayOrigin ~= nil then
+		distanceStuds = math.max(0, RunwaySession.CurrentAlongProgress(hrp))
+	end
+	local maxFuel = RunwaySession.GetExpectedPlayerMaxFuel()
+	local fuelVisible = localState.phase == Ph.Airborne
+		and localState.takeoffCount >= cfg.N_TOTAL_JUMPS
+		and maxFuel > 0
+	local isFinalSlideSecondStage = localState.phase == Ph.Slide
+		and localState.finalLandSubPhase == 2
+		and (localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss)
+	local distanceVisible = not isFinalSlideSecondStage
+	JumpRunWayFrame.RefreshRunwayStats(distanceStuds, localState.fuel, maxFuel, fuelVisible, distanceVisible)
 end
 
 function RunwaySession.RestoreRunningStateAfterFinalSegment(humanoid: Humanoid?)
@@ -1092,7 +1119,7 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 		local elapsed = math.max(0, nowClock - phaseStart)
 		local newAlong = alongStart * math.exp(-brakeK * elapsed)
 		newAlong = math.max(0, newAlong)
-		hrp.AssemblyLinearVelocity = fwdH * newAlong + Vector3.new(0, 0, 0) + perpH * perpDamp
+		hrp.AssemblyLinearVelocity = fwdH * newAlong + Vector3.new(0, 0, 0) + perpH * perpMulFrame
 		-- 子阶段 B 仅由宝箱撞击流程结束，不因低速提前 slideEndClock
 		return
 	end
@@ -2310,6 +2337,16 @@ function RunwaySession.DestroyDistanceRecorder()
 	Refs.distanceRecorderLastGroundY = nil
 end
 
+function RunwaySession.DestroyBestDistanceWall()
+	Refs.bestDistanceWallDestroyToken += 1
+	if Refs.bestDistanceWallModel ~= nil then
+		Refs.bestDistanceWallModel:Destroy()
+		Refs.bestDistanceWallModel = nil
+	end
+	Refs.bestDistanceWallDistance = nil
+	Refs.bestDistanceWallPassed = false
+end
+
 function RunwaySession.DestroyJumpRunwayRocketBackpack()
 	if Refs.jetpackVisualRoot ~= nil then
 		Refs.jetpackVisualRoot:Destroy()
@@ -2805,6 +2842,88 @@ function RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(humanoid: Humanoid
 	end
 end
 
+function RunwaySession.EnsureBestDistanceWall(forward: Vector3, origin: Vector3)
+	RunwaySession.DestroyBestDistanceWall()
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if localPlayerInfo == nil then
+		return
+	end
+	local bestDistance = localPlayerInfo.jumpRunwayBestDistance
+	if bestDistance == nil or bestDistance <= 0 then
+		return
+	end
+	local template = modelsFolder:FindFirstChild("BestDistanceWallModel")
+	if template == nil then
+		warn("[RunwaySession] BestDistanceWallModel not found in ReplicatedStorage.Models")
+		return
+	end
+	if not template:IsA("Model") then
+		warn("[RunwaySession] BestDistanceWallModel under ReplicatedStorage.Models must be a Model")
+		return
+	end
+	local wallTemplate = template :: Model
+	local wallModel = wallTemplate:Clone()
+	wallModel.Name = "BestDistanceWallModel"
+	wallModel.Parent = workspace
+
+	local primaryPart = wallModel.PrimaryPart
+	if primaryPart == nil then
+		warn("[RunwaySession] BestDistanceWallModel.PrimaryPart missing")
+		wallModel:Destroy()
+		return
+	end
+	local wallHeight = cfg.BEST_DISTANCE_WALL_HEIGHT_Y
+	local pos = origin + forward * bestDistance
+	local targetPosition = Vector3.new(pos.X, wallHeight, BestDistanceWallLockedZ)
+	local modelMoveDelta = targetPosition - primaryPart.Position
+	wallModel:PivotTo(wallModel:GetPivot() + modelMoveDelta)
+
+	local wallPart = wallModel:FindFirstChild("BestDistanceWall")
+	if wallPart ~= nil and wallPart:IsA("BasePart") then
+		wallPart.Anchored = true
+		wallPart.CanCollide = false
+		wallPart.CanTouch = false
+
+		local ui = wallPart:FindFirstChild("UI")
+		if ui ~= nil and ui:IsA("SurfaceGui") then
+			local controllerFrame = ui:FindFirstChild("ControllerFrame")
+			if controllerFrame ~= nil and controllerFrame:IsA("Frame") then
+				local textLabel = controllerFrame:FindFirstChild("Text")
+				if textLabel ~= nil and textLabel:IsA("TextLabel") then
+					textLabel.Text = string.format("Best: %.1fm", bestDistance)
+				end
+			end
+		end
+	else
+		warn("[RunwaySession] BestDistanceWallModel.BestDistanceWall missing or not a BasePart")
+	end
+
+	Refs.bestDistanceWallModel = wallModel
+	Refs.bestDistanceWallDistance = bestDistance
+	Refs.bestDistanceWallPassed = false
+end
+
+function RunwaySession.UpdateBestDistanceWall(hrp: BasePart)
+	local wallModel = Refs.bestDistanceWallModel
+	local wallDistance = Refs.bestDistanceWallDistance
+	if wallModel == nil or wallDistance == nil or Refs.bestDistanceWallPassed then
+		return
+	end
+	if RunwaySession.CurrentAlongProgress(hrp) < wallDistance then
+		return
+	end
+	Refs.bestDistanceWallPassed = true
+	JumpRunWayFrame.ShowNewRecordTip()
+	Refs.bestDistanceWallDestroyToken += 1
+	local destroyToken = Refs.bestDistanceWallDestroyToken
+	task.delay(BestDistanceWallDestroyDelaySec, function()
+		if destroyToken ~= Refs.bestDistanceWallDestroyToken then
+			return
+		end
+		RunwaySession.DestroyBestDistanceWall()
+	end)
+end
+
 function RunwaySession.ResetLocalRunToIdle()
 	local _, humanoid, hrp = RunwaySession.GetCharacterParts()
 	ClientGameInfo.SetInJumpRunway(false)
@@ -2822,6 +2941,7 @@ function RunwaySession.ResetLocalRunToIdle()
 	Refs.deferredTerminalServerPayload = nil
 	Refs.missAbortSentForThisRun = nil
 	RunwaySession.DestroyDistanceRecorder()
+	RunwaySession.DestroyBestDistanceWall()
 	RunwaySession.SlideTraceScheduleDestroyAfterRunwayEnd()
 	RunwayUiController.Destroy(RunwaySession.HudDestroy)
 	JumpRunWayFrame.EndSession()
@@ -3440,7 +3560,7 @@ function RunwaySession.ShouldBlockFinalLandingSlideEndForChest(): boolean
 	if localState.finalLandSubPhase ~= 2 then
 		return false
 	end
-	return Refs.chestRewardPresentationStarted ~= true
+	return Refs.chestSpawnedForThisRun == true and Refs.chestRewardPresentationStarted ~= true
 end
 
 function RunwaySession.ClearLittleElfChestRefs()
@@ -4023,6 +4143,10 @@ function RunwaySession.ProcessLittleElfChestHit(chestModel: Model, fwdH: Vector3
 		RunwaySession.EndChestProneBounceAndWaitForReward()
 	end)
 
+	local chestHitDistance = RunwaySession.CurrentAlongProgress(hrpT)
+	RunwaySession.DestroyBestDistanceWall()
+	ClientGameInfo.UpdateJumpRunwayBestDistance(chestHitDistance)
+	NetMsg.FireRequestJumpRunwayBestDistance(chestHitDistance)
 	NetMsg.FireRequestJumpRunwayLittleElfChestReward(chestConfigId)
 	task.spawn(RunwaySession.TryPresentLittleElfChestReward)
 end
@@ -4214,6 +4338,7 @@ function RunwaySession.UpdateTick(dt: number)
 	RunwaySession.PollBeginLineOverlapForJumpWindow()
 	RunwaySession.UpdateRunwayRingTransform(humanoid, hrp)
 	RunwaySession.UpdateDistanceRecorder(humanoid, hrp)
+	RunwaySession.UpdateBestDistanceWall(hrp)
 	if localState.phase == Ph.Airborne and localState.takeoffCount == cfg.N_TOTAL_JUMPS then
 		if localState.dashHeld and localState.fuel > 0 then
 			localState.fuel = math.max(0, localState.fuel - cfg.DASH_FUEL_DRAIN_PER_SEC * dt)
@@ -4245,7 +4370,7 @@ function RunwaySession.UpdateTick(dt: number)
 			localState.runwayForward,
 			dt,
 			nowClock,
-			HorizontalVelocity,
+			ComputeRunwayHorizontalAlongSpeed,
 			RunwaySession.IsRunwayScriptedGrounded
 		)
 	end
@@ -4777,6 +4902,7 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	RunwaySession.SlideTraceDestroy()
 	local forward = NormalizeRunwayForward(startTrigger.CFrame.RightVector)
 	local origin = startTrigger.Position
+	RunwaySession.EnsureBestDistanceWall(forward, origin)
 	RunwaySession.AlignCharacterYawToRunwayForward(hrp, forward)
 	localState.scriptedGroundHrpYBaseline = hrp.Position.Y
 	local alongBaseline = (hrp.Position - origin):Dot(forward)

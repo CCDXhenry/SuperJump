@@ -307,6 +307,7 @@ end
 
 local function LockScoreAndTeleport(player: Player, st: RunState, nowClock: number)
 	local capped = math.min(maxAlongByUserId[player.UserId] or 0, cfg.ANTI_CHEAT_DISTANCE_HARD_CAP)
+	print("[JumpRunwayServerManager] LockScoreAndTeleport for", player.Name, "capped", capped)
 	playerFinalScore[player.UserId] = capped
 	player:SetAttribute("JumpRunwayCooldownUntil", nowClock + cfg.RUN_START_COOLDOWN)
 	NotifyJumpRunway(player, Ph.ScoreLocked, capped, capped, st.runwayForward, st.runwayOrigin, true)
@@ -718,6 +719,7 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 			)
 		end
 	elseif kind == Kind.Final then
+		print("[JumpRunwayServerManager] Final report for", player.Name, "distance", maxAlongByUserId[player.UserId])
 		LockScoreAndTeleport(player, st, nowClock)
 	elseif kind == Kind.Abort then
 		-- 验证 Abort 属于当前 run：需要 lastSampleClock 存在，且 Abort 的 clientClock 不应远大于最后一个 Sample 时钟
@@ -742,6 +744,17 @@ function JumpRunwayServerManager.Init()
 	NetMsg.ConnectRequestJumpRunwayInput(OnJumpRunwayReport)
 	NetMsg.ConnectRequestJumpRunwayLittleElfChestReward(function(player: Player, chestConfigId: number)
 		HandleLittleElfChestReward(player, chestConfigId)
+	end)
+	NetMsg.ConnectRequestJumpRunwayBestDistance(function(player: Player, distance: number)
+		local verifiedDistance = math.min(
+			math.max(0, maxAlongByUserId[player.UserId] or 0),
+			math.max(0, distance),
+			cfg.ANTI_CHEAT_DISTANCE_HARD_CAP
+		)
+		if verifiedDistance <= 0 then
+			return
+		end
+		ServerGameInfo.UpdateJumpRunwayBestDistance(player, verifiedDistance)
 	end)
 	NetMsg.ConnectRequestJumpRunwayLittleElfChestStartCarry(function(player: Player, brainrotId: number?, chestConfigId: number?)
 		HandleLittleElfChestStartCarry(player, brainrotId, chestConfigId)

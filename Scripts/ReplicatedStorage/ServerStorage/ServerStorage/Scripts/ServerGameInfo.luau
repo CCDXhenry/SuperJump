@@ -119,6 +119,7 @@ function ServerGameInfo.InitPlayerInfo(
 		homeInfo = playerSaveInfo.homeInfo,
 		shopInfo = playerSaveInfo.shopInfo,
 		jumpPower = playerSaveInfo.jumpPower,
+		jumpRunwayBestDistance = playerSaveInfo.jumpRunwayBestDistance or 0,
 		brainrotsInfo = playerSaveInfo.brainrotsInfo,
 		brainrotQueue = playerSaveInfo.brainrotQueue or {},
 		exEquipInventory = playerSaveInfo.exEquipInventory or {
@@ -160,6 +161,7 @@ function ServerGameInfo.InitPlayerInfo(
 		homeInfo = playerInfo.homeInfo,
 		shopInfo = playerInfo.shopInfo,
 		jumpPower = playerInfo.jumpPower,
+		jumpRunwayBestDistance = playerInfo.jumpRunwayBestDistance,
 		brainrotsInfo = playerInfo.brainrotsInfo,
 		brainrotQueue = playerInfo.brainrotQueue,
 		exEquipInventory = playerInfo.exEquipInventory,
@@ -258,6 +260,7 @@ function ServerGameInfo.CreatePlayerSaveInfoByPlayerInfo(playerInfo: GameConfig.
 		homeInfo = playerInfo.homeInfo,
 		shopInfo = playerInfo.shopInfo,
 		jumpPower = playerInfo.jumpPower,
+		jumpRunwayBestDistance = playerInfo.jumpRunwayBestDistance,
 		brainrotsInfo = playerInfo.brainrotsInfo,
 		brainrotQueue = playerInfo.brainrotQueue,
 		guideProgressInfo = playerInfo.guideProgressInfo,
@@ -1070,6 +1073,20 @@ function ServerGameInfo.UpdatePlayerJumpPower(player: Player, addAmount: number)
 	playerInfo.jumpPower += addAmount
 	playerInfo.playerInfoChanged = true
 	NetMsg.FireNotifyPlayerJumpPowerUpdate(player, playerInfo.jumpPower, addAmount)
+end
+
+
+-- 更新玩家 JumpRunway 最远距离记录（仅当新距离更远时写入）
+function ServerGameInfo.UpdateJumpRunwayBestDistance(player: Player, distance: number)
+	print("ServerGameInfo.UpdateJumpRunwayBestDistance", player.Name, distance)
+	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	if playerInfo == nil then
+		return
+	end
+	if playerInfo.jumpRunwayBestDistance == nil or distance > playerInfo.jumpRunwayBestDistance then
+		playerInfo.jumpRunwayBestDistance = distance
+		playerInfo.playerInfoChanged = true
+	end
 end
 
 return ServerGameInfo

@@ -45,6 +45,7 @@ function ClientGameInfo.InitPlayerInfo(
 		homeInfo = localPlayerSaveInfo.homeInfo,
 		shopInfo = localPlayerSaveInfo.shopInfo,
 		jumpPower = localPlayerSaveInfo.jumpPower,
+		jumpRunwayBestDistance = localPlayerSaveInfo.jumpRunwayBestDistance or 0,
 		brainrotsInfo = localPlayerSaveInfo.brainrotsInfo,
 		brainrotQueue = localPlayerSaveInfo.brainrotQueue or {},
 		exEquipInventory = localPlayerSaveInfo.exEquipInventory or {
@@ -277,6 +278,15 @@ function ClientGameInfo.UpdateSkillLevel(skillType: number, level: number)
 
 	print("[ClientGameInfo] UpdateSkillLevel", skillType, level)
 	ClientMsg.FireLocalPlayerSkillLevelUpdate(skillType, level)
+end
+
+function ClientGameInfo.UpdateJumpRunwayBestDistance(distance: number)
+	if localPlayerInfo == nil then
+		return
+	end
+	if distance > localPlayerInfo.jumpRunwayBestDistance then
+		localPlayerInfo.jumpRunwayBestDistance = distance
+	end
 end
 
 -- 更新无障碍信息

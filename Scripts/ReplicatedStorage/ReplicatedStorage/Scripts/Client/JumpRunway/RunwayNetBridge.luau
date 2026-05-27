@@ -77,7 +77,7 @@ function RunwayNetBridge.MaybeReportFinal(
 	forward: Vector3,
 	dt: number,
 	nowClock: number,
-	horizontalVelocity: (Vector3) -> Vector3,
+	computeRunwayHorizontalAlongSpeed: (Vector3, Vector3) -> number,
 	isRunwayScriptedGrounded: (Humanoid) -> boolean
 )
 	if localState.finalSent then
@@ -89,7 +89,7 @@ function RunwayNetBridge.MaybeReportFinal(
 	end
 	local grounded = isRunwayScriptedGrounded(humanoid)
 	local v = hrp.AssemblyLinearVelocity
-	local horiz = horizontalVelocity(v).Magnitude
+	local horiz = math.abs(computeRunwayHorizontalAlongSpeed(v, forward))
 	if grounded and horiz < cfg.V_EPSILON and math.abs(v.Y) < cfg.VERTICAL_EPSILON then
 		localState.groundedStableTime += dt
 		if localState.groundedStableTime >= cfg.K_STABLE_FRAMES * (1 / 30) then

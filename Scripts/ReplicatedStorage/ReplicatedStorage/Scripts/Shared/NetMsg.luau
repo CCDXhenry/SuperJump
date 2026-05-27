@@ -107,6 +107,9 @@ local notifyWorkbenchSlotsUpdateEvent: RemoteEvent? = remoteEventsFolder:FindFir
 local notifyJumpRunwayStateEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyJumpRunwayState") :: RemoteEvent?
 local requestJumpRunwayInputEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestJumpRunwayInput") :: RemoteEvent?
 
+-- JumpRunway BestDistance：客户端上报最远距离记录
+local requestJumpRunwayBestDistanceEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestJumpRunwayBestDistance") :: RemoteEvent?
+
 -- JumpRunway LittleElfChest：请求/通知小精灵宝箱奖励
 local requestJumpRunwayLittleElfChestRewardEvent: RemoteEvent? =
 	remoteEventsFolder:FindFirstChild("RequestJumpRunwayLittleElfChestReward") :: RemoteEvent?
@@ -727,6 +730,28 @@ function NetMsg.ConnectRequestJumpRunwayLittleElfChestReward(callback: (player: 
 end
 
 -- 客户端开箱动画播完后请求服务端创建头顶携带态 brainrot
+-- JumpRunway BestDistance：客户端上报当前沿轴距离，服务端判断是否更新最远记录
+function NetMsg.FireRequestJumpRunwayBestDistance(distance: number)
+	if requestJumpRunwayBestDistanceEvent == nil then
+		warn("[NetMsg] RequestJumpRunwayBestDistance RemoteEvent missing. Create it under ReplicatedStorage.RemoteEvents.")
+		return
+	end
+	requestJumpRunwayBestDistanceEvent:FireServer(distance)
+end
+
+function NetMsg.ConnectRequestJumpRunwayBestDistance(callback: (player: Player, distance: number) -> ())
+	if requestJumpRunwayBestDistanceEvent == nil then
+		return
+	end
+	requestJumpRunwayBestDistanceEvent.OnServerEvent:Connect(function(player: Player, payload: any)
+		local distance = if typeof(payload) == "number" then payload :: number else nil
+		if distance == nil then
+			return
+		end
+		callback(player, distance)
+	end)
+end
+
 function NetMsg.FireRequestJumpRunwayLittleElfChestStartCarry(brainrotId: number?, chestConfigId: number?)
 	if requestJumpRunwayLittleElfChestStartCarryEvent == nil then
 		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
