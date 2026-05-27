@@ -5,6 +5,8 @@ local ChaserClientManager = {}
 local players = game:GetService("Players")
 local runService = game:GetService("RunService")
 local tweenService = game:GetService("TweenService")
+local physicsService = game:GetService("PhysicsService")
+local workspace = game:GetService("Workspace")
 local replicatedStorage = game:GetService("ReplicatedStorage")
 
 local scripts = replicatedStorage:WaitForChild("Scripts")
@@ -23,14 +25,96 @@ local stopped = false
 
 local chaserCollisionGroup = "Chaser"
 local playerCollisionGroup = "Player"
+local treeCollisionGroup = "Tree"
+local treeFolderName = "tree"
+local treeCollisionInitialized = false
+local treeDescendantAddedConn: RBXScriptConnection? = nil
 
 -- 管理 Chaser 所有 BasePart 的 Touched 连接，便于清理时统一断开
 local touchConns: { RBXScriptConnection } = {}
 
+local function RegisterCollisionGroupIfNeeded(groupName: string)
+	pcall(function()
+		physicsService:RegisterCollisionGroup(groupName)
+	end)
+end
+
+local function SetCollisionGroup(part: BasePart, groupName: string)
+	pcall(function()
+		part.CollisionGroup = groupName
+	end)
+end
+
+local function ConfigureCollisionGroups()
+	RegisterCollisionGroupIfNeeded(chaserCollisionGroup)
+	RegisterCollisionGroupIfNeeded(playerCollisionGroup)
+	RegisterCollisionGroupIfNeeded(treeCollisionGroup)
+	pcall(function()
+		physicsService:CollisionGroupSetCollidable(chaserCollisionGroup, treeCollisionGroup, false)
+	end)
+end
+
+local function GetTreeFolder(): Folder?
+	local treeFolder = workspace:FindFirstChild(treeFolderName)
+	if treeFolder ~= nil and treeFolder:IsA("Folder") then
+		return treeFolder
+	end
+	return nil
+end
+
+local function SetTreeCollisionGroupForInstance(instance: Instance)
+	if instance:IsA("BasePart") then
+		SetCollisionGroup(instance, treeCollisionGroup)
+		instance.CanTouch = true
+	end
+end
+
+local function ConfigureTreeCollisionGroup()
+	ConfigureCollisionGroups()
+	local treeFolder = GetTreeFolder()
+	if treeFolder == nil then
+		return
+	end
+	for _, descendant in ipairs(treeFolder:GetDescendants()) do
+		SetTreeCollisionGroupForInstance(descendant)
+	end
+	if treeDescendantAddedConn ~= nil then
+		treeDescendantAddedConn:Disconnect()
+	end
+	treeDescendantAddedConn = treeFolder.DescendantAdded:Connect(SetTreeCollisionGroupForInstance)
+	treeCollisionInitialized = true
+end
+
+local function EnsureTreeCollisionGroup()
+	if treeCollisionInitialized then
+		return
+	end
+	ConfigureTreeCollisionGroup()
+end
+
+local function IsTreePart(part: BasePart): boolean
+	local treeFolder = GetTreeFolder()
+	return treeFolder ~= nil and part:IsDescendantOf(treeFolder)
+end
+
+local function IsChaserOverlappingTree(chaserHrp: BasePart): boolean
+	local treeFolder = GetTreeFolder()
+	if treeFolder == nil then
+		return false
+	end
+	local overlap = OverlapParams.new()
+	overlap.FilterType = Enum.RaycastFilterType.Include
+	overlap.FilterDescendantsInstances = { treeFolder }
+	overlap.MaxParts = 8
+	local boxSize = chaserHrp.Size + Vector3.new(2, 3, 2)
+	local parts = workspace:GetPartBoundsInBox(chaserHrp.CFrame, boxSize, overlap)
+	return #parts > 0
+end
+
 local function SetPlayerCollisionGroup(character: Model)
 	for _, descendant in ipairs(character:GetDescendants()) do
 		if descendant:IsA("BasePart") then
-			descendant.CollisionGroup = playerCollisionGroup
+			SetCollisionGroup(descendant, playerCollisionGroup)
 		end
 	end
 end
@@ -81,6 +165,7 @@ end
 
 function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3, speedOverride: number?)
 	InternalCleanupFull()
+	EnsureTreeCollisionGroup()
 
 	if chaserTemplate == nil then
 		warn("[ChaserClientManager] Chaser template not found under ReplicatedStorage.Models.Chaser")
@@ -126,6 +211,16 @@ function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3, 
 	if typeof(chaserSpeed) ~= "number" or chaserSpeed ~= chaserSpeed then
 		chaserSpeed = 16
 	end
+	local treeSlowScale = cfg.CHASER_TREE_SLOW_SCALE
+	if typeof(treeSlowScale) ~= "number" or treeSlowScale ~= treeSlowScale then
+		treeSlowScale = 0.5
+	end
+	treeSlowScale = math.clamp(treeSlowScale, 0.05, 1)
+	local treeSlowDuration = cfg.CHASER_TREE_SLOW_DURATION_SEC
+	if typeof(treeSlowDuration) ~= "number" or treeSlowDuration ~= treeSlowDuration or treeSlowDuration <= 0 then
+		treeSlowDuration = 0.35
+	end
+	local treeSlowUntilClock = 0
 
 	-- 设置玩家角色的碰撞组
 	EnsurePlayerCollisionGroup()
@@ -142,7 +237,7 @@ function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3, 
 	-- 通过 Touched 事件检测接触来击杀玩家
 	for _, descendant in ipairs(chaser:GetDescendants()) do
 		if descendant:IsA("BasePart") then
-			descendant.CollisionGroup = chaserCollisionGroup
+			SetCollisionGroup(descendant, chaserCollisionGroup)
 			descendant.CanCollide = true
 			descendant.CanTouch = true
 			local conn = descendant.Touched:Connect(function(hit: BasePart)
@@ -150,6 +245,10 @@ function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3, 
 					return
 				end
 				if not hit or not hit.Parent then
+					return
+				end
+				if IsTreePart(hit) then
+					treeSlowUntilClock = math.max(treeSlowUntilClock, os.clock() + treeSlowDuration)
 					return
 				end
 				local hitCharacter = hit:FindFirstAncestorOfClass("Model")
@@ -203,6 +302,9 @@ function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3, 
 	stopped = false
 	faded = false
 
+	local chaseStartClock = os.clock() + math.max(0, cfg.CHASER_START_DELAY_SEC or 3)
+	local nextHopClock = os.clock()
+
 	heartbeatConn = runService.Heartbeat:Connect(function(dt: number)
 		if stopped or faded then
 			return
@@ -227,7 +329,26 @@ function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3, 
 			return
 		end
 
-		-- 通过 Humanoid:MoveTo 驱动移动，自动播放步行动画
+		local nowClock = os.clock()
+		if IsChaserOverlappingTree(chaserHrpLive) then
+			treeSlowUntilClock = math.max(treeSlowUntilClock, nowClock + treeSlowDuration)
+		end
+		local targetWalkSpeed = chaserSpeed
+		if nowClock < treeSlowUntilClock then
+			targetWalkSpeed = chaserSpeed * treeSlowScale
+		end
+		if chaserHumanoidLive.WalkSpeed ~= targetWalkSpeed then
+			chaserHumanoidLive.WalkSpeed = targetWalkSpeed
+		end
+		if nowClock < chaseStartClock then
+			chaserHumanoidLive:MoveTo(chaserHrpLive.Position)
+			if nowClock >= nextHopClock then
+				chaserHumanoidLive.Jump = true
+				nextHopClock = nowClock + 0.65
+			end
+			return
+		end
+
 		chaserHumanoidLive:MoveTo(currentHrp.Position)
 	end)
 end
@@ -312,5 +433,13 @@ function ChaserClientManager.CleanupChaser()
 	end
 	InternalCleanupFull()
 end
+
+ConfigureCollisionGroups()
+task.defer(ConfigureTreeCollisionGroup)
+workspace.ChildAdded:Connect(function(child: Instance)
+	if child.Name == treeFolderName and child:IsA("Folder") then
+		task.defer(ConfigureTreeCollisionGroup)
+	end
+end)
 
 return ChaserClientManager

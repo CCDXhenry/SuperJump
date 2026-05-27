@@ -679,6 +679,8 @@ GameConfig.JumpRunwayDesigner = {
 	N_TOTAL_JUMPS = 3,
 	-- 单次起跳窗时长(s)；↑ 更容易踩线、节奏更松；↓ 更苛刻
 	T_WINDOW = 1.35,
+	-- 起跳输入最小间隔(s)；↑ 更防连点误触，↓ 响应更快
+	JUMP_INPUT_COOLDOWN_SEC = 0.5,
 	-- 窗内 Perfect 时间占比上限；↑ Perfect 窗口更宽
 	JUMP_WINDOW_RATING_PERFECT_MAX_FRAC = 1 / 3,
 	-- 窗内 Ok 时间占比上限；↑ Ok 窗口更宽
@@ -779,6 +781,8 @@ GameConfig.JumpRunwayDesigner = {
 	RUNWAY_CAMERA_SMOOTH_SPEED = 3,
 	-- 玩法摄像机 FOV；↑ 视野更广
 	RUNWAY_CAMERA_FOV = 60,
+	-- 解除脚本摄像机后过渡回玩家控制的插值时长（秒）；0 表示立即恢复
+	RUNWAY_CAMERA_RELEASE_TRANSITION_SEC = 0.35,
 
 	-- ═══════════════════════════════════════
 	-- —— ⑦ 终局小精灵宝箱 ——
@@ -812,6 +816,8 @@ GameConfig.JumpRunway = {
 	-- —— 起跳窗：时间窗、线重叠、预落地、窗内漂移 ——
 	-- BeginLine / 链式起跳窗有效时长（秒）；略增可更早、更宽响应（与 PRELAND / OVERLAP_PADDING 配合）
 	T_WINDOW = jumpRunwayDesigner.T_WINDOW,
+	-- 起跳输入最小间隔（秒），防止快速连点在同一物理窗口内触发多次起跳
+	JUMP_INPUT_COOLDOWN_SEC = jumpRunwayDesigner.JUMP_INPUT_COOLDOWN_SEC,
 	-- BeginLine 与角色重叠判定：相对线 Part 的 Size 各轴外扩（stud），薄板/高速时比纯 Touched 更早进入起跳窗
 	BEGIN_LINE_OVERLAP_PADDING_STUDS = 1.0,
 	-- 起跳窗内 deltaT/T_WINDOW：前 1/3 为 Perfect，至 2/3 为 Ok，之后为 Late
@@ -900,6 +906,8 @@ GameConfig.JumpRunway = {
 	RUNWAY_FINAL_PITCH_SMOOTH_RATE = 18,
 	-- 终局俯仰：对角速度按帧衰减（越大越快消旋）；0 表示仍每帧清零角速度
 	RUNWAY_FINAL_PITCH_ANGULAR_DAMP_RATE = 14,
+	-- 跑道普通阶段被障碍碰撞打歪后，HRP 朝向回正到跑道前向的插值速率
+	RUNWAY_ORIENTATION_CORRECT_RATE = 18,
 
 	-- —— 中途摔滑 Slide ——
 	SLIDE_DURATION_SEC = 2.0,
@@ -989,6 +997,10 @@ GameConfig.JumpRunway = {
 	RUNWAY_FINAL_LAND_PHASE_A_MIN_POP_VY = jumpRunwayDesigner.RUNWAY_FINAL_LAND_PHASE_A_MIN_POP_VY,
 	RUNWAY_FINAL_LAND_PHASE_A_TOUCHDOWN_SCRIPT_MAX_VY = -6,
 	RUNWAY_FINAL_LAND_PHASE_A_TOUCHDOWN_FULLBODY_MAX_ABS_VY = 85,
+	RUNWAY_FINAL_LAND_PHASE_A_GROUNDED_STUCK_SEC = 0.35,
+	RUNWAY_FINAL_LAND_PHASE_A_MAX_SEC = 6,
+	RUNWAY_FINAL_LAND_PHASE_A_GROUNDED_BRAKE_EXP = 2.4,
+	RUNWAY_FINAL_LAND_PHASE_A_LOOSE_TOUCHDOWN_HIP_MULT = 1.5,
 	RUNWAY_FINAL_LAND_PHASE_A_TOUCHDOWN_FEET_MAX_ABOVE_BASELINE_STUDS = 0,
 	RUNWAY_FINAL_LAND_PHASE_A_TOUCHDOWN_FEET_FALLBACK_MAX_DIST_STUDS = 4,
 	-- 终局翻滚：为 true 时 A 阶段脚本水平速仅保留沿跑道前向（侧向清零）；为 false 时首帧侧向乘 0.35 后按帧衰减
@@ -1029,6 +1041,7 @@ GameConfig.JumpRunway = {
 	RUNWAY_CAMERA_LOOK_HEIGHT = 0,
 	RUNWAY_CAMERA_SMOOTH_SPEED = jumpRunwayDesigner.RUNWAY_CAMERA_SMOOTH_SPEED,
 	RUNWAY_CAMERA_FOV = jumpRunwayDesigner.RUNWAY_CAMERA_FOV,
+	RUNWAY_CAMERA_RELEASE_TRANSITION_SEC = jumpRunwayDesigner.RUNWAY_CAMERA_RELEASE_TRANSITION_SEC,
 
 	-- —— 终局小精灵宝箱 ——
 	RUNWAY_CHEST_CONFIG_ID = jumpRunwayDesigner.RUNWAY_CHEST_CONFIG_ID,
@@ -1046,6 +1059,14 @@ GameConfig.JumpRunway = {
 	CHASER_SPEED = 16,
 	CHASER_SPAWN_AHEAD_STUDS = 50,
 	CHASER_FADE_DURATION_SEC = 1.5,
+	CHASER_START_DELAY_SEC = 3,
+	CHASER_TREE_SLOW_SCALE = 0.5,
+	CHASER_TREE_SLOW_DURATION_SEC = 0.35,
+	RUNWAY_BLOCKED_FORWARD_RAY_DISTANCE = 3.5,
+	RUNWAY_BLOCKED_MIN_STUCK_SEC = 0.35,
+	RUNWAY_BLOCKED_MAX_ALONG_SPEED = 2.5,
+	RUNWAY_BLOCKED_MIN_PROGRESS_STUDS = 0.35,
+	RUNWAY_JUMP_WINDOW_GROUNDED_HOLD_SEC = 0.12,
 }
 
 --- 跑道单段跳跃水平限速：max = baseSpeed + cumulativeRatingBonus（clamp 至 ANTI_CHEAT_MAX_ALONG_SPEED）；min = max - reductionDelta。

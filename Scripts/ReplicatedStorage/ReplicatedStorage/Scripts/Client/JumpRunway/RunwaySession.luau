@@ -154,6 +154,10 @@ local Refs: {
 	startTriggerPlayerWasInsideVolume: boolean?,
 	startTriggerOutsideVolumeClock: number?,
 	deferredTerminalServerPayload: NetMsg.JumpRunwayStatePayload?,
+	forwardBlockedStartClock: number?,
+	forwardBlockedStartAlong: number?,
+	lastRunwayTakeoffClock: number?,
+	finalLandPhaseADebugNextClock: number,
 } = {
 	finalTakeoffForceFreefallUntilClock = 0,
 	initDone = false,
@@ -208,6 +212,10 @@ local Refs: {
 	startTriggerOutsideVolumeClock = nil,
 	deferredTerminalServerPayload = nil,
 	missAbortSentForThisRun = nil,
+	forwardBlockedStartClock = nil,
+	forwardBlockedStartAlong = nil,
+	lastRunwayTakeoffClock = nil,
+	finalLandPhaseADebugNextClock = 0,
 }
 
 local localState: RunwayLocalState = RunwayStateStore.CreateDefault(Ph, SlideKindStandard)
@@ -289,6 +297,149 @@ local ComputeRunwayHorizontalAlongSpeed = RunwayPhysicsController.ComputeRunwayH
 
 function RunwaySession.CurrentAlongProgress(hrp: BasePart): number
 	return RunwayPhysicsController.CurrentAlongProgress(hrp, localState.runwayOrigin, localState.runwayForward, localState.alongBaseline)
+end
+
+function RunwaySession.BuildRunwayObstacleRaycastExcludeList(character: Model): { Instance }
+	local excludeList: { Instance } = { character }
+	local localFx = workspace:FindFirstChild("JumpRunwayLocalFx")
+	if localFx ~= nil then
+		table.insert(excludeList, localFx)
+	end
+	if Refs.chestSpawnedModel ~= nil then
+		table.insert(excludeList, Refs.chestSpawnedModel :: Model)
+	end
+	if Refs.bestDistanceWallModel ~= nil then
+		table.insert(excludeList, Refs.bestDistanceWallModel :: Model)
+	end
+	return excludeList
+end
+
+function RunwaySession.RaycastRunwayForwardBlock(character: Model, hrp: BasePart, forward: Vector3): RaycastResult?
+	local rayDistance = cfg.RUNWAY_BLOCKED_FORWARD_RAY_DISTANCE
+	if typeof(rayDistance) ~= "number" or rayDistance ~= rayDistance or rayDistance <= 0 then
+		rayDistance = 3.5
+	end
+	local rp = RaycastParams.new()
+	rp.FilterType = Enum.RaycastFilterType.Exclude
+	rp.FilterDescendantsInstances = RunwaySession.BuildRunwayObstacleRaycastExcludeList(character)
+	local origin = hrp.Position + Vector3.new(0, 0.2, 0)
+	local hit = workspace:Raycast(origin, forward * rayDistance, rp)
+	if hit == nil or not hit.Instance:IsA("BasePart") then
+		return nil
+	end
+	if not hit.Instance.CanCollide then
+		return nil
+	end
+	return hit
+end
+
+function RunwaySession.ResetRunwayForwardBlockedState()
+	Refs.forwardBlockedStartClock = nil
+	Refs.forwardBlockedStartAlong = nil
+end
+
+function RunwaySession.DebugFinalLandPhaseA(reason: string, humanoid: Humanoid?, hrp: BasePart?, nowClock: number)
+	if cfg.DEBUG ~= true then
+		return
+	end
+	if nowClock < Refs.finalLandPhaseADebugNextClock then
+		return
+	end
+	Refs.finalLandPhaseADebugNextClock = nowClock + 0.25
+	local okFeet = false
+	local distFeet = 1e9
+	local fullBody = false
+	local looseGround = false
+	local floorMaterial = Enum.Material.Air
+	local humanoidState = "nil"
+	local vy = 0
+	local alongVelocity = 0
+	if humanoid ~= nil then
+		floorMaterial = humanoid.FloorMaterial
+		humanoidState = humanoid:GetState().Name
+		okFeet, distFeet = RunwaySession.RaycastFeet(humanoid)
+	end
+	if humanoid ~= nil and hrp ~= nil then
+		local forward = NormalizeRunwayForward(localState.runwayForward)
+		fullBody = RunwaySession.IsRunwayFinalLandFullBodyGrounded(humanoid, hrp)
+		looseGround = RunwaySession.IsRunwayFinalLandPhaseAGroundedLoose(humanoid, hrp)
+		vy = hrp.AssemblyLinearVelocity.Y
+		alongVelocity = ComputeRunwayHorizontalAlongSpeed(hrp.AssemblyLinearVelocity, forward)
+	end
+	local groundedAge = if localState.finalLandPhaseAGroundedStartClock ~= nil
+		then nowClock - (localState.finalLandPhaseAGroundedStartClock :: number)
+		else -1
+	print(
+		string.format(
+			"[RunwaySession][FinalA] reason=%s sub=%d pop=%d lockedAlong=%.2f velAlong=%.2f vy=%.2f useAir=%s leftGround=%s groundedAge=%.2f okFeet=%s distFeet=%.2f fullBody=%s looseGround=%s floor=%s hState=%s slideElapsed=%.2f",
+			reason,
+			localState.finalLandSubPhase,
+			localState.finalLandPhaseAPopCount,
+			localState.finalLandLockedTumbleAlong,
+			alongVelocity,
+			vy,
+			tostring(localState.finalLandTumbleUseAirClock),
+			tostring(localState.finalLandTumbleLeftGround),
+			groundedAge,
+			tostring(okFeet),
+			distFeet,
+			tostring(fullBody),
+			tostring(looseGround),
+			floorMaterial.Name,
+			humanoidState,
+			nowClock - localState.slideStartClock
+		)
+	)
+end
+
+function RunwaySession.ProcessRunwayForwardBlocked(character: Model, humanoid: Humanoid, hrp: BasePart, nowClock: number)
+	if localState.phase ~= Ph.Airborne then
+		RunwaySession.ResetRunwayForwardBlockedState()
+		return
+	end
+	local forward = NormalizeRunwayForward(localState.runwayForward)
+	if RunwaySession.RaycastRunwayForwardBlock(character, hrp, forward) == nil then
+		RunwaySession.ResetRunwayForwardBlockedState()
+		return
+	end
+	local currentAlong = RunwaySession.CurrentAlongProgress(hrp)
+	if Refs.forwardBlockedStartClock == nil or Refs.forwardBlockedStartAlong == nil then
+		Refs.forwardBlockedStartClock = nowClock
+		Refs.forwardBlockedStartAlong = currentAlong
+		return
+	end
+	local minStuckSec = cfg.RUNWAY_BLOCKED_MIN_STUCK_SEC
+	if typeof(minStuckSec) ~= "number" or minStuckSec ~= minStuckSec or minStuckSec < 0 then
+		minStuckSec = 0.35
+	end
+	if nowClock - (Refs.forwardBlockedStartClock :: number) < minStuckSec then
+		return
+	end
+	local minProgress = cfg.RUNWAY_BLOCKED_MIN_PROGRESS_STUDS
+	if typeof(minProgress) ~= "number" or minProgress ~= minProgress or minProgress < 0 then
+		minProgress = 0.35
+	end
+	if currentAlong - (Refs.forwardBlockedStartAlong :: number) > minProgress then
+		Refs.forwardBlockedStartClock = nowClock
+		Refs.forwardBlockedStartAlong = currentAlong
+		return
+	end
+	local maxAlongSpeed = cfg.RUNWAY_BLOCKED_MAX_ALONG_SPEED
+	if typeof(maxAlongSpeed) ~= "number" or maxAlongSpeed ~= maxAlongSpeed or maxAlongSpeed < 0 then
+		maxAlongSpeed = 2.5
+	end
+	local alongSpeed = math.abs(ComputeRunwayHorizontalAlongSpeed(hrp.AssemblyLinearVelocity, forward))
+	if alongSpeed > maxAlongSpeed and currentAlong - (Refs.forwardBlockedStartAlong :: number) > minProgress * 0.25 then
+		Refs.forwardBlockedStartClock = nowClock
+		Refs.forwardBlockedStartAlong = currentAlong
+		return
+	end
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	hrp.AssemblyAngularVelocity = Vector3.zero
+	RunwaySession.CancelJumpWindowTimeoutUntilGroundedAgain()
+	RunwaySession.SnapCharacterHrpToGround(humanoid, hrp, forward)
+	JumpRunWayFrame.ShowMiss()
+	RunwaySession.EnterSlidePhase(nowClock, SlideKindMiss, humanoid)
 end
 
 function RunwaySession.HudDestroy()
@@ -889,6 +1040,32 @@ function RunwaySession.CFrameAtPositionWithSameOrientation(cf: CFrame, pos: Vect
 	return CFrame.new(pos) * CFrame.fromOrientation(rx, ry, rz)
 end
 
+function RunwaySession.ApplyRunwayYawCorrection(hrp: BasePart, forward: Vector3, dt: number)
+	if localState.phase == Ph.Slide then
+		return
+	end
+	if localState.phase == Ph.Airborne and localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
+		return
+	end
+	local f = Vector3.new(forward.X, 0, forward.Z)
+	if f.Magnitude < 1e-4 then
+		return
+	end
+	f = f.Unit
+	local pos = hrp.Position
+	local linVel = hrp.AssemblyLinearVelocity
+	local targetCf = CFrame.lookAt(pos, pos + f, Vector3.yAxis)
+	local rate = cfg.RUNWAY_ORIENTATION_CORRECT_RATE
+	if typeof(rate) ~= "number" or rate ~= rate then
+		rate = 18
+	end
+	local alpha = if rate <= 0 then 1 else 1 - math.exp(-rate * dt)
+	local blendedRot = hrp.CFrame.Rotation:Lerp(targetCf.Rotation, alpha)
+	hrp.CFrame = CFrame.fromMatrix(pos, blendedRot.XVector, blendedRot.YVector, blendedRot.ZVector)
+	hrp.AssemblyLinearVelocity = linVel
+	hrp.AssemblyAngularVelocity = hrp.AssemblyAngularVelocity * math.exp(-math.max(0, rate) * dt)
+end
+
 function RunwaySession.BuildProneRunwayCFrame(pos: Vector3, runwayForward: Vector3): CFrame
 	local f = runwayForward
 	if f.Magnitude < 1e-4 then
@@ -1103,6 +1280,7 @@ function RunwaySession.ApplyFinalLandPhaseAPop(hrp: BasePart, fwdH: Vector3, now
 	localState.finalLandTumbleUseAirClock = useAirClock
 	localState.finalLandTumbleAirAccumSec = 0
 	localState.finalLandTumbleLeftGround = false
+	localState.finalLandPhaseAGroundedStartClock = nil
 	if vyPop > 1e-5 then
 		localState.jumpBoostVy = vyPop
 		localState.jumpBoostUntilClock = nowClock + cfg.RUNWAY_JUMP_BOOST_HOLD_SEC
@@ -1142,12 +1320,15 @@ function RunwaySession.StartFinalLandPronePhase(nowClock: number, hrp: BasePart?
 	if localState.finalLandSubPhase ~= 1 then
 		return
 	end
+	local _, humanoidDbg, _ = RunwaySession.GetCharacterParts()
+	RunwaySession.DebugFinalLandPhaseA("enter_phase_b", humanoidDbg, hrp, nowClock)
 	localState.finalLandSubPhase = 2
 	localState.finalLandPronePhaseStartClock = nowClock
 	localState.finalLandTumbleAirAccumSec = math.max(
 		localState.finalLandTumbleAirAccumSec,
 		localState.finalLandTumblePredAirTimeSec
 	)
+	localState.finalLandPhaseAGroundedStartClock = nil
 	if hrp ~= nil and forward ~= nil then
 		localState.finalLandProneBStage = 1
 		local fwdHInit = Vector3.new(forward.X, 0, forward.Z)
@@ -1256,6 +1437,7 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 	end
 	if not localState.finalLandTumbleImpulseApplied then
 		RunwaySession.ApplyFinalLandPhaseAPop(hrp, fwdH, nowClock)
+		RunwaySession.DebugFinalLandPhaseA("apply_first_pop", humanoid, hrp, nowClock)
 		-- Physics 状态下 Humanoid 引擎会抵抗竖直速度；小幅抬升 HRP 确保离开地面碰撞
 		if hrp.AssemblyLinearVelocity.Y > 1 then
 			local poppedCf = hrp.CFrame + Vector3.new(0, 0.3, 0)
@@ -1266,23 +1448,37 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 		return
 	end
 	local fullGroundTrack = RunwaySession.IsRunwayFinalLandFullBodyGrounded(humanoid, hrp)
+	local looseGroundTrack = RunwaySession.IsRunwayFinalLandPhaseAGroundedLoose(humanoid, hrp)
+	if looseGroundTrack then
+		RunwaySession.DebugFinalLandPhaseA("physics_loose_ground_before_brake", humanoid, hrp, nowClock)
+	end
 	if localState.finalLandTumbleUseAirClock then
-		if not fullGroundTrack then
+		if not looseGroundTrack then
 			localState.finalLandTumbleLeftGround = true
 		end
 	else
 		localState.finalLandTumbleAirAccumSec += dt
 	end
 	local alongSpd = math.clamp(localState.finalLandLockedTumbleAlong, 0, cfg.ANTI_CHEAT_MAX_ALONG_SPEED)
+	if looseGroundTrack then
+		local brakeRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_GROUNDED_BRAKE_EXP
+		local brakeK = (typeof(brakeRaw) == "number" and brakeRaw == brakeRaw and brakeRaw > 0) and brakeRaw or 2.4
+		alongSpd *= math.exp(-brakeK * dt)
+		localState.finalLandLockedTumbleAlong = alongSpd
+		RunwaySession.DebugFinalLandPhaseA("physics_loose_ground_after_brake", humanoid, hrp, nowClock)
+	end
 	local vyPhaseA = RunwaySession.GetBoostedVerticalY(v.Y)
 	-- Physics 状态下 Humanoid 引擎会抵抗竖直速度；如果尚未离地且应有弹跳，保持最小离地速度
 	if
 		localState.finalLandTumbleUseAirClock
 		and not localState.finalLandTumbleLeftGround
 		and localState.finalLandPhaseAPopCount >= 1
+		and not looseGroundTrack
 	then
 		local minVyKeep = cfg.RUNWAY_FINAL_LAND_PHASE_A_MIN_POP_VY
 		vyPhaseA = math.max(vyPhaseA, minVyKeep)
+	elseif looseGroundTrack and localState.finalLandTumbleUseAirClock and not localState.finalLandTumbleLeftGround then
+		vyPhaseA = math.min(vyPhaseA, 0)
 	end
 	local horiz = HorizontalVelocity(v)
 	local alongH = horiz:Dot(fwdH)
@@ -1352,7 +1548,10 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 	localState.lineJumpWindowExpireAt = nil
 	localState.tHudStart = nil
 	localState.firstGroundedInWindowClock = nil
+	localState.jumpWindowGroundedStartClock = nil
 	localState.chainJumpWindowAwaitingGround = false
+	Refs.forwardBlockedStartClock = nil
+	Refs.forwardBlockedStartAlong = nil
 	localState.slideStartClock = nowClock
 	-- 进入终局 Slide 时清除冲刺状态，避免 Physics 状态下的残留干扰
 	localState.dashHeld = false
@@ -1376,6 +1575,7 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 		localState.finalLandTumbleAirAccumSec = 0
 		localState.finalLandTumbleLeftGround = false
 		localState.finalLandTumbleUseAirClock = false
+		localState.finalLandPhaseAGroundedStartClock = nil
 		RunwaySession.ClearFinalLandingSlideModuleLocals()
 		localState.slideEndClock = nowClock + 7200
 		localState.finalLandTumbleRollAngleRad = 0
@@ -1415,6 +1615,7 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 		localState.finalLandTumbleAirAccumSec = 0
 		localState.finalLandTumbleLeftGround = false
 		localState.finalLandTumbleUseAirClock = false
+		localState.finalLandPhaseAGroundedStartClock = nil
 		RunwaySession.ClearFinalLandingSlideModuleLocals()
 		localState.finalLandTumbleRollAngleRad = 0
 		localState.finalLandProneBStage = 1
@@ -1487,6 +1688,7 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 		localState.finalLandTumbleAirAccumSec = 0
 		localState.finalLandTumbleLeftGround = false
 		localState.finalLandTumbleUseAirClock = false
+		localState.finalLandPhaseAGroundedStartClock = nil
 		localState.finalLandLockedTumbleAlong = 0
 		localState.finalLandTumblePrevPopVy = 0
 		localState.finalLandTumbleRollAngleRad = 0
@@ -1974,6 +2176,32 @@ end
 function RunwaySession.IsRunwayFinalLandPhaseAGeometricTouchdown(humanoid: Humanoid, hrp: BasePart): boolean
 	return RunwaySession.IsRunwayFinalLandFullBodyGrounded(humanoid, hrp)
 		or RunwaySession.IsRunwayFinalLandPhaseAFeetRayTouchdown(humanoid)
+end
+
+function RunwaySession.GetFinalLandPhaseALooseTouchdownDistance(humanoid: Humanoid): number
+	local touchdownDistRaw = cfg.RUNWAY_FINAL_LAND_TOUCHDOWN_FEET_MAX_DIST_STUDS
+	local touchdownDist = (typeof(touchdownDistRaw) == "number" and touchdownDistRaw == touchdownDistRaw and touchdownDistRaw > 0)
+		and touchdownDistRaw
+		or 2
+	local hipMultRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_LOOSE_TOUCHDOWN_HIP_MULT
+	local hipMult = (typeof(hipMultRaw) == "number" and hipMultRaw == hipMultRaw and hipMultRaw > 0)
+		and hipMultRaw
+		or 1.5
+	return math.max(touchdownDist, humanoid.HipHeight * hipMult + cfg.RUNWAY_GROUND_RAY_ORIGIN_Y)
+end
+
+function RunwaySession.IsRunwayFinalLandPhaseAGroundedLoose(humanoid: Humanoid, hrp: BasePart): boolean
+	if humanoid.FloorMaterial ~= Enum.Material.Air then
+		return true
+	end
+	if RunwaySession.IsRunwayFinalLandFullBodyGrounded(humanoid, hrp) then
+		return true
+	end
+	local okFeet, distFeet = RunwaySession.RaycastFeet(humanoid)
+	if not okFeet then
+		return false
+	end
+	return distFeet <= RunwaySession.GetFinalLandPhaseALooseTouchdownDistance(humanoid)
 end
 
 function RunwaySession.IsRunwayScriptedGrounded(humanoid: Humanoid): boolean
@@ -3086,6 +3314,9 @@ function RunwaySession.ResetLocalRunToIdle()
 	Refs.chestPostOpenTeleportDelayToken += 1
 	Refs.deferredTerminalServerPayload = nil
 	Refs.missAbortSentForThisRun = nil
+	Refs.forwardBlockedStartClock = nil
+	Refs.forwardBlockedStartAlong = nil
+	Refs.lastRunwayTakeoffClock = nil
 	RunwaySession.DestroyDistanceRecorder()
 	RunwaySession.DestroyBestDistanceWall()
 	RunwaySession.SlideTraceScheduleDestroyAfterRunwayEnd()
@@ -3152,12 +3383,35 @@ function RunwaySession.WindowDriftPhysicsActive(humanoid: Humanoid, nowClock: nu
 	return nowClock - (localState.firstGroundedInWindowClock :: number) >= cfg.RUNWAY_JUMPWINDOW_DRIFT_DELAY_AFTER_TOUCH_SEC
 end
 
--- 线窗触线 / 链式武装后：仅在 IsRunwayScriptedGrounded 首次为真时启动 T_WINDOW 与 tHudStart
-function RunwaySession.MaybeStartJumpWindowTimingFromGround(humanoid: Humanoid, nowClock: number)
+function RunwaySession.IsJumpWindowStableGrounded(humanoid: Humanoid, nowClock: number): boolean
 	if not RunwaySession.IsRunwayScriptedGrounded(humanoid) then
-		return
+		localState.jumpWindowGroundedStartClock = nil
+		return false
 	end
+	if localState.jumpWindowGroundedStartClock == nil then
+		localState.jumpWindowGroundedStartClock = nowClock
+	end
+	local holdSec = cfg.RUNWAY_JUMP_WINDOW_GROUNDED_HOLD_SEC
+	if typeof(holdSec) ~= "number" or holdSec ~= holdSec or holdSec < 0 then
+		holdSec = 0.12
+	end
+	return nowClock - (localState.jumpWindowGroundedStartClock :: number) >= holdSec
+end
+
+function RunwaySession.CancelJumpWindowTimeoutUntilGroundedAgain()
+	localState.lineJumpWindowExpireAt = nil
+	localState.predictJumpWindowUntil = nil
+	localState.tHudStart = nil
+	localState.firstGroundedInWindowClock = nil
+	localState.jumpWindowGroundedStartClock = nil
+end
+
+-- 线窗触线后仍按稳定贴地启动；链式窗按独立高度阈值启动，避免与贴地射线耦合。
+function RunwaySession.MaybeStartJumpWindowTiming(humanoid: Humanoid, nowClock: number)
 	if localState.phase == Ph.JumpWindow and not localState.lineWindowConsumed and localState.tHudStart == nil then
+		if not RunwaySession.IsJumpWindowStableGrounded(humanoid, nowClock) then
+			return
+		end
 		localState.tHudStart = nowClock
 		localState.lineJumpWindowExpireAt = nowClock + cfg.T_WINDOW
 		return
@@ -3166,14 +3420,24 @@ function RunwaySession.MaybeStartJumpWindowTimingFromGround(humanoid: Humanoid, 
 		and localState.takeoffCount >= 1
 		and localState.takeoffCount < cfg.N_TOTAL_JUMPS
 	if chainSeg and localState.chainJumpWindowAwaitingGround then
-		if RunwaySession.IsRunwayChainWindowHeightOk(humanoid) or RunwaySession.IsRunwayScriptedGrounded(humanoid) then
-			if localState.tHudStart == nil then
-				localState.tHudStart = nowClock
-			end
-			localState.predictJumpWindowUntil = nowClock + cfg.T_WINDOW
-			localState.chainJumpWindowAwaitingGround = false
+		if
+			not RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid)
+			or not RunwaySession.IsRunwayChainWindowHeightOk(humanoid)
+		then
+			return
 		end
+		if localState.tHudStart == nil then
+			localState.tHudStart = nowClock
+		end
+		localState.predictJumpWindowUntil = nowClock + cfg.T_WINDOW
+		localState.chainJumpWindowAwaitingGround = false
 	elseif chainSeg and localState.predictJumpWindowUntil == nil then
+		if
+			not RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid)
+			or not RunwaySession.IsRunwayChainWindowHeightOk(humanoid)
+		then
+			return
+		end
 		if localState.tHudStart == nil then
 			localState.tHudStart = nowClock
 		end
@@ -3187,28 +3451,25 @@ function RunwaySession.UpdateLocalJumpWindowPrediction(humanoid: Humanoid, nowCl
 	local pre = RunwaySession.IsRunwayPreLanding(humanoid)
 	local g = RunwaySession.IsRunwayScriptedGrounded(humanoid)
 	local lineOrChainContext = localState.phase == Ph.Airborne and localState.takeoffCount >= 1 and localState.takeoffCount < cfg.N_TOTAL_JUMPS
+	if localState.phase == Ph.JumpWindow and not g then
+		RunwaySession.CancelJumpWindowTimeoutUntilGroundedAgain()
+	end
 	if lineOrChainContext then
+		if not bandOk and localState.predictJumpWindowUntil == nil then
+			localState.chainJumpWindowAwaitingGround = false
+			localState.tHudStart = nil
+			localState.jumpWindowGroundedStartClock = nil
+		end
 		local armEdge = bandOk and not localState.prevJumpWindowRayBand
 		if armEdge then
 			localState.firstGroundedInWindowClock = nil
-			if g then
-				localState.predictJumpWindowUntil = nowClock + cfg.T_WINDOW
-				localState.tHudStart = nowClock
-				localState.chainJumpWindowAwaitingGround = false
-			elseif RunwaySession.IsRunwayChainWindowHeightOk(humanoid) then
-				localState.predictJumpWindowUntil = nowClock + cfg.T_WINDOW
-				localState.tHudStart = nowClock
-				localState.chainJumpWindowAwaitingGround = false
-			else
-				localState.chainJumpWindowAwaitingGround = true
-				localState.predictJumpWindowUntil = nil
-				localState.tHudStart = nil
-			end
-		elseif localState.chainJumpWindowAwaitingGround and RunwaySession.IsRunwayChainWindowHeightOk(humanoid) then
-			-- chainJumpWindowAwaitingGround 期间高度达到要求：启动倒计时
-			localState.predictJumpWindowUntil = nowClock + cfg.T_WINDOW
-			localState.tHudStart = if localState.tHudStart == nil then nowClock else localState.tHudStart
-			localState.chainJumpWindowAwaitingGround = false
+			localState.chainJumpWindowAwaitingGround = true
+			localState.predictJumpWindowUntil = nil
+			localState.tHudStart = nil
+			localState.jumpWindowGroundedStartClock = nil
+		end
+		if localState.chainJumpWindowAwaitingGround then
+			RunwaySession.MaybeStartJumpWindowTiming(humanoid, nowClock)
 		end
 		localState.prevJumpWindowRayBand = bandOk
 		localState.prevLocalGroundedForLand = g
@@ -3219,12 +3480,18 @@ function RunwaySession.UpdateLocalJumpWindowPrediction(humanoid: Humanoid, nowCl
 		localState.prevJumpWindowRayBand = bandOk
 	end
 	if localState.predictJumpWindowUntil ~= nil and nowClock >= (localState.predictJumpWindowUntil :: number) then
-		if localState.phase == Ph.Airborne and localState.takeoffCount >= 1 and localState.takeoffCount < cfg.N_TOTAL_JUMPS then
+		if
+			localState.phase == Ph.Airborne
+			and localState.takeoffCount >= 1
+			and localState.takeoffCount < cfg.N_TOTAL_JUMPS
+			and g
+		then
 			JumpRunWayFrame.ShowMiss()
 			RunwaySession.EnterSlidePhase(nowClock, SlideKindMiss, humanoid)
+			localState.predictJumpWindowUntil = nil
+			localState.chainJumpWindowAwaitingGround = false
 		end
-		localState.predictJumpWindowUntil = nil
-		localState.chainJumpWindowAwaitingGround = false
+		return
 	end
 	if (RunwaySession.LineHudActive(nowClock) or RunwaySession.ChainHudActive(nowClock)) and bandOk and g then
 		if localState.firstGroundedInWindowClock == nil then
@@ -3233,7 +3500,7 @@ function RunwaySession.UpdateLocalJumpWindowPrediction(humanoid: Humanoid, nowCl
 	elseif not RunwaySession.LineHudActive(nowClock) and not RunwaySession.ChainHudActive(nowClock) then
 		localState.firstGroundedInWindowClock = nil
 	end
-	RunwaySession.MaybeStartJumpWindowTimingFromGround(humanoid, nowClock)
+	RunwaySession.MaybeStartJumpWindowTiming(humanoid, nowClock)
 end
 
 function RunwaySession.GetEffectivePhysicsPhase(humanoid: Humanoid, nowClock: number): number
@@ -3396,6 +3663,8 @@ function RunwaySession.OnPostSimulationLocomotion(dt: number)
 	if hrp ~= nil and localState.phase == Ph.Airborne and localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
 		RunwaySession.EnsureHumanoidAutoRotateOffForFinalPitch(humanoid)
 		RunwaySession.ApplyRunwayFinalBodyPitch(hrp, forward, dt)
+	elseif hrp ~= nil and (localState.phase == Ph.AutoRun or localState.phase == Ph.JumpWindow or localState.phase == Ph.Airborne) then
+		RunwaySession.ApplyRunwayYawCorrection(hrp, forward, dt)
 	elseif hrp ~= nil and localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindFinalLanding then
 		if not RunwaySession.IsLittleElfChestRunwayFlowActive() then
 			RunwaySession.EnsureHumanoidAutoRotateOffForFinalPitch(humanoid)
@@ -3435,7 +3704,7 @@ function RunwaySession.OnJumpRunwayFinalTiltRenderStep(dt: number)
 	if not RunwaySession.IsRunwayActivePhase(localState.phase) then
 		return
 	end
-	local _, humanoid, hrp = RunwaySession.GetCharacterParts()
+	local _character, humanoid, hrp = RunwaySession.GetCharacterParts()
 	if humanoid == nil or hrp == nil then
 		return
 	end
@@ -3472,9 +3741,13 @@ function RunwaySession.ProcessJumpWindowTimeout(nowClock: number)
 		return
 	end
 	if localState.lineJumpWindowExpireAt ~= nil and nowClock >= (localState.lineJumpWindowExpireAt :: number) then
-		localState.lineWindowConsumed = true
-		JumpRunWayFrame.ShowMiss()
 		local _character, humanoidTimeout, _hrpTimeout = RunwaySession.GetCharacterParts()
+		if humanoidTimeout == nil or not RunwaySession.IsRunwayScriptedGrounded(humanoidTimeout) then
+			RunwaySession.CancelJumpWindowTimeoutUntilGroundedAgain()
+			return
+		end
+		JumpRunWayFrame.ShowMiss()
+		localState.lineWindowConsumed = true
 		RunwaySession.EnterSlidePhase(nowClock, SlideKindMiss, humanoidTimeout)
 	end
 end
@@ -3508,6 +3781,7 @@ function RunwaySession.ProcessAirborneLandingHeartbeat(humanoid: Humanoid)
 			RunwaySession.ClearJumpHorizontalLerp()
 			localState.predictJumpWindowUntil = nil
 			localState.tHudStart = nil
+			localState.jumpWindowGroundedStartClock = nil
 			localState.chainJumpWindowAwaitingGround = false
 		end
 		Refs.prevGroundedHeartbeat = g
@@ -3541,9 +3815,10 @@ function RunwaySession.OnBeginLineCharacterContactConfirmed()
 		localState.lineJumpWindowExpireAt = nil
 		localState.tHudStart = nil
 		localState.firstGroundedInWindowClock = nil
+		localState.jumpWindowGroundedStartClock = nil
 		local _character, humanoid, _hrp = RunwaySession.GetCharacterParts()
 		if humanoid ~= nil then
-			RunwaySession.MaybeStartJumpWindowTimingFromGround(humanoid, nowClock)
+			RunwaySession.MaybeStartJumpWindowTiming(humanoid, nowClock)
 		end
 	end
 end
@@ -3585,6 +3860,15 @@ function RunwaySession.ProcessFinalLandingSubPhaseTransition(humanoid: Humanoid,
 		return
 	end
 	local forwardCheck = NormalizeRunwayForward(localState.runwayForward)
+	local maxPhaseASecRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_MAX_SEC
+	local maxPhaseASec = (typeof(maxPhaseASecRaw) == "number" and maxPhaseASecRaw == maxPhaseASecRaw and maxPhaseASecRaw > 0)
+		and maxPhaseASecRaw
+		or 6
+	if nowClock - localState.slideStartClock >= maxPhaseASec then
+		RunwaySession.DebugFinalLandPhaseA("exit_max_phase_a_sec", humanoid, hrp, nowClock)
+		RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forwardCheck)
+		return
+	end
 
 	local vyScriptMaxRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_TOUCHDOWN_SCRIPT_MAX_VY
 	local vyScriptMax = -3
@@ -3598,38 +3882,75 @@ function RunwaySession.ProcessFinalLandingSubPhaseTransition(humanoid: Humanoid,
 		vyFbAbsMax = vyFbAbsMaxRaw
 	end
 
-	-- 终局触地检测：使用独立配置 RUNWAY_FINAL_LAND_TOUCHDOWN_FEET_MAX_DIST_STUDS，不依赖 preLandRayBaselineStuds
-	local okFeet, distFeet = RunwaySession.RaycastFeet(humanoid)
-	local fullBody = RunwaySession.IsRunwayFinalLandFullBodyGrounded(humanoid, hrp)
-	local touchdownDistRaw = cfg.RUNWAY_FINAL_LAND_TOUCHDOWN_FEET_MAX_DIST_STUDS
-	local touchdownDist = (typeof(touchdownDistRaw) == "number" and touchdownDistRaw == touchdownDistRaw and touchdownDistRaw > 0) and touchdownDistRaw or 2
-	local geomTouch = fullBody or (okFeet and distFeet <= touchdownDist)
+	-- 终局触地检测使用宽松几何判定，避免 Physics/翻滚姿态下脚射线或全身点位漏判。
+	local geomTouch = RunwaySession.IsRunwayFinalLandPhaseAGroundedLoose(humanoid, hrp)
 	local vy = hrp.AssemblyLinearVelocity.Y
-	if not geomTouch or vy > vyScriptMax or math.abs(vy) > vyFbAbsMax then
-		return
-	end
-
 	local fwdHCheck = Vector3.new(forwardCheck.X, 0, forwardCheck.Z)
 	if fwdHCheck.Magnitude < 1e-4 then
 		fwdHCheck = Vector3.new(0, 0, -1)
 	else
 		fwdHCheck = fwdHCheck.Unit
 	end
+	local minVyRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_MIN_POP_VY
+	local minBounceVy = (typeof(minVyRaw) == "number" and minVyRaw == minVyRaw and minVyRaw >= 0) and minVyRaw or 3
+	local minAlongRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_MIN_ALONG_SPEED
+	local minAlong = (typeof(minAlongRaw) == "number" and minAlongRaw == minAlongRaw and minAlongRaw >= 0) and minAlongRaw or 12
+	local maxPopRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_MAX_POP_COUNT
+	local maxPop = (typeof(maxPopRaw) == "number" and maxPopRaw == maxPopRaw and maxPopRaw >= 1) and math.floor(maxPopRaw) or 4
+	if geomTouch and localState.finalLandTumbleUseAirClock and not localState.finalLandTumbleLeftGround then
+		if localState.finalLandPhaseAGroundedStartClock == nil then
+			localState.finalLandPhaseAGroundedStartClock = nowClock
+		end
+		local stuckSecRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_GROUNDED_STUCK_SEC
+		local stuckSec = (typeof(stuckSecRaw) == "number" and stuckSecRaw == stuckSecRaw and stuckSecRaw >= 0)
+			and stuckSecRaw
+			or 0.35
+		if nowClock - (localState.finalLandPhaseAGroundedStartClock :: number) >= stuckSec then
+			RunwaySession.DebugFinalLandPhaseA("exit_grounded_stuck_sec", humanoid, hrp, nowClock)
+			RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forwardCheck)
+			return
+		end
+		if localState.finalLandLockedTumbleAlong <= minAlong then
+			RunwaySession.DebugFinalLandPhaseA("exit_locked_along_below_min_in_grounded_branch", humanoid, hrp, nowClock)
+			RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forwardCheck)
+			return
+		end
+	else
+		localState.finalLandPhaseAGroundedStartClock = nil
+	end
+	if geomTouch and localState.finalLandPhaseAPopCount >= maxPop then
+		RunwaySession.DebugFinalLandPhaseA("exit_max_pop", humanoid, hrp, nowClock)
+		RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forwardCheck)
+		return
+	end
+	if not geomTouch or vy > vyScriptMax or math.abs(vy) > vyFbAbsMax then
+		if geomTouch and localState.finalLandLockedTumbleAlong <= minAlong then
+			RunwaySession.DebugFinalLandPhaseA("exit_locked_along_below_min_before_vy_return", humanoid, hrp, nowClock)
+			RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forwardCheck)
+			return
+		end
+		local reason = if not geomTouch then "return_not_geom_touch"
+			elseif vy > vyScriptMax then "return_vy_not_falling"
+			else "return_vy_abs_too_large"
+		RunwaySession.DebugFinalLandPhaseA(reason, humanoid, hrp, nowClock)
+		return
+	end
 
 	-- 子阶段 A → B：竖直速度判断。弹性次弹跳时 finalLandTumblePrevPopVy 是前一次 vyPop；
 	-- 如果前一次弹跳速度已经接近最低阈值（minPopVy），本次触地后不再弹跳直接进 B
-	local minVyRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_MIN_POP_VY
-	local minBounceVy = (typeof(minVyRaw) == "number" and minVyRaw == minVyRaw and minVyRaw >= 0) and minVyRaw or 3
 	local shouldEnterB = localState.finalLandTumblePrevPopVy <= minBounceVy * 1.1
 	if shouldEnterB then
+		RunwaySession.DebugFinalLandPhaseA("exit_prev_pop_vy_below_min", humanoid, hrp, nowClock)
 		RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forwardCheck)
 		return
 	end
 
 	if localState.finalLandTumbleUseAirClock and not localState.finalLandTumbleLeftGround then
+		RunwaySession.DebugFinalLandPhaseA("return_wait_left_ground", humanoid, hrp, nowClock)
 		return
 	end
 
+	RunwaySession.DebugFinalLandPhaseA("apply_next_pop", humanoid, hrp, nowClock)
 	RunwaySession.ApplyFinalLandPhaseAPop(hrp, fwdHCheck, nowClock)
 end
 
@@ -3897,7 +4218,6 @@ end
 
 function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chestConfigId: number?)
 	NetMsg.FireRequestJumpRunwayLittleElfChestStartCarry(brainrotId, chestConfigId)
-	RunwayCameraController.Disable(workspace, RunwaySession.GetCharacterParts)
 	RunwaySession.DestroyJumpRunwayRocketBackpack()
 	RunwaySession.DestroyRunwayGravityForce()
 	RunwaySession.DestroyRunwayRing()
@@ -3908,15 +4228,26 @@ function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chest
 	else
 		forwardExit = Vector3.new(forwardExit.X, 0, forwardExit.Z).Unit
 	end
+	local baseDirection = -forwardExit
+	if baseDirection.Magnitude < 1e-4 then
+		baseDirection = Vector3.new(0, 0, 1)
+	else
+		baseDirection = Vector3.new(baseDirection.X, 0, baseDirection.Z).Unit
+	end
 	local _, hDelay, hrpDelay = RunwaySession.GetCharacterParts()
 	if hDelay and hrpDelay then
-		RunwaySession.SnapCharacterHrpToGround(hDelay, hrpDelay, forwardExit)
+		RunwaySession.SnapCharacterHrpToGround(hDelay, hrpDelay, baseDirection)
 		hrpDelay.AssemblyLinearVelocity = Vector3.zero
 		hrpDelay.AssemblyAngularVelocity = Vector3.zero
+		RunwaySession.AlignCharacterYawToRunwayForward(hrpDelay, baseDirection)
+		RunwayCameraController.Disable(workspace, RunwaySession.GetCharacterParts, baseDirection, cfg, NormalizeRunwayForward)
 		RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(hDelay)
 		RunwaySession.ClearFinalLandingSlideModuleLocals()
 		RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(hDelay, hrpDelay)
+		RunwaySession.AlignCharacterYawToRunwayForward(hrpDelay, baseDirection)
 		RunwaySession.ApplyExpectedWalkSpeedAfterRunway(hDelay)
+	else
+		RunwayCameraController.Disable(workspace, RunwaySession.GetCharacterParts, baseDirection, cfg, NormalizeRunwayForward)
 	end
 	localState.phase = Ph.Idle
 	localState.groundedStableTime = 0
@@ -4492,8 +4823,8 @@ function RunwaySession.UpdateTick(dt: number)
 	if not localState.controlsDisabled then
 		RunwaySession.SetControlsEnabled(false)
 	end
-	local _, humanoid, hrp = RunwaySession.GetCharacterParts()
-	if humanoid == nil or hrp == nil then
+	local character, humanoid, hrp = RunwaySession.GetCharacterParts()
+	if character == nil or humanoid == nil or hrp == nil then
 		return
 	end
 	RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid, nowClock)
@@ -4502,6 +4833,11 @@ function RunwaySession.UpdateTick(dt: number)
 	RunwaySession.UpdateRunwayRingTransform(humanoid, hrp)
 	RunwaySession.UpdateDistanceRecorder(humanoid, hrp)
 	RunwaySession.UpdateBestDistanceWall(hrp)
+	local phaseBeforeForwardBlocked = localState.phase
+	RunwaySession.ProcessRunwayForwardBlocked(character, humanoid, hrp, nowClock)
+	if phaseBeforeForwardBlocked ~= Ph.Slide and localState.phase == Ph.Slide then
+		return
+	end
 	if localState.phase == Ph.Airborne and localState.takeoffCount == cfg.N_TOTAL_JUMPS then
 		if localState.dashHeld and localState.fuel > 0 then
 			localState.fuel = math.max(0, localState.fuel - cfg.DASH_FUEL_DRAIN_PER_SEC * dt)
@@ -4799,6 +5135,7 @@ function RunwaySession.JumpAdvancePhaseAfterImpulse(inAuto: boolean, inLineWindo
 		localState.lineWindowConsumed = true
 		localState.lineJumpWindowExpireAt = nil
 		localState.tHudStart = nil
+		localState.jumpWindowGroundedStartClock = nil
 		localState.chainJumpWindowAwaitingGround = false
 		localState.takeoffCount += 1
 		RunwaySession.JumpGrantDashFuelIfOnFinalSegment()
@@ -4808,6 +5145,7 @@ function RunwaySession.JumpAdvancePhaseAfterImpulse(inAuto: boolean, inLineWindo
 		RunwaySession.JumpGrantDashFuelIfOnFinalSegment()
 		localState.predictJumpWindowUntil = nil
 		localState.tHudStart = nil
+		localState.jumpWindowGroundedStartClock = nil
 		localState.chainJumpWindowAwaitingGround = false
 		localState.phase = Ph.Airborne
 	end
@@ -4862,6 +5200,7 @@ function RunwaySession.JumpApplyTakeoff(
 	localState.prevJumpWindowRayBand = true
 	localState.firstGroundedInWindowClock = nil
 	Refs.prevGroundedHeartbeat = true
+	Refs.lastRunwayTakeoffClock = nowClock
 	pcall(function()
 		humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
 	end)
@@ -4875,6 +5214,13 @@ end
 
 function RunwaySession.JumpTry(): boolean
 	local nowClock = os.clock()
+	local jumpInputCooldownSec = cfg.JUMP_INPUT_COOLDOWN_SEC
+	if typeof(jumpInputCooldownSec) ~= "number" or jumpInputCooldownSec ~= jumpInputCooldownSec or jumpInputCooldownSec < 0 then
+		jumpInputCooldownSec = 0.18
+	end
+	if Refs.lastRunwayTakeoffClock ~= nil and nowClock - (Refs.lastRunwayTakeoffClock :: number) < jumpInputCooldownSec then
+		return false
+	end
 	if not RunwaySession.IsRunwayActivePhase(localState.phase) then
 		return false
 	end
@@ -5084,7 +5430,9 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	localState.jumpBoostUntilClock = 0
 	localState.predictJumpWindowUntil = nil
 	localState.firstGroundedInWindowClock = nil
+	localState.jumpWindowGroundedStartClock = nil
 	localState.tHudStart = nil
+	Refs.lastRunwayTakeoffClock = nil
 	localState.lineJumpWindowExpireAt = nil
 	localState.lineWindowConsumed = false
 	localState.chainJumpWindowAwaitingGround = false
@@ -5102,6 +5450,7 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	localState.finalLandTumbleAirAccumSec = 0
 	localState.finalLandTumbleLeftGround = false
 	localState.finalLandTumbleUseAirClock = false
+	localState.finalLandPhaseAGroundedStartClock = nil
 	localState.finalLandLockedTumbleAlong = 0
 	localState.finalLandTumblePrevPopVy = 0
 	localState.finalLandTumbleRollAngleRad = 0

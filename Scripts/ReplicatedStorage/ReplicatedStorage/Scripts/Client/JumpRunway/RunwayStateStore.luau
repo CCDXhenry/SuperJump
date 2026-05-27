@@ -29,6 +29,7 @@ export type RunwayStateStoreShape = {
 	preLandRayBaselineStuds: number?,
 	scriptedGroundHrpYBaseline: number?,
 	firstGroundedInWindowClock: number?,
+	jumpWindowGroundedStartClock: number?,
 	tHudStart: number?,
 	lineJumpWindowExpireAt: number?,
 	lineWindowConsumed: boolean,
@@ -50,6 +51,7 @@ export type RunwayStateStoreShape = {
 	finalLandTumbleAirAccumSec: number,
 	finalLandTumbleLeftGround: boolean,
 	finalLandTumbleUseAirClock: boolean,
+	finalLandPhaseAGroundedStartClock: number?,
 	finalLandLockedTumbleAlong: number,
 	finalLandTumblePrevPopVy: number,
 	finalLandTumbleRollAngleRad: number,
@@ -88,6 +90,7 @@ function RunwayStateStore.CreateDefault(phases: any, slideKindStandard: string):
 		preLandRayBaselineStuds = nil,
 		scriptedGroundHrpYBaseline = nil,
 		firstGroundedInWindowClock = nil,
+		jumpWindowGroundedStartClock = nil,
 		tHudStart = nil,
 		lineJumpWindowExpireAt = nil,
 		lineWindowConsumed = false,
@@ -109,6 +112,7 @@ function RunwayStateStore.CreateDefault(phases: any, slideKindStandard: string):
 		finalLandTumbleAirAccumSec = 0,
 		finalLandTumbleLeftGround = false,
 		finalLandTumbleUseAirClock = false,
+		finalLandPhaseAGroundedStartClock = nil,
 		finalLandLockedTumbleAlong = 0,
 		finalLandTumblePrevPopVy = 0,
 		finalLandTumbleRollAngleRad = 0,
@@ -141,6 +145,7 @@ function RunwayStateStore.ResetForIdle(localState: RunwayStateStoreShape, phases
 	localState.preLandRayBaselineStuds = nil
 	localState.scriptedGroundHrpYBaseline = nil
 	localState.firstGroundedInWindowClock = nil
+	localState.jumpWindowGroundedStartClock = nil
 	localState.tHudStart = nil
 	localState.lineJumpWindowExpireAt = nil
 	localState.lineWindowConsumed = false
@@ -159,6 +164,7 @@ function RunwayStateStore.ResetForIdle(localState: RunwayStateStoreShape, phases
 	localState.finalLandTumbleAirAccumSec = 0
 	localState.finalLandTumbleLeftGround = false
 	localState.finalLandTumbleUseAirClock = false
+	localState.finalLandPhaseAGroundedStartClock = nil
 	localState.finalLandLockedTumbleAlong = 0
 	localState.finalLandTumblePrevPopVy = 0
 	localState.finalLandTumbleRollAngleRad = 0
