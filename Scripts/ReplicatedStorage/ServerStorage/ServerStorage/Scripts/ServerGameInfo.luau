@@ -301,21 +301,18 @@ function ServerGameInfo.ExecuteRebirth(player: Player, isPaid: boolean): boolean
 	end
 
 	-- 检查要求
-	local requiredSpeedLv = nextRebirthConfig.speedLv
+	local requiredJumpPowerLv = nextRebirthConfig.jumppowerLv
 
-	if playerInfo.shopInfo.walkSpeedLevel < requiredSpeedLv then
+	if playerInfo.jumpPower.lv < requiredJumpPowerLv then
 		print("[ServerGameInfo] ExecuteRebirth failed: requirements not met for", player.Name)
 		return false
 	end
 
-	local speedLevelBeforeRebirth = playerInfo.shopInfo.walkSpeedLevel
+	local jumpPowerLevelBeforeRebirth = playerInfo.jumpPower.lv
 
 	if not isPaid then
-		-- 免费重生：重置等级
-		playerInfo.shopInfo.walkSpeedLevel = 1
-		ServerGameInfo.ApplyWalkSpeed(player)
-		-- 同步重置后的等级
-		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.WalkSpeed, 1)
+		-- 免费重生：重置 JumpPower 等级
+		ServerGameInfo.SetPlayerJumpPowerLevel(player, 1)
 	end
 
 	-- 增加重生等级
@@ -335,8 +332,7 @@ function ServerGameInfo.ExecuteRebirth(player: Player, isPaid: boolean): boolean
 	analyticsTool().LogPlayerRebirth(
 		player,
 		playerInfo.shopInfo.rebirthLevel,
-		0,
-		speedLevelBeforeRebirth,
+		jumpPowerLevelBeforeRebirth,
 		if isPaid then 1 else 0
 	)
 	return true

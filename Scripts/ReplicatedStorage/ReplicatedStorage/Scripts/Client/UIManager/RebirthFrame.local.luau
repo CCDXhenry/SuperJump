@@ -21,7 +21,6 @@ local TranslationTool = require(coreScripts:WaitForChild("Client"):WaitForChild(
 
 local FullProgress = 1
 local EmptyProgress = 0
-local DefaultRequiredLevel = 1
 
 local thisFrame = script.Parent :: Frame
 local windowId = thisFrame:GetAttribute("WindowId") :: string
@@ -37,35 +36,10 @@ local newImage = mainFrame:WaitForChild("NewImage") :: ImageLabel
 local newImageNumberLabel = newImage:WaitForChild("NumberLabel") :: TextLabel
 local newImageValueLabel = newImage:WaitForChild("ValueLabel") :: TextLabel
 local infoFrame = mainFrame:WaitForChild("InfoFrame") :: Frame
-local speedImage = infoFrame:WaitForChild("SpeedImage") :: ImageLabel
-
-local function getProgressScale(imageLabel: ImageLabel): ImageLabel?
-	local scaleBar = imageLabel:FindFirstChild("ScaleBar")
-	if not scaleBar or not scaleBar:IsA("ImageLabel") then
-		return nil
-	end
-	local scale = scaleBar:FindFirstChild("Scale")
-	if not scale or not scale:IsA("ImageLabel") then
-		return nil
-	end
-	return scale
-end
-
-local function findProgressLabel(imageLabel: ImageLabel, keyword: string): TextLabel?
-	local label = imageLabel:FindFirstChild("TextLabel")
-	if label and label:IsA("TextLabel") then
-		return label
-	end
-	for _, child in infoFrame:GetChildren() do
-		if child:IsA("TextLabel") and string.find(string.lower(child.Text), keyword) then
-			return child
-		end
-	end
-	return nil
-end
-
-local speedTextLabel = findProgressLabel(speedImage, "speed")
-local speedScale = getProgressScale(speedImage)
+local jumppowerImage = infoFrame:WaitForChild("JumppowerImage") :: ImageLabel
+local jumppowerTextLabel = jumppowerImage:WaitForChild("TextLabel") :: TextLabel
+local jumppowerScaleBar = jumppowerImage:WaitForChild("ScaleBar") :: ImageLabel
+local jumppowerScale = jumppowerScaleBar:WaitForChild("Scale") :: ImageLabel
 
 local function refreshScaleX(scaleImage: ImageLabel?, percent: number)
 	if not scaleImage then
@@ -101,13 +75,16 @@ local function checkRebirthRequirements(localPlayerInfo: GameConfig.ClientLocalP
 		return false
 	end
 
-	local currentSpeedLevel = localPlayerInfo.shopInfo.walkSpeedLevel or DefaultRequiredLevel
+	local currentJumpPowerLevel = localPlayerInfo.jumpPower.lv
 	local missingRequirements: { string } = {}
 
-	if currentSpeedLevel < nextRebirthData.speedLv then
+	if currentJumpPowerLevel < nextRebirthData.jumppowerLv then
 		table.insert(
 			missingRequirements,
-			formatTemplate(GameTexts.SpeedLevelProgress.source, { tostring(currentSpeedLevel), tostring(nextRebirthData.speedLv) })
+			formatTemplate(
+				GameTexts.JumpPowerLevelProgress.source,
+				{ tostring(currentJumpPowerLevel), tostring(nextRebirthData.jumppowerLv) }
+			)
 		)
 	end
 
@@ -130,14 +107,16 @@ local function refreshView()
 		return
 	end
 
-	local currentSpeedLevel = localPlayerInfo.shopInfo.walkSpeedLevel or DefaultRequiredLevel
+	local currentJumpPowerLevel = localPlayerInfo.jumpPower.lv
 	local currentRebirthLevel = localPlayerInfo.shopInfo.rebirthLevel or 0
 
 	local nextRebirthData = GameConfig.RebirthMap[currentRebirthLevel + 1]
 	local nextRebirthLevel = currentRebirthLevel + 1
-	local requiredSpeedLevel = if nextRebirthData then nextRebirthData.speedLv else currentSpeedLevel
+	local requiredJumpPowerLevel = if nextRebirthData then nextRebirthData.jumppowerLv else currentJumpPowerLevel
 
-	local speedProgress = if nextRebirthData and requiredSpeedLevel > 0 then currentSpeedLevel / requiredSpeedLevel else FullProgress
+	local jumpPowerProgress = if nextRebirthData and requiredJumpPowerLevel > 0
+		then currentJumpPowerLevel / requiredJumpPowerLevel
+		else FullProgress
 	local currentMultiplier = getRebirthMultiplier(currentRebirthLevel)
 	local nextMultiplier = if nextRebirthData then getRebirthMultiplier(nextRebirthLevel) else currentMultiplier
 
@@ -166,16 +145,14 @@ local function refreshView()
 		{ string.format("%.1f", nextMultiplier) }
 	)
 
-	if speedTextLabel then
-		TranslationTool.CustomAutoLocalizeTextLabel(
-			speedTextLabel,
-			GameTexts.SpeedLevelProgress.source,
-			GameTexts.SpeedLevelProgress.key,
-			{ tostring(currentSpeedLevel), tostring(requiredSpeedLevel) }
-		)
-	end
+	TranslationTool.CustomAutoLocalizeTextLabel(
+		jumppowerTextLabel,
+		GameTexts.JumpPowerLevelProgress.source,
+		GameTexts.JumpPowerLevelProgress.key,
+		{ tostring(currentJumpPowerLevel), tostring(requiredJumpPowerLevel) }
+	)
 
-	refreshScaleX(speedScale, speedProgress)
+	refreshScaleX(jumppowerScale, jumpPowerProgress)
 end
 
 closeButton.Activated:Connect(function()
@@ -218,6 +195,10 @@ local function OnCloseWindow(closeWindowId: string)
 end
 
 ClientMsg.ConnectLocalPlayerSkillLevelUpdate(function()
+	refreshView()
+end)
+
+ClientMsg.ConnectLocalPlayerJumpPowerUpdate(function()
 	refreshView()
 end)
 

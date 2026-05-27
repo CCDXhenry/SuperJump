@@ -38,6 +38,7 @@ local GameTexts = {
 	RebirthRedPoint = { key = "ReplicatedStorage.UI.LobbyFrame.RebirthFrame.RedPoint", source = "" },
 	CoinMultiplierText = { key = "CoinMultiplierText", source = "{1}x Coin" },
 	SpeedLevelProgress = { key = "SpeedLevelProgress", source = "Speed Lv {1}/{2}" },
+	JumpPowerLevelProgress = { key = "JumpPowerLevelProgress", source = "Jump Power Lv {1}/{2}" },
 	UpgradeSpeedLevelIncreased = { key = "UpgradeSpeedLevelIncreased", source = "Speed increased to Lv. {1}!" },
 	UpgradeFuelLevelIncreased = { key = "UpgradeFuelLevelIncreased", source = "Fuel increased to Lv. {1}!" },
 	UpgradeThrustLevelIncreased = { key = "UpgradeThrustLevelIncreased", source = "Thrust increased to Lv. {1}!" },

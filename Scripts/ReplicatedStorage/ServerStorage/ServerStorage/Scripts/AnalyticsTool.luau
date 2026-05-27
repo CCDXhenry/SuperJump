@@ -220,11 +220,10 @@ function AnalyticsTool.LogPlayerUpgrade(player: Player, upgradeType: number, new
 	})
 end
 
-function AnalyticsTool.LogPlayerRebirth(player: Player, rebirthCount: number, brickLevel: number, speedLevel: number, isSkipRebirth: number)
+function AnalyticsTool.LogPlayerRebirth(player: Player, rebirthCount: number, jumpPowerLevel: number, isSkipRebirth: number)
 	AddCustomEvent(player, "player_rebirth", {
 		{ filed = "rebirth_count", value = tostring(rebirthCount) },
-		{ filed = "brick_level", value = tostring(brickLevel) },
-		{ filed = "speed_level", value = tostring(speedLevel) },
+		{ filed = "jump_power_level", value = tostring(jumpPowerLevel) },
 		{ filed = "is_Skip_Rebirth", value = tostring(isSkipRebirth) },
 	})
 end

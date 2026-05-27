@@ -75,8 +75,6 @@ if rebirthRedPoint == nil and rebirthFrame then
 	rebirthRedPoint = rebirthFrame:FindFirstChild("RedPointCircle") :: GuiObject?
 end
 
-local DEFAULT_REBIRTH_REQUIRED_LEVEL = 1
-
 local function IsRebirthRedPointConditionMet(): boolean
 	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
 	if localPlayerInfo == nil then
@@ -89,8 +87,8 @@ local function IsRebirthRedPointConditionMet(): boolean
 		return false
 	end
 
-	local currentSpeedLevel = localPlayerInfo.shopInfo.walkSpeedLevel or DEFAULT_REBIRTH_REQUIRED_LEVEL
-	return currentSpeedLevel >= nextRebirthData.speedLv
+	local currentJumpPowerLevel = localPlayerInfo.jumpPower.lv
+	return currentJumpPowerLevel >= nextRebirthData.jumppowerLv
 end
 
 local function RefreshRebirthRedPointView()
@@ -391,9 +389,7 @@ local function OnLocalPlayerSkillLevelChanged(skillType: number, level: number)
 		RefreshDecelerationButtonView()
 	end
 
-	if skillType == GameConfig.SkillType.RebirthLevel
-		or skillType == GameConfig.SkillType.WalkSpeed
-	then
+	if skillType == GameConfig.SkillType.RebirthLevel then
 		RefreshRebirthRedPointView()
 	end
 end
@@ -412,6 +408,7 @@ ClientMsg.ConnectLocalPlayerJumpPowerUpdate(function(jumpPowerInfo: GameConfig.J
 	if jumpPowerText then
 		jumpPowerText.Text = NumberExtension.FormatBigNumberAA(GameConfig.GetJumpPowerAbility(jumpPowerInfo))
 	end
+	RefreshRebirthRedPointView()
 	--ShowJumpPowerFloatingText(addAmount)
 end)
 

@@ -533,7 +533,7 @@ function PlayerHomeServerManager.Init()
 		end
 
 		if
-			playerInfo.shopInfo.walkSpeedLevel >= nextRebirthConfig.speedLv
+			playerInfo.jumpPower.lv >= nextRebirthConfig.jumppowerLv
 		then
 			marketplaceService:PromptProductPurchase(player, GameConfig.Paving.RebirthProductId)
 		end

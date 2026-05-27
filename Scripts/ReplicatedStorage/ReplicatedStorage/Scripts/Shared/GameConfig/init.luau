@@ -15,6 +15,7 @@ local ExEquipDataModule = require(script:WaitForChild("ExEquipData"))
 local ExStatsDataModule = require(script:WaitForChild("ExStatsData"))
 local JetpackDataModule = require(script:WaitForChild("JetpackData"))
 local MonsterDataModule = require(script:WaitForChild("MonsterData"))
+local RebirthDataModule = require(script:WaitForChild("RebirthData"))
 
 GameConfig.GameVersion = "1.0.0"
 GameConfig.ABTestVersion = "1.0.0"
@@ -571,11 +572,25 @@ export type RebirthData = {
 	id: number,
 	count: number,
 	collectMultiple: number,
-	speedLv: number,
+	jumppowerLv: number,
 }
 
 GameConfig.Rebirth = {} :: { RebirthData }
 GameConfig.RebirthMap = {} :: { [number]: RebirthData }
+
+for _, rawData in pairs(RebirthDataModule) do
+	local rebirthData: RebirthData = {
+		id = rawData.id,
+		count = rawData.count,
+		collectMultiple = rawData.collectMultiple,
+		jumppowerLv = rawData.jumppowerLv,
+	}
+	GameConfig.RebirthMap[rebirthData.id] = rebirthData
+	table.insert(GameConfig.Rebirth, rebirthData)
+end
+table.sort(GameConfig.Rebirth, function(a, b)
+	return a.id < b.id
+end)
 
 GameConfig.BrainrotQualityConfig = {
 	[1] = { rarity = "Common", image = "rbxassetid://16865599320", textColor = Color3.fromRGB(255, 255, 255) },
