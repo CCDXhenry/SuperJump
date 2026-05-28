@@ -632,7 +632,7 @@ local function CreateExerciseModelAtPlayer(equipData: GameConfig.ExEquipData, ch
 	local equipmentModel = sourceModel:Clone()
 	equipmentModel.Name = "ActiveExerciseEquip"
 	equipmentModel.Parent = workspace
-	equipmentModel:PivotTo(CFrame.lookAt(hrp.Position, hrp.Position + flatLook.Unit))
+	equipmentModel:PivotTo(CFrame.lookAt(hrp.Position, hrp.Position - flatLook.Unit))
 	DisableExerciseModelPrompts(equipmentModel)
 	MoveExerciseModelStandXzToPlayer(equipmentModel, equipData, character, hrp)
 	MoveExerciseModelPrimaryPartToGround(equipmentModel, character)
