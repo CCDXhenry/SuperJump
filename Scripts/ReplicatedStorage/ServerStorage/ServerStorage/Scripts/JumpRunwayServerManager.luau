@@ -9,6 +9,7 @@ local JumpRunwayServerManager = {}
 local players: Players = game:GetService("Players")
 local workspaceInst: Workspace = game:GetService("Workspace")
 local httpService: HttpService = game:GetService("HttpService")
+local physicsService: PhysicsService = game:GetService("PhysicsService")
 
 local replicatedStorage: ReplicatedStorage = game:GetService("ReplicatedStorage")
 local serverStorage: ServerStorage = game:GetService("ServerStorage")
@@ -32,6 +33,9 @@ type RunState = {
 }
 
 local cfg = GameConfig.JumpRunway
+local PlayerSlideCollisionGroupName = "PlayerSlideState"
+local ChestCollisionGroupName = "Chest"
+local TreeCollisionGroupName = "Tree"
 
 -- 惰性引用 BrainrotQueueManager，避免静态循环依赖
 local brainrotQueueManagerMod: any = nil
@@ -52,6 +56,24 @@ local pendingLittleElfChestRewardMap: { [number]: PendingLittleElfChestReward } 
 
 local JumpRunwayLittleElfChestCarryAttr = "JumpRunwayLittleElfChestCarry"
 local StartTriggerCloseEnoughMinStuds = 24
+
+local function EnsureCollisionGroup(groupName: string)
+	pcall(function()
+		physicsService:RegisterCollisionGroup(groupName)
+	end)
+end
+
+local function ConfigureJumpRunwayCollisionGroups()
+	EnsureCollisionGroup(PlayerSlideCollisionGroupName)
+	EnsureCollisionGroup(ChestCollisionGroupName)
+	EnsureCollisionGroup(TreeCollisionGroupName)
+	pcall(function()
+		physicsService:CollisionGroupSetCollidable(PlayerSlideCollisionGroupName, TreeCollisionGroupName, false)
+	end)
+	pcall(function()
+		physicsService:CollisionGroupSetCollidable(ChestCollisionGroupName, TreeCollisionGroupName, false)
+	end)
+end
 
 local brainrotCarryingManagerMod: any = nil
 local function GetBrainrotCarryingManager(): any
@@ -741,6 +763,7 @@ function JumpRunwayServerManager.Init()
 		return
 	end
 	initDone = true
+	ConfigureJumpRunwayCollisionGroups()
 	NetMsg.ConnectRequestJumpRunwayInput(OnJumpRunwayReport)
 	NetMsg.ConnectRequestJumpRunwayLittleElfChestReward(function(player: Player, chestConfigId: number)
 		HandleLittleElfChestReward(player, chestConfigId)

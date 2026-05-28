@@ -806,9 +806,9 @@ GameConfig.JumpRunwayDesigner = {
 	-- ═══════════════════════════════════════
 	-- 小精灵宝箱的配置 ID（对应 LittleElfChestData 中的 id）
 	RUNWAY_CHEST_CONFIG_ID = 1,
-	-- 宝箱生成在玩家前方多远（stud）
+	-- 旧字段：宝箱生成距离现在由 RUNWAY_CHEST_SLIDE_DISTANCE_* 控制，保留字段避免配置兼容问题
 	RUNWAY_CHEST_SPAWN_AHEAD_STUDS = 3,
-	-- 子阶段 B 结束前多少秒生成宝箱
+	-- 旧字段：宝箱现在在 B 段入口直接贴地生成，不再按结束前时间生成
 	RUNWAY_CHEST_SPAWN_BEFORE_END_SEC = 4,
 	-- 玩家撞击宝箱后向后反弹速度（studs/s）wdsa
 	RUNWAY_CHEST_BOUNCE_BACK_SPEED = 12,
@@ -1076,6 +1076,24 @@ GameConfig.JumpRunway = {
 	RUNWAY_CHEST_BOUNCE_BACK_SPEED = jumpRunwayDesigner.RUNWAY_CHEST_BOUNCE_BACK_SPEED,
 	RUNWAY_CHEST_BOUNCE_DELAY_SEC = jumpRunwayDesigner.RUNWAY_CHEST_BOUNCE_DELAY_SEC,
 	RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC = jumpRunwayDesigner.RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC,
+	-- B 段追宝箱最小滑行速度（stud/s）；提高可减少末段慢漂，但过高会显得撞击过快
+	RUNWAY_CHEST_SLIDE_MIN_CHASE_SPEED = 16,
+	-- B 段追宝箱最大滑行速度（stud/s）；限制整体滑行速度上限
+	RUNWAY_CHEST_SLIDE_MAX_CHASE_SPEED = 30,
+	-- 默认 JumpPower 下，宝箱生成在玩家前方的基础距离（stud）
+	RUNWAY_CHEST_SLIDE_DISTANCE_BASE_STUDS = 32,
+	-- 宝箱生成距离下限（stud）
+	RUNWAY_CHEST_SLIDE_DISTANCE_MIN_STUDS = 36,
+	-- 宝箱生成距离上限（stud）
+	RUNWAY_CHEST_SLIDE_DISTANCE_MAX_STUDS = 96,
+	-- JumpPower 距离增长衰减参考值；值越大，JumpPower 增加带来的距离增长越平缓
+	RUNWAY_CHEST_SLIDE_DISTANCE_DECAY_REFERENCE_JUMP_POWER = 80,
+	-- 宝箱生成距离整体倍率；>1 整体更远，<1 整体更近
+	RUNWAY_CHEST_SLIDE_DISTANCE_MULTIPLIER = 1,
+	-- 宝箱落点/贴地射线起点抬高距离（stud）；用于从障碍物高度向下找真实地面
+	RUNWAY_CHEST_GROUND_RAYCAST_HEIGHT_STUDS = 256,
+	-- 宝箱落点/贴地射线向下检测距离（stud）
+	RUNWAY_CHEST_GROUND_RAYCAST_DISTANCE_STUDS = 512,
 	-- 最远距离记录墙体 Y 轴高度（stud）
 	BEST_DISTANCE_WALL_HEIGHT_Y = if typeof(jumpRunwayDesigner.BEST_DISTANCE_WALL_HEIGHT_Y) == "number"
 		then jumpRunwayDesigner.BEST_DISTANCE_WALL_HEIGHT_Y
