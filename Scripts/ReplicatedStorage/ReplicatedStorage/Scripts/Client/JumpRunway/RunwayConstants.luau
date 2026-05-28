@@ -28,7 +28,7 @@ RunwayConstants.RunwaySlideTraceDestroyAfterEndSec = 5
 RunwayConstants.RunwayCameraRenderStepName = "JumpRunwayCamera"
 RunwayConstants.RunwayFinalTiltRenderStepName = "JumpRunwayFinalBodyTilt"
 RunwayConstants.RunwayRingTemplateName = "JumpRunwayRing"
-RunwayConstants.RunwaySlideTraceTemplateName = "SlideTracePart"
+RunwayConstants.RunwaySlideTraceTemplateName = "SlideTraceTrail"
 
 function RunwayConstants.IsRunwayActivePhase(phase: number): boolean
 	return phase ~= RunwayConstants.Ph.Idle and phase ~= RunwayConstants.Ph.Cleaning

@@ -150,11 +150,10 @@ local Refs: {
 	platformStandSavedBeforeFinalLand: boolean?,
 	finalPitchSmoothedExtraDeg: number,
 	slideTraceTemplateWarned: boolean,
-	slideTraceCachedTemplate: BasePart?,
-	slideTraceFollowerPart: BasePart?,
-	slideTraceAccumAlong: number,
-	slideTracePrevAlongForDelta: number?,
-	slideTraceSegmentList: { BasePart? },
+	slideTraceCachedTemplate: Instance?,
+	slideTraceRootInstance: Instance?,
+	slideTraceAnchorPart: BasePart?,
+	slideTraceTrail: Trail?,
 	slideTraceDestroyScheduleToken: number,
 	prevGroundedHeartbeat: boolean,
 	slideCollisionGroupOriginalMap: { [BasePart]: string },
@@ -217,8 +216,6 @@ local Refs: {
 	bestDistanceWallPassed = false,
 	bestDistanceWallDestroyToken = 0,
 	slideTraceTemplateWarned = false,
-	slideTraceAccumAlong = 0,
-	slideTraceSegmentList = {},
 	slideTraceDestroyScheduleToken = 0,
 	prevGroundedHeartbeat = true,
 	slideCollisionGroupOriginalMap = {},
@@ -2541,36 +2538,23 @@ function RunwaySession.GetJumpRunwayLocalFxFolder(): Folder
 	return folder
 end
 
-function RunwaySession.SlideTraceGetSegmentsFolder(): Folder
-	local fx = RunwaySession.GetJumpRunwayLocalFxFolder()
-	local existing = fx:FindFirstChild("SlideTraceSegments")
-	if existing ~= nil and existing:IsA("Folder") then
-		return existing
+function RunwaySession.SlideTraceDisableTrailOnly()
+	local trailMaybe = Refs.slideTraceTrail
+	if trailMaybe ~= nil and trailMaybe.Parent ~= nil then
+		trailMaybe.Enabled = false
 	end
-	local folder = Instance.new("Folder")
-	folder.Name = "SlideTraceSegments"
-	folder.Parent = fx
-	return folder
 end
 
 function RunwaySession.SlideTraceDestroyImpl()
-	if Refs.slideTraceFollowerPart ~= nil then
-		Refs.slideTraceFollowerPart:Destroy()
-		Refs.slideTraceFollowerPart = nil
-	end
-	for i = #Refs.slideTraceSegmentList, 1, -1 do
-		local segMaybe = Refs.slideTraceSegmentList[i]
-		if segMaybe ~= nil then
-			local seg = segMaybe :: BasePart
-			if seg.Parent ~= nil then
-				seg:Destroy()
-			end
+	RunwaySession.SlideTraceDisableTrailOnly()
+	if Refs.slideTraceRootInstance ~= nil then
+		if Refs.slideTraceRootInstance.Parent ~= nil then
+			Refs.slideTraceRootInstance:Destroy()
 		end
-		Refs.slideTraceSegmentList[i] = nil
+		Refs.slideTraceRootInstance = nil
 	end
-	table.clear(Refs.slideTraceSegmentList)
-	Refs.slideTraceAccumAlong = 0
-	Refs.slideTracePrevAlongForDelta = nil
+	Refs.slideTraceAnchorPart = nil
+	Refs.slideTraceTrail = nil
 end
 
 function RunwaySession.FireSlideTraceScheduledDestroyIfCurrent(scheduledAt: number)
@@ -2589,12 +2573,42 @@ end
 function RunwaySession.SlideTraceScheduleDestroyAfterRunwayEnd()
 	Refs.slideTraceDestroyScheduleToken += 1
 	local scheduledAt = Refs.slideTraceDestroyScheduleToken
+	RunwaySession.SlideTraceDisableTrailOnly()
 	task.delay(RunwaySlideTraceDestroyAfterEndSec, function()
 		RunwaySession.FireSlideTraceScheduledDestroyIfCurrent(scheduledAt)
 	end)
 end
 
-function RunwaySession.SlideTraceGetTemplate(): BasePart?
+function RunwaySession.SlideTraceResolveAnchorPartFromClone(clone: Instance): BasePart?
+	if clone:IsA("BasePart") then
+		return clone
+	end
+	if clone:IsA("Model") then
+		local named = clone:FindFirstChild("AnchorPart")
+		if named ~= nil and named:IsA("BasePart") then
+			return named
+		end
+		local firstPart = clone:FindFirstChildWhichIsA("BasePart", true)
+		if firstPart ~= nil then
+			return firstPart
+		end
+	end
+	return nil
+end
+
+function RunwaySession.SlideTraceResolveTrailFromAnchor(anchor: BasePart): Trail?
+	for _, child in anchor:GetChildren() do
+		if child:IsA("Trail") then
+			local trail = child :: Trail
+			if trail.Attachment0 ~= nil and trail.Attachment1 ~= nil then
+				return trail
+			end
+		end
+	end
+	return nil
+end
+
+function RunwaySession.SlideTraceGetTemplate(): Instance?
 	local cached = Refs.slideTraceCachedTemplate
 	if cached ~= nil and cached.Parent ~= nil then
 		return cached
@@ -2605,22 +2619,37 @@ function RunwaySession.SlideTraceGetTemplate(): BasePart?
 		if not Refs.slideTraceTemplateWarned then
 			Refs.slideTraceTemplateWarned = true
 			warn(
-				"[RunwaySession] ReplicatedStorage.Models missing; SlideTracePart skipped. Add Models.SlideTracePart in Studio."
+				"[RunwaySession] ReplicatedStorage.Models missing; SlideTraceTrail skipped. Add Models.SlideTraceTrail in Studio."
 			)
 		end
 		return nil
 	end
 	local template = modelsFolder:FindFirstChild(RunwaySlideTraceTemplateName)
-	if template == nil or not template:IsA("BasePart") then
+	if template == nil or (not template:IsA("Model") and not template:IsA("BasePart")) then
 		if not Refs.slideTraceTemplateWarned then
 			Refs.slideTraceTemplateWarned = true
 			warn(
-				"[RunwaySession] ReplicatedStorage.Models.SlideTracePart missing or not a BasePart; add template in Studio."
+				"[RunwaySession] ReplicatedStorage.Models.SlideTraceTrail missing or invalid; add AnchorPart + Trail template in Studio."
 			)
 		end
 		return nil
 	end
-	Refs.slideTraceCachedTemplate = template :: BasePart
+	local anchor = RunwaySession.SlideTraceResolveAnchorPartFromClone(template)
+	if anchor == nil then
+		if not Refs.slideTraceTemplateWarned then
+			Refs.slideTraceTemplateWarned = true
+			warn("[RunwaySession] SlideTraceTrail template has no AnchorPart BasePart.")
+		end
+		return nil
+	end
+	if RunwaySession.SlideTraceResolveTrailFromAnchor(anchor) == nil then
+		if not Refs.slideTraceTemplateWarned then
+			Refs.slideTraceTemplateWarned = true
+			warn("[RunwaySession] SlideTraceTrail template missing Trail with Attachment0/Attachment1.")
+		end
+		return nil
+	end
+	Refs.slideTraceCachedTemplate = template
 	return Refs.slideTraceCachedTemplate
 end
 
@@ -2664,67 +2693,56 @@ function RunwaySession.SlideTraceComputeWorldCFrame(hrp: BasePart, humanoid: Hum
 	return CFrame.fromMatrix(center, xAxis, n)
 end
 
-function RunwaySession.SlideTraceEnsureFollowerFromTemplate(): boolean
-	if Refs.slideTraceFollowerPart ~= nil and Refs.slideTraceFollowerPart.Parent ~= nil then
+function RunwaySession.SlideTraceEnsureAnchorFromTemplate(): boolean
+	if Refs.slideTraceAnchorPart ~= nil and Refs.slideTraceAnchorPart.Parent ~= nil then
 		return true
 	end
-	Refs.slideTraceFollowerPart = nil
+	Refs.slideTraceRootInstance = nil
+	Refs.slideTraceAnchorPart = nil
+	Refs.slideTraceTrail = nil
 	local tmpl = RunwaySession.SlideTraceGetTemplate()
 	if tmpl == nil then
 		return false
 	end
-	local p = tmpl:Clone()
-	p.Name = "JumpRunwaySlideTraceFollower"
-	p.Anchored = true
-	p.CanCollide = false
-	p.CanQuery = false
-	p.Parent = RunwaySession.GetJumpRunwayLocalFxFolder()
-	Refs.slideTraceFollowerPart = p
-	Refs.slideTracePrevAlongForDelta = nil
+	local clone = tmpl:Clone()
+	local anchor = RunwaySession.SlideTraceResolveAnchorPartFromClone(clone)
+	if anchor == nil then
+		clone:Destroy()
+		return false
+	end
+	local trail = RunwaySession.SlideTraceResolveTrailFromAnchor(anchor)
+	if trail == nil then
+		clone:Destroy()
+		return false
+	end
+	clone.Name = "JumpRunwaySlideTrace"
+	anchor.Name = "JumpRunwaySlideTraceAnchor"
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanQuery = false
+	clone.Parent = RunwaySession.GetJumpRunwayLocalFxFolder()
+	local lifetimeRaw = cfg.RUNWAY_SLIDE_TRACE_LIFETIME
+	if typeof(lifetimeRaw) == "number" and lifetimeRaw == lifetimeRaw and lifetimeRaw > 0 then
+		trail.Lifetime = lifetimeRaw
+	end
+	local minLenRaw = cfg.RUNWAY_SLIDE_TRACE_MIN_LENGTH
+	if typeof(minLenRaw) == "number" and minLenRaw == minLenRaw and minLenRaw > 0 then
+		trail.MinLength = minLenRaw
+	end
+	trail.Enabled = true
+	Refs.slideTraceRootInstance = clone
+	Refs.slideTraceAnchorPart = anchor
+	Refs.slideTraceTrail = trail
 	return true
 end
 
-function RunwaySession.SlideTraceStampSegmentsIfDue()
-	local follower = Refs.slideTraceFollowerPart
-	if follower == nil then
-		return
-	end
-	local tmpl = RunwaySession.SlideTraceGetTemplate()
-	if tmpl == nil then
-		return
-	end
-	local lenX = follower.Size.X
-	if lenX < 1e-4 then
-		return
-	end
-	local fracRaw = cfg.RUNWAY_SLIDE_TRACE_STAMP_AT_ALONG_FRAC
-	local frac = (typeof(fracRaw) == "number" and fracRaw == fracRaw) and math.clamp(fracRaw, 0.05, 1) or 0.75
-	local thresh = frac * lenX
-	local maxSegRaw = cfg.RUNWAY_SLIDE_TRACE_MAX_SEGMENTS
-	local maxSeg = (typeof(maxSegRaw) == "number" and maxSegRaw == maxSegRaw and maxSegRaw >= 2) and math.floor(maxSegRaw) or 64
-	local folder = RunwaySession.SlideTraceGetSegmentsFolder()
-	while Refs.slideTraceAccumAlong >= thresh do
-		Refs.slideTraceAccumAlong -= thresh
-		local seg = tmpl:Clone()
-		seg.Name = "JumpRunwaySlideTraceSegment"
-		seg.Anchored = true
-		seg.CanCollide = false
-		seg.CanQuery = false
-		seg.CFrame = follower.CFrame
-		seg.Parent = folder
-		table.insert(Refs.slideTraceSegmentList, seg)
-		while #Refs.slideTraceSegmentList > maxSeg do
-			local old = table.remove(Refs.slideTraceSegmentList, 1)
-			if old ~= nil and old.Parent ~= nil then
-				old:Destroy()
-			end
-		end
-	end
+function RunwaySession.SlideTraceHasActiveInstance(): boolean
+	return Refs.slideTraceAnchorPart ~= nil or Refs.slideTraceRootInstance ~= nil
 end
 
 function RunwaySession.SlideTraceUpdate(humanoid: Humanoid, hrp: BasePart)
 	if cfg.RUNWAY_SLIDE_TRACE_ENABLED ~= true then
-		if Refs.slideTraceFollowerPart ~= nil or #Refs.slideTraceSegmentList > 0 then
+		if RunwaySession.SlideTraceHasActiveInstance() then
 			RunwaySession.SlideTraceDestroy()
 		end
 		return
@@ -2735,12 +2753,12 @@ function RunwaySession.SlideTraceUpdate(humanoid: Humanoid, hrp: BasePart)
 		and localState.finalLandSubPhase == 2
 		and localState.finalLandProneBStage >= 1
 	if not shouldTraces then
-		if Refs.slideTraceFollowerPart ~= nil or #Refs.slideTraceSegmentList > 0 then
+		if RunwaySession.SlideTraceHasActiveInstance() then
 			RunwaySession.SlideTraceDestroy()
 		end
 		return
 	end
-	if not RunwaySession.SlideTraceEnsureFollowerFromTemplate() then
+	if not RunwaySession.SlideTraceEnsureAnchorFromTemplate() then
 		return
 	end
 	local forward = NormalizeRunwayForward(localState.runwayForward)
@@ -2748,24 +2766,8 @@ function RunwaySession.SlideTraceUpdate(humanoid: Humanoid, hrp: BasePart)
 	if cf == nil then
 		return
 	end
-	local follower = Refs.slideTraceFollowerPart :: BasePart
-	follower.CFrame = cf
-	local alongNow = RunwaySession.CurrentAlongProgress(hrp)
-	if Refs.slideTracePrevAlongForDelta == nil then
-		Refs.slideTracePrevAlongForDelta = alongNow
-		return
-	end
-	local prev = Refs.slideTracePrevAlongForDelta :: number
-	local delta = alongNow - prev
-	Refs.slideTracePrevAlongForDelta = alongNow
-	if delta < -12 then
-		Refs.slideTraceAccumAlong = 0
-		return
-	end
-	if delta > 0 then
-		Refs.slideTraceAccumAlong += delta
-	end
-	RunwaySession.SlideTraceStampSegmentsIfDue()
+	local anchor = Refs.slideTraceAnchorPart :: BasePart
+	anchor.CFrame = cf
 end
 
 function RunwaySession.DestroyRunwayRing()

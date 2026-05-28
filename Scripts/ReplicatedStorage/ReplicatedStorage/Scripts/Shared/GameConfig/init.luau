@@ -1047,12 +1047,14 @@ GameConfig.JumpRunway = {
 	-- 撞宝箱后站立等待：额外站立高度偏移（stud）
 	RUNWAY_CHEST_STAND_HRP_GROUND_EXTRA_HEIGHT = jumpRunwayDesigner.RUNWAY_CHEST_STAND_HRP_GROUND_EXTRA_HEIGHT,
 
-	-- 终局趴滑（子阶段 B）地面滑行痕迹：客户端克隆 ReplicatedStorage.Models.SlideTracePart（长方 Part，长边沿 Size.X 对齐跑道方向；内嵌 SurfaceGui 等 UI）。模板仅存在于 Studio 同步资源，仓库不存实例。
+	-- 终局趴滑（子阶段 B）地面滑行痕迹：客户端克隆 ReplicatedStorage.Models.SlideTraceTrail（AnchorPart + 双 Attachment + Trail）。模板仅存在于 Studio 同步资源，仓库不存实例。
 	RUNWAY_SLIDE_TRACE_ENABLED = true,
-	RUNWAY_SLIDE_TRACE_MAX_SEC = 5,
-	-- 沿跑道累积位移达到 「本比例 × SlideTracePart.Size.X」 时在地面落一段锚定拷贝（保证连续）
-	RUNWAY_SLIDE_TRACE_STAMP_AT_ALONG_FRAC = 0.75,
-	RUNWAY_SLIDE_TRACE_MAX_SEGMENTS = 64,
+	-- Trail 残留秒数（与 RunwaySlideTraceDestroyAfterEndSec 对齐）
+	RUNWAY_SLIDE_TRACE_LIFETIME = 5,
+	-- 最小采样长度，避免静止时噪点
+	RUNWAY_SLIDE_TRACE_MIN_LENGTH = 0.2,
+	-- 禁用 Trail 后额外等待再 Destroy（应 >= LIFETIME）
+	RUNWAY_SLIDE_TRACE_FADEOUT_BUFFER_SEC = 5,
 	-- 贴地点沿地法线抬高，减轻与地面 Z-fight
 	RUNWAY_SLIDE_TRACE_GROUND_NORMAL_LIFT_STUDS = 0.035,
 	-- 痕迹中心相对 HRP 在贴地前向轴上的偏移（studs；负值偏后）
