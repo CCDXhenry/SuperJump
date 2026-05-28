@@ -65,6 +65,10 @@ local StartTriggerCloseEnoughMinStuds = 24
 local StartTriggerRearmOutsideMinSec = 0.2
 local BestDistanceWallDestroyDelaySec = 3
 local BestDistanceWallLockedZ = 670.8
+local BestDistanceWallTextXMinNorm = 0.05
+local BestDistanceWallTextXMaxNorm = 0.95
+local BestDistanceWallTextYMinNorm = 0.05
+local BestDistanceWallTextYMaxNorm = 0.95
 local JumpWindowStumblePulseFrequencyHz = 2.4
 local JumpWindowStumblePulseStrength = 0.18
 local JumpWindowStumbleMinSpeedScale = 0.72
@@ -136,6 +140,8 @@ local Refs: {
 	jetpackDashParticleEmitters: { ParticleEmitter },
 	jetpackTemplateWarned: boolean,
 	bestDistanceWallModel: Model?,
+	bestDistanceWallPart: BasePart?,
+	bestDistanceWallText: TextLabel?,
 	bestDistanceWallDistance: number?,
 	bestDistanceWallPassed: boolean,
 	bestDistanceWallDestroyToken: number,
@@ -205,6 +211,8 @@ local Refs: {
 	jetpackDashParticleEmitters = {},
 	jetpackTemplateWarned = false,
 	bestDistanceWallModel = nil,
+	bestDistanceWallPart = nil,
+	bestDistanceWallText = nil,
 	bestDistanceWallDistance = nil,
 	bestDistanceWallPassed = false,
 	bestDistanceWallDestroyToken = 0,
@@ -3105,6 +3113,8 @@ function RunwaySession.DestroyBestDistanceWall()
 		Refs.bestDistanceWallModel = nil
 	end
 	Refs.bestDistanceWallDistance = nil
+	Refs.bestDistanceWallPart = nil
+	Refs.bestDistanceWallText = nil
 	Refs.bestDistanceWallPassed = false
 end
 
@@ -3632,19 +3642,25 @@ function RunwaySession.EnsureBestDistanceWall(forward: Vector3, origin: Vector3)
 	local modelMoveDelta = targetPosition - primaryPart.Position
 	wallModel:PivotTo(wallModel:GetPivot() + modelMoveDelta)
 
+	Refs.bestDistanceWallPart = nil
+	Refs.bestDistanceWallText = nil
 	local wallPart = wallModel:FindFirstChild("BestDistanceWall")
 	if wallPart ~= nil and wallPart:IsA("BasePart") then
-		wallPart.Anchored = true
-		wallPart.CanCollide = false
-		wallPart.CanTouch = false
+		local wallBase = wallPart :: BasePart
+		wallBase.Anchored = true
+		wallBase.CanCollide = false
+		wallBase.CanTouch = false
+		Refs.bestDistanceWallPart = wallBase
 
-		local ui = wallPart:FindFirstChild("UI")
+		local ui = wallBase:FindFirstChild("UI")
 		if ui ~= nil and ui:IsA("SurfaceGui") then
 			local controllerFrame = ui:FindFirstChild("ControllerFrame")
 			if controllerFrame ~= nil and controllerFrame:IsA("Frame") then
 				local textLabel = controllerFrame:FindFirstChild("Text")
 				if textLabel ~= nil and textLabel:IsA("TextLabel") then
-					textLabel.Text = string.format("Best: %.1fm", bestDistance)
+					local text = textLabel :: TextLabel
+					text.AnchorPoint = Vector2.new(0.5, 0.5)
+					Refs.bestDistanceWallText = text
 				end
 			end
 		end
@@ -3655,6 +3671,61 @@ function RunwaySession.EnsureBestDistanceWall(forward: Vector3, origin: Vector3)
 	Refs.bestDistanceWallModel = wallModel
 	Refs.bestDistanceWallDistance = bestDistance
 	Refs.bestDistanceWallPassed = false
+end
+
+local function MapWorldPosToBestDistanceWallSurfaceNorms(
+	wallPart: BasePart,
+	face: Enum.NormalId,
+	worldPos: Vector3
+): (number?, number?)
+	local localPos = wallPart.CFrame:PointToObjectSpace(worldPos)
+	local size = wallPart.Size
+	local xNorm: number
+	local yNorm: number
+	if face == Enum.NormalId.Left or face == Enum.NormalId.Right then
+		if size.Z < 1e-4 or size.Y < 1e-4 then
+			return nil, nil
+		end
+		xNorm = (localPos.Z / size.Z) + 0.5
+		yNorm = (localPos.Y / size.Y) + 0.5
+	elseif face == Enum.NormalId.Top or face == Enum.NormalId.Bottom then
+		if size.X < 1e-4 or size.Z < 1e-4 then
+			return nil, nil
+		end
+		xNorm = (localPos.X / size.X) + 0.5
+		yNorm = (localPos.Z / size.Z) + 0.5
+	else
+		if size.X < 1e-4 or size.Y < 1e-4 then
+			return nil, nil
+		end
+		xNorm = (localPos.X / size.X) + 0.5
+		yNorm = (localPos.Y / size.Y) + 0.5
+	end
+	return xNorm, yNorm
+end
+
+function RunwaySession.UpdateBestDistanceWallText(hrp: BasePart)
+	if Refs.bestDistanceWallPassed then
+		return
+	end
+	local wallPart = Refs.bestDistanceWallPart
+	local textLabel = Refs.bestDistanceWallText
+	if wallPart == nil or wallPart.Parent == nil or textLabel == nil or textLabel.Parent == nil then
+		return
+	end
+	local ui = wallPart:FindFirstChild("UI")
+	local face = Enum.NormalId.Front
+	if ui ~= nil and ui:IsA("SurfaceGui") then
+		face = (ui :: SurfaceGui).Face
+	end
+	local xNorm, yNorm = MapWorldPosToBestDistanceWallSurfaceNorms(wallPart, face, hrp.Position)
+	if xNorm == nil or yNorm == nil then
+		return
+	end
+	xNorm = math.clamp(xNorm, BestDistanceWallTextXMinNorm, BestDistanceWallTextXMaxNorm)
+	yNorm = math.clamp(yNorm, BestDistanceWallTextYMinNorm, BestDistanceWallTextYMaxNorm)
+	local pos = textLabel.Position
+	textLabel.Position = UDim2.new(xNorm, pos.X.Offset, 1 - yNorm, pos.Y.Offset)
 end
 
 function RunwaySession.UpdateBestDistanceWall(hrp: BasePart)
@@ -5311,6 +5382,7 @@ function RunwaySession.UpdateTick(dt: number)
 	RunwaySession.PollBeginLineOverlapForJumpWindow()
 	RunwaySession.UpdateRunwayRingTransform(humanoid, hrp, dt)
 	RunwaySession.UpdateDistanceRecorder(humanoid, hrp)
+	RunwaySession.UpdateBestDistanceWallText(hrp)
 	RunwaySession.UpdateBestDistanceWall(hrp)
 	local phaseBeforeForwardBlocked = localState.phase
 	RunwaySession.ProcessRunwayForwardBlocked(character, humanoid, hrp, nowClock)
