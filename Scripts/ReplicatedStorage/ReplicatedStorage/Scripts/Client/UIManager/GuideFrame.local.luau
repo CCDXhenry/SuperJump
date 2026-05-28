@@ -78,7 +78,7 @@ local function IsGuiVisibleChain(gui: GuiObject): boolean
 	return true
 end
 
--- BottomButtonsFrame 下仅 Brainrot 槽位可引导去放置展台：按队列找第一个 Brainrot 对应的 Slot_i
+-- BottomButtonsFrame 下仅 Brainrot 槽位可引导去放置展台：按队列找第一个 Brainrot 对应槽位
 local function FindLobbyBrainrotSlotButton(): GuiButton?
 	if localPlayer == nil then
 		return nil
@@ -100,20 +100,20 @@ local function FindLobbyBrainrotSlotButton(): GuiButton?
 		return nil
 	end
 	local queue = ClientGameInfo.GetBrainrotQueue()
-	for i, item in ipairs(queue) do
+	for _, item in ipairs(queue) do
 		if (item.itemType or GameConfig.ItemType.Brainrot) ~= GameConfig.ItemType.Brainrot then
 			continue
 		end
-		local byName = bottom:FindFirstChild("Slot_" .. i)
-		if byName and byName:IsA("GuiButton") then
-			return byName
-		end
 		for _, child in bottom:GetChildren() do
-			if child:IsA("GuiButton") then
-				local slotIndex = child:GetAttribute("slotIndex") :: number?
-				if slotIndex == i then
-					return child :: GuiButton
-				end
+			if not child:IsA("GuiButton") then
+				continue
+			end
+			if child:GetAttribute("slotType") ~= "Brainrot" then
+				continue
+			end
+			local uid = child:GetAttribute("uid")
+			if uid ~= nil and tostring(uid) == tostring(item.uid) then
+				return child :: GuiButton
 			end
 		end
 	end

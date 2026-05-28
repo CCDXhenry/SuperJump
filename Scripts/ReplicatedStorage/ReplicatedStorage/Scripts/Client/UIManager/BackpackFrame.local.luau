@@ -35,6 +35,7 @@ local activeSlots: { ImageButton } = {}
 local currentEquippedIndex: number = 0
 local activeExEquipSlotIndex: number = 0
 local isExEquipExercising: boolean = false
+local lastBackpackSignature: string? = nil
 
 -- 获取手持 Tool 的 UID
 local function GetEquippedUid(): string?
@@ -337,8 +338,53 @@ local function OnRenderStepped()
 	currentEquippedIndex = foundIndex
 end
 
+local function BuildBackpackSignature(
+	queue: { GameConfig.BrainrotQueueItem },
+	shouldShowExEquip: boolean,
+	equipId: number?
+): string
+	local parts: { string } = {}
+	if shouldShowExEquip and equipId ~= nil then
+		table.insert(parts, "ex:" .. tostring(equipId))
+	end
+
+	local maxBrainrotSlots = if shouldShowExEquip then 8 else 9
+	local shownCount = math.min(#queue, maxBrainrotSlots)
+	for i = 1, shownCount do
+		local item = queue[i]
+		if item then
+			local itemType = item.itemType or GameConfig.ItemType.Brainrot
+			table.insert(
+				parts,
+				string.format("%s:%d:%d:%d", item.uid, item.configId, item.level or 1, itemType)
+			)
+		end
+	end
+	return table.concat(parts, "|")
+end
+
+local function UpdateBackpackFrameVisible(slotCount: number)
+	bottomButtonsFrame.Visible = slotCount > 0 and not ClientGameInfo.IsInJumpRunway()
+end
+
 -- 刷新整个背包 UI
 local function RefreshBackpackUI(queue: { GameConfig.BrainrotQueueItem })
+	local MAX_UI_SLOTS = 9
+	local equipData = GetCurrentExEquipData()
+	local shouldShowExEquip = equipData ~= nil and not ClientGameInfo.IsInJumpRunway()
+	local equipId = if equipData then equipData.id else nil
+	local maxBrainrotSlots = if shouldShowExEquip then MAX_UI_SLOTS - 1 else MAX_UI_SLOTS
+	local shownCount = math.min(#queue, maxBrainrotSlots)
+	local slotCount = shownCount + (if shouldShowExEquip then 1 else 0)
+
+	UpdateBackpackFrameVisible(slotCount)
+
+	local signature = BuildBackpackSignature(queue, shouldShowExEquip, equipId)
+	if signature == lastBackpackSignature then
+		return
+	end
+	lastBackpackSignature = signature
+
 	-- 清除旧格子
 	for _, slot in ipairs(activeSlots) do
 		slot:Destroy()
@@ -347,28 +393,21 @@ local function RefreshBackpackUI(queue: { GameConfig.BrainrotQueueItem })
 	currentEquippedIndex = 0
 	activeExEquipSlotIndex = 0
 
-	local MAX_UI_SLOTS = 9
-	local equipData = GetCurrentExEquipData()
-	local shouldShowExEquip = equipData ~= nil and not ClientGameInfo.IsInJumpRunway()
-	local maxBrainrotSlots = if shouldShowExEquip then MAX_UI_SLOTS - 1 else MAX_UI_SLOTS
-
-	-- 创建新格子
-	local shownCount = math.min(#queue, maxBrainrotSlots)
-	for i = 1, shownCount do
-		local item = queue[i]
-		if item then
-			local slot = CreateSlot(i, item)
-			table.insert(activeSlots, slot)
-		end
-	end
+	-- 创建新格子：锻炼器材固定显示在第一个槽位
 	if shouldShowExEquip and equipData ~= nil then
-		activeExEquipSlotIndex = shownCount + 1
+		activeExEquipSlotIndex = 1
 		local slot = CreateExEquipSlot(activeExEquipSlotIndex, equipData)
 		table.insert(activeSlots, slot)
 	end
 
-	-- 显示/隐藏整个容器
-	bottomButtonsFrame.Visible = #activeSlots > 0 and not ClientGameInfo.IsInJumpRunway()
+	for i = 1, shownCount do
+		local item = queue[i]
+		if item then
+			local slotIndex = if shouldShowExEquip then i + 1 else i
+			local slot = CreateSlot(slotIndex, item)
+			table.insert(activeSlots, slot)
+		end
+	end
 end
 
 -- 公开接口：更新当前装备索引
@@ -387,6 +426,18 @@ function BackpackFrameManager.IsExEquipSlotIndex(index: number): boolean
 	return activeExEquipSlotIndex > 0 and index == activeExEquipSlotIndex
 end
 
+function BackpackFrameManager.GetBrainrotQueueIndexForSlot(slotIndex: number): number?
+	if activeExEquipSlotIndex > 0 then
+		if slotIndex == activeExEquipSlotIndex then
+			return nil
+		end
+		if slotIndex > activeExEquipSlotIndex then
+			return slotIndex - 1
+		end
+	end
+	return slotIndex
+end
+
 function BackpackFrameManager.Refresh()
 	local queue = ClientGameInfo.GetBrainrotQueue()
 	RefreshBackpackUI(queue)
@@ -402,10 +453,6 @@ ClientMsg.ConnectBrainrotQueueUpdate(function(queue: { GameConfig.BrainrotQueueI
 end)
 
 ClientMsg.ConnectLocalPlayerExEquipInventoryUpdate(function()
-	RefreshBackpackUI(ClientGameInfo.GetBrainrotQueue())
-end)
-
-ClientMsg.ConnectCurrentGuideTypeChanged(function()
 	RefreshBackpackUI(ClientGameInfo.GetBrainrotQueue())
 end)
 

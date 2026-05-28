@@ -76,6 +76,29 @@ local function IsCarryingUid(character: Model, uid: string): boolean
 	return a ~= nil and tostring(a) == tostring(uid)
 end
 
+local function GetBackpackFrameManager(): any?
+	if _G.BackpackFrameManager == nil then
+		return nil
+	end
+	return _G.BackpackFrameManager :: any
+end
+
+local function IsExEquipSlotIndex(index: number): boolean
+	local manager = GetBackpackFrameManager()
+	if manager == nil or manager.IsExEquipSlotIndex == nil then
+		return false
+	end
+	return manager.IsExEquipSlotIndex(index) == true
+end
+
+local function GetBrainrotQueueIndexForSlot(slotIndex: number): number?
+	local manager = GetBackpackFrameManager()
+	if manager == nil or manager.GetBrainrotQueueIndexForSlot == nil then
+		return slotIndex
+	end
+	return manager.GetBrainrotQueueIndexForSlot(slotIndex)
+end
+
 -- 供数字键防抖：本次按下是否会执行收起（已装备该槽 uid 的 Tool）
 local function WouldUnequipForSlotIndex(index: number): boolean
 	if ClientGameInfo.IsInJumpRunway() then
@@ -90,22 +113,12 @@ local function WouldUnequipForSlotIndex(index: number): boolean
 		return false
 	end
 	local queue = ClientGameInfo.GetBrainrotQueue()
-	if not queue or not queue[index] then
+	local queueIndex = GetBrainrotQueueIndexForSlot(index)
+	if not queue or queueIndex == nil or not queue[queueIndex] then
 		return false
 	end
 	local equipped = GetEquippedTool()
-	return equipped ~= nil and ToolBrainrotUidEquals(equipped, queue[index].uid)
-end
-
-local function IsExEquipSlotIndex(index: number): boolean
-	if _G.BackpackFrameManager == nil then
-		return false
-	end
-	local manager = _G.BackpackFrameManager :: any
-	if manager.IsExEquipSlotIndex == nil then
-		return false
-	end
-	return manager.IsExEquipSlotIndex(index) == true
+	return equipped ~= nil and ToolBrainrotUidEquals(equipped, queue[queueIndex].uid)
 end
 
 local function ToggleCurrentExEquip()
@@ -144,11 +157,12 @@ function BackpackInputManager.ToggleTool(index: number)
 	end
 
 	local queue = ClientGameInfo.GetBrainrotQueue()
-	if not queue or not queue[index] then
+	local queueIndex = GetBrainrotQueueIndexForSlot(index)
+	if not queue or queueIndex == nil or not queue[queueIndex] then
 		return
 	end
 
-	local targetItem = queue[index]
+	local targetItem = queue[queueIndex]
 	local targetUid = targetItem.uid
 
 	-- 收起优先：不经过 IsCarryingUid / FindTool，避免携带态或查找失败挡死收起
