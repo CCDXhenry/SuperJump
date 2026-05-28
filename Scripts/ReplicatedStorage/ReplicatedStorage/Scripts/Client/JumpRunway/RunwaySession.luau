@@ -2967,14 +2967,14 @@ function RunwaySession.JetpackPartsShareWeldConstraint(a: BasePart, b: BasePart)
 	return false
 end
 
--- 取消锚点后，未与 Middle 同装配的 Part 会散落/掉落；在移动 Middle 之前焊上，保留模板相对位姿。
-function RunwaySession.WeldAllRunwayJetpackPartsToMiddle(jetpackRoot: Model, middle: BasePart)
+-- 取消锚点后，未与 PrimaryPart 同装配的 Part 会散落/掉落；在移动 PrimaryPart 之前焊上，保留模板相对位姿。
+function RunwaySession.WeldAllRunwayJetpackPartsToPrimaryPart(jetpackRoot: Model, primaryPart: BasePart)
 	for _, d in jetpackRoot:GetDescendants() do
 		if d:IsA("BasePart") then
 			local bp = d :: BasePart
-			if bp ~= middle and not RunwaySession.JetpackPartsShareWeldConstraint(bp, middle) then
+			if bp ~= primaryPart and not RunwaySession.JetpackPartsShareWeldConstraint(bp, primaryPart) then
 				local w = Instance.new("WeldConstraint")
-				w.Part0 = middle
+				w.Part0 = primaryPart
 				w.Part1 = bp
 				w.Parent = bp
 			end
@@ -3053,7 +3053,6 @@ function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
 		local jetpackFolder = if modelsFolder then modelsFolder:FindFirstChild("Jetpack") :: Folder? else nil
 		local outerTemplate: Model? = nil
 		local innerTemplate: Instance? = nil
-		local middleTemplate: Instance? = nil
 
 		-- 尝试加载玩家当前装备的火箭背包模型
 		local function TryLoadEquippedJetpack(): boolean
@@ -3078,17 +3077,12 @@ function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
 			end
 			-- 用 resourceName 查找对应的子模型
 			outerTemplate = jetpackFolder:FindFirstChild(jetpackData.resourceName) :: Model?
-			if outerTemplate == nil or not outerTemplate:IsA("Model") then
+			if outerTemplate == nil or not outerTemplate:IsA("Model") or outerTemplate.PrimaryPart == nil then
 				outerTemplate = nil
 				return false
 			end
 			innerTemplate = outerTemplate:FindFirstChild(cfg.RUNWAY_JETPACK_INNER_MODEL_NAME)
-			middleTemplate = if innerTemplate and innerTemplate:IsA("Model")
-				then innerTemplate:FindFirstChild(cfg.RUNWAY_JETPACK_MIDDLE_NAME)
-				else nil
-			return outerTemplate ~= nil and innerTemplate ~= nil
-				and innerTemplate:IsA("Model") and middleTemplate ~= nil
-				and middleTemplate:IsA("BasePart")
+			return innerTemplate ~= nil and innerTemplate:IsA("Model")
 		end
 
 		-- 备用：加载默认的 Jetpack 模板
@@ -3096,40 +3090,39 @@ function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
 			outerTemplate = if modelsFolder
 				then modelsFolder:FindFirstChild(cfg.RUNWAY_JETPACK_OUTER_MODEL_NAME) :: Model?
 				else nil
+			if outerTemplate == nil or not outerTemplate:IsA("Model") or outerTemplate.PrimaryPart == nil then
+				outerTemplate = nil
+				return false
+			end
 			innerTemplate = if outerTemplate and outerTemplate:IsA("Model")
 				then outerTemplate:FindFirstChild(cfg.RUNWAY_JETPACK_INNER_MODEL_NAME)
 				else nil
-			middleTemplate = if innerTemplate and innerTemplate:IsA("Model")
-				then innerTemplate:FindFirstChild(cfg.RUNWAY_JETPACK_MIDDLE_NAME)
-				else nil
-			return outerTemplate ~= nil and outerTemplate:IsA("Model")
-				and innerTemplate ~= nil and innerTemplate:IsA("Model")
-				and middleTemplate ~= nil and middleTemplate:IsA("BasePart")
+			return innerTemplate ~= nil and innerTemplate:IsA("Model")
 		end
 
 		local templateReady = TryLoadEquippedJetpack() or TryLoadDefaultJetpack()
 
-		if templateReady and outerTemplate ~= nil and innerTemplate ~= nil and middleTemplate ~= nil then
+		if templateReady and outerTemplate ~= nil and innerTemplate ~= nil then
 			local clone = outerTemplate:Clone() :: Model
 			clone.Name = "JumpRunwayJetpackClone"
 			clone.Parent = character
 			RunwaySession.ConfigureRunwayJetpackBaseParts(clone)
+			local primaryPart = clone.PrimaryPart
 			local inner = clone:FindFirstChild(cfg.RUNWAY_JETPACK_INNER_MODEL_NAME) :: Model?
-			local middle = if inner then inner:FindFirstChild(cfg.RUNWAY_JETPACK_MIDDLE_NAME) :: BasePart? else nil
-			if inner == nil or middle == nil then
+			if primaryPart == nil or inner == nil then
 				clone:Destroy()
 				if not Refs.jetpackTemplateWarned then
 					Refs.jetpackTemplateWarned = true
-					warn("[RunwaySession] Jetpack clone missing inner model or Middle; using fallback Part.")
+					warn("[RunwaySession] Jetpack clone missing PrimaryPart or inner model; using fallback Part.")
 				end
 				CreateFallbackRocketBackpackPart()
 				return
 			end
 			local flame1 = inner:FindFirstChild(cfg.RUNWAY_JETPACK_FLAME1_NAME)
 			local flame2 = inner:FindFirstChild(cfg.RUNWAY_JETPACK_FLAME2_NAME)
-			RunwaySession.WeldAllRunwayJetpackPartsToMiddle(clone, middle)
+			RunwaySession.WeldAllRunwayJetpackPartsToPrimaryPart(clone, primaryPart)
 			if torso ~= nil then
-				middle.CFrame = torso.CFrame
+				primaryPart.CFrame = torso.CFrame
 					* CFrame.new(
 						cfg.RUNWAY_ROCKET_BACKPACK_OFFSET_X,
 						cfg.RUNWAY_ROCKET_BACKPACK_OFFSET_Y,
@@ -3138,9 +3131,9 @@ function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
 			else
 				if not Refs.rocketBackpackFallbackWarned then
 					Refs.rocketBackpackFallbackWarned = true
-					warn("[RunwaySession] No UpperTorso/Torso; jetpack Middle welded to HumanoidRootPart.")
+					warn("[RunwaySession] No UpperTorso/Torso; jetpack PrimaryPart welded to HumanoidRootPart.")
 				end
-				middle.CFrame = hrp.CFrame
+				primaryPart.CFrame = hrp.CFrame
 					* CFrame.new(
 						cfg.RUNWAY_ROCKET_BACKPACK_HRP_FALLBACK_OFFSET_X,
 						cfg.RUNWAY_ROCKET_BACKPACK_HRP_FALLBACK_OFFSET_Y,
@@ -3149,8 +3142,8 @@ function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
 			end
 			local w = Instance.new("WeldConstraint")
 			w.Part0 = attachPart
-			w.Part1 = middle
-			w.Parent = middle
+			w.Part1 = primaryPart
+			w.Parent = primaryPart
 			Refs.jetpackVisualRoot = clone
 			table.clear(Refs.jetpackDashParticleEmitters)
 			if flame1 ~= nil and flame1:IsA("BasePart") then

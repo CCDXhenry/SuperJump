@@ -450,7 +450,11 @@ function ClientGameInfo.IsInJumpRunwayEscapePhase(): boolean
 end
 
 function ClientGameInfo.SetInJumpRunwayEscapePhase(value: boolean)
+	if isInJumpRunwayEscapePhase == value then
+		return
+	end
 	isInJumpRunwayEscapePhase = value
+	ClientMsg.FireCurrentGuideTypeChanged()
 end
 
 -- 移除其他玩家信息 (当玩家离开时)

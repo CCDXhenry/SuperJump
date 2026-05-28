@@ -15,7 +15,7 @@ local GameConfig = require(SharedScripts:WaitForChild("GameConfig"))
 local GameTexts = require(SharedScripts:WaitForChild("GameTexts"))
 
 local ShopClientManager = {}
-local SHOP_MODEL_NAMES = { "ProPack", "NewPack", "SellShop", "UpgradeShop" }
+local SHOP_MODEL_NAMES = {"SellShop", "UpgradeShop" , "JetpackShop" , "ExEquipShop"}
 local SHOP_WAIT_TIMEOUT = 10
 local PROMPT_BOUND_ATTR = "ShopPromptWindowBound"
 local BILLBOARD_TRACKED_ATTR = "BillboardTracked"
