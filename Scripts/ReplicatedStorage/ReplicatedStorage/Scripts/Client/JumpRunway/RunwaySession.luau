@@ -344,6 +344,20 @@ function RunwaySession.CurrentAlongProgress(hrp: BasePart): number
 	return RunwayPhysicsController.CurrentAlongProgress(hrp, localState.runwayOrigin, localState.runwayForward, localState.alongBaseline)
 end
 
+function RunwaySession.ResolveBeginLineAlongFromOrigin(forward: Vector3, origin: Vector3): number?
+	local _, beginLine = RunwaySession.ResolveSceneParts()
+	if beginLine == nil or not beginLine:IsA("BasePart") then
+		return nil
+	end
+	local fwd = NormalizeRunwayForward(forward)
+	local beginEdgeWorld = beginLine.CFrame * Vector3.new(beginLine.Size.X / 2, 0, 0)
+	return (beginEdgeWorld - origin):Dot(fwd)
+end
+
+function RunwaySession.ComputeRunwayDisplayDistanceStuds(hrp: BasePart): number
+	return RunwaySession.CurrentAlongProgress(hrp)
+end
+
 function RunwaySession.BuildRunwayObstacleRaycastExcludeList(character: Model): { Instance }
 	local excludeList: { Instance } = { character }
 	local localFx = workspace:FindFirstChild("JumpRunwayLocalFx")
@@ -639,7 +653,7 @@ function RunwaySession.HudRefresh()
 	local _c, humanoid, hrp = RunwaySession.GetCharacterParts()
 	local dist = 0
 	if hrp ~= nil and localState.runwayOrigin ~= nil then
-		dist = math.max(0, RunwaySession.CurrentAlongProgress(hrp))
+		dist = RunwaySession.ComputeRunwayDisplayDistanceStuds(hrp)
 	end
 	if Refs.phaseLabel then
 		local extra = ""
@@ -706,7 +720,7 @@ end
 function RunwaySession.RefreshJumpRunWayFrameStats(hrp: BasePart?)
 	local distanceStuds = 0
 	if hrp ~= nil and localState.runwayOrigin ~= nil then
-		distanceStuds = math.max(0, RunwaySession.CurrentAlongProgress(hrp))
+		distanceStuds = RunwaySession.ComputeRunwayDisplayDistanceStuds(hrp)
 	end
 	local maxFuel = RunwaySession.GetExpectedPlayerMaxFuel()
 	local fuelVisible = localState.phase == Ph.Airborne
@@ -715,7 +729,7 @@ function RunwaySession.RefreshJumpRunWayFrameStats(hrp: BasePart?)
 	local isFinalSlideSecondStage = localState.phase == Ph.Slide
 		and localState.finalLandSubPhase == 2
 		and (localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss)
-	local distanceVisible = not isFinalSlideSecondStage
+	local distanceVisible = not isFinalSlideSecondStage and distanceStuds > 0
 	JumpRunWayFrame.RefreshRunwayStats(distanceStuds, localState.fuel, maxFuel, fuelVisible, distanceVisible)
 end
 
@@ -2791,7 +2805,11 @@ function RunwaySession.ResolveBeginLineAlongMetrics(hrp: BasePart): (boolean, nu
 	local beginEdgeAlong = (beginEdgeWorld - localState.runwayOrigin):Dot(fwd)
 	local currentAlong = (hrp.Position - localState.runwayOrigin):Dot(fwd)
 	local distToBegin = beginEdgeAlong - currentAlong
-	local maxDist = beginEdgeAlong - localState.alongBaseline
+	local sessionStartAlong = localState.sessionStartAlong
+	if sessionStartAlong == nil then
+		sessionStartAlong = localState.alongBaseline or 0
+	end
+	local maxDist = beginEdgeAlong - sessionStartAlong
 	return true, distToBegin, maxDist
 end
 
@@ -3554,10 +3572,19 @@ function RunwaySession.EnsureDistanceRecorderFromTemplate(humanoid: Humanoid, hr
 	local abilityLabel = ability :: TextLabel
 	abilityLabel.AutoLocalize = false
 	Refs.runwayDistanceRecorderText = abilityLabel
-	local studs = math.max(0, RunwaySession.CurrentAlongProgress(hrp))
+	RunwaySession.ApplyDistanceRecorderDisplay(abilityLabel, hrp)
+end
+
+function RunwaySession.ApplyDistanceRecorderDisplay(lbl: TextLabel, hrp: BasePart)
+	local studs = RunwaySession.ComputeRunwayDisplayDistanceStuds(hrp)
+	if studs <= 0 then
+		lbl.Visible = false
+		return
+	end
+	lbl.Visible = true
 	local metersWhole = math.floor(studs + 0.5)
 	local tip = GameTexts.JumpRunwayDistanceMeters
-	TranslationTool.CustomAutoLocalizeTextLabel(abilityLabel, tip.source, tip.key, { tostring(metersWhole) })
+	TranslationTool.CustomAutoLocalizeTextLabel(lbl, tip.source, tip.key, { tostring(metersWhole) })
 end
 
 function RunwaySession.UpdateDistanceRecorder(humanoid: Humanoid, hrp: BasePart)
@@ -3569,10 +3596,7 @@ function RunwaySession.UpdateDistanceRecorder(humanoid: Humanoid, hrp: BasePart)
 	part.Position = worldCenter
 	local lbl = Refs.runwayDistanceRecorderText
 	if lbl ~= nil and lbl.Parent ~= nil then
-		local studs = math.max(0, RunwaySession.CurrentAlongProgress(hrp))
-		local metersWhole = math.floor(studs + 0.5)
-		local tip = GameTexts.JumpRunwayDistanceMeters
-		TranslationTool.CustomAutoLocalizeTextLabel(lbl, tip.source, tip.key, { tostring(metersWhole) })
+		RunwaySession.ApplyDistanceRecorderDisplay(lbl, hrp)
 	end
 end
 
@@ -3608,7 +3632,7 @@ function RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(humanoid: Humanoid
 	end
 end
 
-function RunwaySession.EnsureBestDistanceWall(forward: Vector3, origin: Vector3)
+function RunwaySession.EnsureBestDistanceWall(forward: Vector3, origin: Vector3, scoreBaselineAlong: number)
 	RunwaySession.DestroyBestDistanceWall()
 	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
 	if localPlayerInfo == nil then
@@ -3639,7 +3663,7 @@ function RunwaySession.EnsureBestDistanceWall(forward: Vector3, origin: Vector3)
 		return
 	end
 	local wallHeight = cfg.BEST_DISTANCE_WALL_HEIGHT_Y
-	local pos = origin + forward * bestDistance
+	local pos = origin + forward * (scoreBaselineAlong + bestDistance)
 	local targetPosition = Vector3.new(pos.X, wallHeight, BestDistanceWallLockedZ)
 	local modelMoveDelta = targetPosition - primaryPart.Position
 	wallModel:PivotTo(wallModel:GetPivot() + modelMoveDelta)
@@ -5989,13 +6013,16 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	RunwaySession.SlideTraceDestroy()
 	local forward = NormalizeRunwayForward(startTrigger.CFrame.RightVector)
 	local origin = startTrigger.Position
-	RunwaySession.EnsureBestDistanceWall(forward, origin)
+	local sessionStartAlong = (hrp.Position - origin):Dot(forward)
+	local beginLineAlong = RunwaySession.ResolveBeginLineAlongFromOrigin(forward, origin)
+	local scoreBaselineAlong = if beginLineAlong ~= nil then beginLineAlong else sessionStartAlong
+	RunwaySession.EnsureBestDistanceWall(forward, origin, scoreBaselineAlong)
 	RunwaySession.AlignCharacterYawToRunwayForward(hrp, forward)
 	localState.scriptedGroundHrpYBaseline = hrp.Position.Y
-	local alongBaseline = (hrp.Position - origin):Dot(forward)
 	localState.runwayForward = forward
 	localState.runwayOrigin = origin
-	localState.alongBaseline = alongBaseline
+	localState.sessionStartAlong = sessionStartAlong
+	localState.alongBaseline = scoreBaselineAlong
 	localState.phase = Ph.AutoRun
 	localState.takeoffCount = 0
 	localState.jumpSpeedCumulativeRatingBonus = 0
@@ -6043,8 +6070,8 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	localState.finalDashAlongExtra = 0
 	Refs.finalPitchSmoothedExtraDeg = 0
 	localState.lastSampleSendClock = 0
-	localState.lastSampleAlong = alongBaseline
-	RunwayNetBridge.FireStartSession(NetMsg, Kind, forward, origin, alongBaseline)
+	localState.lastSampleAlong = scoreBaselineAlong
+	RunwayNetBridge.FireStartSession(NetMsg, Kind, forward, origin, scoreBaselineAlong)
 	localState.lastReportedDashHeld = localState.dashHeld
 	RunwaySession.ApplyRunwayHumanoidJumpState(humanoid, true)
 	humanoid.WalkSpeed = cfg.FIRST_TAKEOFF_AUTORUN_SPEED

@@ -209,7 +209,10 @@ function JumpRunWayFrame.RefreshRunwayStats(distanceStuds: number, currentFuel: 
 		distanceLabel.Visible = distanceVisible
 	end
 	if distanceValue ~= nil then
-		distanceValue.Text = string.format("%dm", math.max(0, math.floor(distanceStuds + 0.5)))
+		distanceValue.Visible = distanceVisible
+		if distanceVisible then
+			distanceValue.Text = string.format("%dm", math.max(0, math.floor(distanceStuds + 0.5)))
+		end
 	end
 end
 

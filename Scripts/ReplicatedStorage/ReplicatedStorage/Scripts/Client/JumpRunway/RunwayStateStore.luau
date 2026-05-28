@@ -7,6 +7,7 @@ export type RunwayStateStoreShape = {
 	runwayForward: Vector3,
 	runwayOrigin: Vector3?,
 	alongBaseline: number?,
+	sessionStartAlong: number?,
 	takeoffCount: number,
 	jumpSpeedCumulativeRatingBonus: number,
 	jumpSpeedCurrentReductionDelta: number,
@@ -68,6 +69,7 @@ function RunwayStateStore.CreateDefault(phases: any, slideKindStandard: string):
 		runwayForward = Vector3.xAxis,
 		runwayOrigin = nil,
 		alongBaseline = nil,
+		sessionStartAlong = nil,
 		takeoffCount = 0,
 		jumpSpeedCumulativeRatingBonus = 0,
 		jumpSpeedCurrentReductionDelta = 0,
@@ -128,6 +130,7 @@ function RunwayStateStore.ResetForIdle(localState: RunwayStateStoreShape, phases
 	localState.phase = phases.Idle
 	localState.runwayOrigin = nil
 	localState.alongBaseline = nil
+	localState.sessionStartAlong = nil
 	localState.takeoffCount = 0
 	localState.jumpSpeedCumulativeRatingBonus = 0
 	localState.jumpSpeedCurrentReductionDelta = 0
