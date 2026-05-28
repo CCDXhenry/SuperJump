@@ -1100,11 +1100,31 @@ GameConfig.JumpRunway = {
 		else 1.14,
 
 	-- —— 追擊者 Chaser ——
+	-- 追击者基础移动速度（stud/s）
 	CHASER_SPEED = 16,
-	CHASER_SPAWN_AHEAD_STUDS = 50,
+	-- 追击者生成在玩家跑道前方的距离（stud）
+	CHASER_SPAWN_AHEAD_STUDS = 100,
+	-- 追击者消失淡出时长（秒）
 	CHASER_FADE_DURATION_SEC = 1.5,
+	-- 未显式传入定身时使用的默认追击延迟（秒）
 	CHASER_START_DELAY_SEC = 3,
+	-- 追击者创建后保持不动的时长（秒）
+	CHASER_FREEZE_AFTER_SPAWN_SEC = 1,
+	-- 摄像机插值移动到追击者镜头的时长（秒）
+	CHASER_CAMERA_FOCUS_TRANSITION_SEC = 1,
+	-- 摄像机对准追击者后保持的时长（秒）
+	CHASER_CAMERA_FOCUS_HOLD_SEC = 1,
+	-- 摄像机从追击者镜头插值回玩家 home 视角的时长（秒）
+	CHASER_CAMERA_RETURN_HOME_TRANSITION_SEC = 1,
+	-- 追击者镜头距离追击者 HumanoidRootPart 的水平距离（stud）
+	CHASER_CAMERA_FOCUS_DISTANCE_STUDS = 50,
+	-- 追击者镜头相对追击者 HumanoidRootPart 的右侧偏移（stud）
+	CHASER_CAMERA_FOCUS_RIGHT_OFFSET_STUDS = 0,
+	-- 追击者镜头相对追击者 HumanoidRootPart 的高度偏移（stud）
+	CHASER_CAMERA_FOCUS_HEIGHT_OFFSET_STUDS = 6,
+	-- 追击者穿过树木时的速度倍率
 	CHASER_TREE_SLOW_SCALE = 0.5,
+	-- 追击者碰到树木后的减速持续时长（秒）
 	CHASER_TREE_SLOW_DURATION_SEC = 0.35,
 	RUNWAY_BLOCKED_FORWARD_RAY_DISTANCE = 3.5,
 	RUNWAY_BLOCKED_MIN_STUCK_SEC = 0.35,

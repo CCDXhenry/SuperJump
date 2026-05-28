@@ -4776,7 +4776,6 @@ function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chest
 		hrpDelay.AssemblyLinearVelocity = Vector3.zero
 		hrpDelay.AssemblyAngularVelocity = Vector3.zero
 		RunwaySession.AlignCharacterYawToRunwayForward(hrpDelay, baseDirection)
-		RunwayCameraController.Disable(workspace, RunwaySession.GetCharacterParts, baseDirection, cfg, NormalizeRunwayForward)
 		RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(hDelay)
 		RunwaySession.ClearFinalLandingSlideModuleLocals()
 		RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(hDelay, hrpDelay)
@@ -4800,7 +4799,21 @@ function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chest
 	local chaserSpeedOverride = if monsterData then monsterData.moveSpeed else nil
 	RunwaySession.ClearLittleElfChestRefs()
 	if hDelay then
-		ChaserClientManager.SpawnChaser(hDelay:FindFirstAncestorOfClass("Model") :: Model, forwardExit, chaserSpeedOverride)
+		local chaserFreezeDuration = cfg.CHASER_FREEZE_AFTER_SPAWN_SEC
+		local chaser = ChaserClientManager.SpawnChaser(
+			hDelay:FindFirstAncestorOfClass("Model") :: Model,
+			forwardExit,
+			chaserSpeedOverride,
+			chaserFreezeDuration
+		)
+		RunwayCameraController.FocusChaserThenDisable(
+			workspace,
+			RunwaySession.GetCharacterParts,
+			chaser,
+			baseDirection,
+			cfg,
+			NormalizeRunwayForward
+		)
 	end
 	ClientGameInfo.SetInJumpRunwayEscapePhase(true)
 	Refs.chestCarryReturnActive = true

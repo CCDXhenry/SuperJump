@@ -35,6 +35,39 @@ local function ResolveReleaseTransitionDuration(cfg: any?): number
 	return duration
 end
 
+local function ResolveChaserFocusTransitionDuration(cfg: any?): number
+	if cfg == nil then
+		return 0.6
+	end
+	local duration = cfg.CHASER_CAMERA_FOCUS_TRANSITION_SEC
+	if typeof(duration) ~= "number" or duration ~= duration or duration < 0 then
+		return 0.6
+	end
+	return duration
+end
+
+local function ResolveChaserFocusHoldDuration(cfg: any?): number
+	if cfg == nil then
+		return 1
+	end
+	local duration = cfg.CHASER_CAMERA_FOCUS_HOLD_SEC
+	if typeof(duration) ~= "number" or duration ~= duration or duration < 0 then
+		return 1
+	end
+	return duration
+end
+
+local function ResolveChaserReturnHomeTransitionDuration(cfg: any?): number
+	if cfg == nil then
+		return 0.35
+	end
+	local duration = cfg.CHASER_CAMERA_RETURN_HOME_TRANSITION_SEC
+	if typeof(duration) ~= "number" or duration ~= duration or duration < 0 then
+		return 0.35
+	end
+	return duration
+end
+
 local function RestoreCameraControl(
 	camera: Camera,
 	restoreCameraType: Enum.CameraType?,
@@ -60,6 +93,55 @@ local function RestoreCameraControl(
 	end
 end
 
+local function PlayCameraTransition(
+	camera: Camera,
+	transitionToken: number,
+	duration: number,
+	startCFrame: CFrame,
+	targetCFrame: CFrame,
+	startFov: number,
+	targetFov: number
+): boolean
+	local elapsed = 0
+	while elapsed < duration do
+		if state.releaseTransitionToken ~= transitionToken then
+			return false
+		end
+		if camera.Parent == nil then
+			return false
+		end
+		local dt = runService.RenderStepped:Wait()
+		elapsed += dt
+		local t = math.clamp(elapsed / duration, 0, 1)
+		local eased = t * t * (3 - 2 * t)
+		camera.CFrame = startCFrame:Lerp(targetCFrame, eased)
+		camera.FieldOfView = startFov + (targetFov - startFov) * eased
+	end
+	if state.releaseTransitionToken ~= transitionToken then
+		return false
+	end
+	if camera.Parent == nil then
+		return false
+	end
+	camera.CFrame = targetCFrame
+	camera.FieldOfView = targetFov
+	return true
+end
+
+local function PlayHold(camera: Camera, transitionToken: number, holdDuration: number): boolean
+	local elapsed = 0
+	while elapsed < holdDuration do
+		if state.releaseTransitionToken ~= transitionToken then
+			return false
+		end
+		if camera.Parent == nil then
+			return false
+		end
+		elapsed += runService.RenderStepped:Wait()
+	end
+	return state.releaseTransitionToken == transitionToken and camera.Parent ~= nil
+end
+
 local function PlayReleaseTransition(
 	camera: Camera,
 	transitionToken: number,
@@ -73,28 +155,9 @@ local function PlayReleaseTransition(
 	restoreFov: number?,
 	getCharacterParts: () -> (Model?, Humanoid?, BasePart?)
 )
-	local elapsed = 0
-	while elapsed < releaseDuration do
-		if state.releaseTransitionToken ~= transitionToken then
-			return
-		end
-		if camera.Parent == nil then
-			return
-		end
-		local dt = runService.RenderStepped:Wait()
-		elapsed += dt
-		local t = math.clamp(elapsed / releaseDuration, 0, 1)
-		local eased = t * t * (3 - 2 * t)
-		camera.CFrame = startCFrame:Lerp(targetCFrame, eased)
-		camera.FieldOfView = startFov + (targetFov - startFov) * eased
-	end
-	if state.releaseTransitionToken ~= transitionToken then
+	if not PlayCameraTransition(camera, transitionToken, releaseDuration, startCFrame, targetCFrame, startFov, targetFov) then
 		return
 	end
-	if camera.Parent == nil then
-		return
-	end
-	camera.CFrame = targetCFrame
 	RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
 end
 
@@ -115,6 +178,48 @@ function RunwayCameraController.CalculateTargets(hrp: BasePart, runwayForward: V
 		targetLookAt += forward
 	end
 	return targetPosition, targetLookAt
+end
+
+function RunwayCameraController.CalculateChaserFocusTarget(
+	chaser: Model,
+	hrp: BasePart?,
+	fallbackForward: Vector3,
+	cfg: any,
+	normalizeForward: (Vector3) -> Vector3
+): CFrame
+	local chaserHead = chaser:FindFirstChild("Head") :: BasePart?
+	print("chaserHead", chaserHead)
+	local centerPos = if chaserHead ~= nil then chaserHead.Position else chaser:GetPivot().Position
+	local lookAt = centerPos
+	local toPlayer = if hrp ~= nil then Vector3.new(hrp.Position.X - centerPos.X, 0, hrp.Position.Z - centerPos.Z) else Vector3.zero
+	if toPlayer.Magnitude < 1e-4 then
+		toPlayer = -normalizeForward(fallbackForward)
+	else
+		toPlayer = toPlayer.Unit
+	end
+	local right = toPlayer:Cross(Vector3.yAxis)
+	if right.Magnitude < 1e-4 then
+		right = Vector3.xAxis
+	else
+		right = right.Unit
+	end
+	local distance = cfg.CHASER_CAMERA_FOCUS_DISTANCE_STUDS
+	if typeof(distance) ~= "number" or distance ~= distance or distance <= 0 then
+		distance = 32
+	end
+	local rightOffset = cfg.CHASER_CAMERA_FOCUS_RIGHT_OFFSET_STUDS
+	if typeof(rightOffset) ~= "number" or rightOffset ~= rightOffset then
+		rightOffset = 0
+	end
+	local heightOffset = cfg.CHASER_CAMERA_FOCUS_HEIGHT_OFFSET_STUDS
+	if typeof(heightOffset) ~= "number" or heightOffset ~= heightOffset then
+		heightOffset = 8
+	end
+	local cameraPos = centerPos + toPlayer * distance + right * rightOffset + Vector3.new(0, heightOffset, 0)
+	if (lookAt - cameraPos).Magnitude < 1e-3 then
+		cameraPos += Vector3.new(0, 0, 1)
+	end
+	return CFrame.lookAt(cameraPos, lookAt, Vector3.yAxis)
 end
 
 function RunwayCameraController.Enable(workspaceRef: Workspace, cfg: any, hrp: BasePart, runwayForward: Vector3, normalizeForward: (Vector3) -> Vector3)
@@ -192,6 +297,91 @@ function RunwayCameraController.Disable(
 			RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
 		end
 	end
+	state.cameraTypeBeforeRunway = nil
+	state.cameraSubjectBeforeRunway = nil
+	state.cameraFovBeforeRunway = nil
+end
+
+function RunwayCameraController.FocusChaserThenDisable(
+	workspaceRef: Workspace,
+	getCharacterParts: () -> (Model?, Humanoid?, BasePart?),
+	chaser: Model?,
+	releaseForward: Vector3,
+	cfg: any,
+	normalizeForward: (Vector3) -> Vector3
+)
+	if chaser == nil or chaser.Parent == nil then
+		RunwayCameraController.Disable(workspaceRef, getCharacterParts, releaseForward, cfg, normalizeForward)
+		return
+	end
+	state.smoothedCameraPosition = nil
+	state.smoothedCameraLookAt = nil
+	if not state.active then
+		return
+	end
+	state.active = false
+	local camera = workspaceRef.CurrentCamera
+	if camera == nil then
+		return
+	end
+	state.releaseTransitionToken += 1
+	local transitionToken = state.releaseTransitionToken
+	local restoreCameraType = state.cameraTypeBeforeRunway
+	local restoreSubject = state.cameraSubjectBeforeRunway
+	local restoreFov = state.cameraFovBeforeRunway
+	local focusDuration = ResolveChaserFocusTransitionDuration(cfg)
+	local holdDuration = ResolveChaserFocusHoldDuration(cfg)
+	local releaseDuration = ResolveChaserReturnHomeTransitionDuration(cfg)
+	local _character, _humanoid, hrp = getCharacterParts()
+	local focusCFrame = RunwayCameraController.CalculateChaserFocusTarget(chaser, hrp, releaseForward, cfg, normalizeForward)
+	local startCFrame = camera.CFrame
+	local startFov = camera.FieldOfView
+	camera.CameraType = Enum.CameraType.Scriptable
+	task.spawn(function()
+		if focusDuration > 0 then
+			if not PlayCameraTransition(camera, transitionToken, focusDuration, startCFrame, focusCFrame, startFov, cfg.RUNWAY_CAMERA_FOV) then
+				return
+			end
+		else
+			camera.CFrame = focusCFrame
+			camera.FieldOfView = cfg.RUNWAY_CAMERA_FOV
+		end
+		if not PlayHold(camera, transitionToken, holdDuration) then
+			return
+		end
+		local _releaseCharacter, _releaseHumanoid, releaseHrp = getCharacterParts()
+		if releaseHrp ~= nil then
+			local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(
+				releaseHrp,
+				releaseForward,
+				cfg,
+				normalizeForward
+			)
+			local targetCFrame = CFrame.lookAt(targetPosition, targetLookAt, Vector3.yAxis)
+			local targetFov = restoreFov or camera.FieldOfView
+			if releaseDuration > 0 then
+				PlayReleaseTransition(
+					camera,
+					transitionToken,
+					releaseDuration,
+					camera.CFrame,
+					targetCFrame,
+					camera.FieldOfView,
+					targetFov,
+					restoreCameraType,
+					restoreSubject,
+					restoreFov,
+					getCharacterParts
+				)
+			else
+				camera.CFrame = targetCFrame
+				camera.FieldOfView = targetFov
+				RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+			end
+		else
+			RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+		end
+	end)
 	state.cameraTypeBeforeRunway = nil
 	state.cameraSubjectBeforeRunway = nil
 	state.cameraFovBeforeRunway = nil

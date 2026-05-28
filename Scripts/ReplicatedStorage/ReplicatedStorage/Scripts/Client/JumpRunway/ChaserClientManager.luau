@@ -163,18 +163,23 @@ local function InternalCleanupFull()
 	end
 end
 
-function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3, speedOverride: number?)
+function ChaserClientManager.SpawnChaser(
+	character: Model,
+	forwardDir: Vector3,
+	speedOverride: number?,
+	startDelayOverrideSec: number?
+): Model?
 	InternalCleanupFull()
 	EnsureTreeCollisionGroup()
 
 	if chaserTemplate == nil then
 		warn("[ChaserClientManager] Chaser template not found under ReplicatedStorage.Models.Chaser")
-		return
+		return nil
 	end
 
 	local hrp = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if hrp == nil then
-		return
+		return nil
 	end
 
 	local forwardH = Vector3.new(forwardDir.X, 0, forwardDir.Z)
@@ -271,8 +276,9 @@ function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3, 
 		end
 	end
 	local chaserHumanoid = chaser:FindFirstChildOfClass("Humanoid")
+	local runAnimTrack: AnimationTrack? = nil
 	if chaserHumanoid then
-		chaserHumanoid.WalkSpeed = chaserSpeed
+		chaserHumanoid.WalkSpeed = 0
 		chaserHumanoid.AutoRotate = true
 		chaserHumanoid.PlatformStand = false
 
@@ -280,11 +286,11 @@ function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3, 
 		if chaserHumanoid.RigType == Enum.HumanoidRigType.R6 then
 			local runAnim = Instance.new("Animation")
 			runAnim.AnimationId = "rbxassetid://180426354"
-			local success, runAnimTrack = pcall(function()
+			local success, loadedRunAnimTrack = pcall(function()
 				return chaserHumanoid:LoadAnimation(runAnim)
 			end)
-			if success and runAnimTrack then
-				runAnimTrack:Play(0, 1, 1)
+			if success and loadedRunAnimTrack then
+				runAnimTrack = loadedRunAnimTrack
 			end
 		end
 	end
@@ -302,8 +308,12 @@ function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3, 
 	stopped = false
 	faded = false
 
-	local chaseStartClock = os.clock() + math.max(0, cfg.CHASER_START_DELAY_SEC or 3)
-	local nextHopClock = os.clock()
+	local startDelaySec = if startDelayOverrideSec ~= nil then startDelayOverrideSec else cfg.CHASER_START_DELAY_SEC
+	if typeof(startDelaySec) ~= "number" or startDelaySec ~= startDelaySec then
+		startDelaySec = 3
+	end
+	local chaseStartClock = os.clock() + math.max(0, startDelaySec)
+	local chaseStarted = false
 
 	heartbeatConn = runService.Heartbeat:Connect(function(dt: number)
 		if stopped or faded then
@@ -330,6 +340,17 @@ function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3, 
 		end
 
 		local nowClock = os.clock()
+		if nowClock < chaseStartClock then
+			chaserHumanoidLive.WalkSpeed = 0
+			chaserHumanoidLive:MoveTo(chaserHrpLive.Position)
+			return
+		end
+		if not chaseStarted then
+			chaseStarted = true
+			if runAnimTrack ~= nil then
+				runAnimTrack:Play(0, 1, 1)
+			end
+		end
 		if IsChaserOverlappingTree(chaserHrpLive) then
 			treeSlowUntilClock = math.max(treeSlowUntilClock, nowClock + treeSlowDuration)
 		end
@@ -340,17 +361,10 @@ function ChaserClientManager.SpawnChaser(character: Model, forwardDir: Vector3, 
 		if chaserHumanoidLive.WalkSpeed ~= targetWalkSpeed then
 			chaserHumanoidLive.WalkSpeed = targetWalkSpeed
 		end
-		if nowClock < chaseStartClock then
-			chaserHumanoidLive:MoveTo(chaserHrpLive.Position)
-			if nowClock >= nextHopClock then
-				chaserHumanoidLive.Jump = true
-				nextHopClock = nowClock + 0.65
-			end
-			return
-		end
 
 		chaserHumanoidLive:MoveTo(currentHrp.Position)
 	end)
+	return chaser
 end
 
 function ChaserClientManager.StopAndFadeChaser()
