@@ -208,6 +208,18 @@ userInputService.InputBegan:Connect(function(inputObject: InputObject, gameProce
 	ToggleDecelerationOn()
 end)
 
+local function RefreshJumpPowerText(jumpPowerLevel: number)
+	if jumpPowerText == nil then
+		return
+	end
+	TranslationTool.CustomAutoLocalizeTextLabel(
+		jumpPowerText,
+		GameTexts.LevelWithNumberCompact.source,
+		GameTexts.LevelWithNumberCompact.key,
+		{ tostring(jumpPowerLevel) }
+	)
+end
+
 --刷新金币数量
 local function RefreshCoinCountText()
 	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
@@ -291,10 +303,7 @@ local function RefreshUpgradeValues()
 	maxThrustText.Text = string.format("+%s", NumberExtension.FormatBigNumberAA(maxThrustValue))
 
 	-- JumpPower
-	if jumpPowerText then
-		local jumpPowerValue = GameConfig.GetJumpPowerAbility(localPlayerInfo.jumpPower)
-		jumpPowerText.Text = NumberExtension.FormatBigNumberAA(jumpPowerValue)
-	end
+	RefreshJumpPowerText(localPlayerInfo.jumpPower.lv)
 end
 
 -- local function ShowJumpPowerFloatingText(addAmount: number)
@@ -405,9 +414,7 @@ ClientMsg.ConnectLocalPlayerCurrencyUpdate(OnLocalPlayerCoinCountChanged)
 ClientMsg.ConnectLocalPlayerInfoInit(OnLocalPlayerInfoInit)
 ClientMsg.ConnectLocalPlayerSkillLevelUpdate(OnLocalPlayerSkillLevelChanged)
 ClientMsg.ConnectLocalPlayerJumpPowerUpdate(function(jumpPowerInfo: GameConfig.JumpPowerInfo, addAmount: number)
-	if jumpPowerText then
-		jumpPowerText.Text = NumberExtension.FormatBigNumberAA(GameConfig.GetJumpPowerAbility(jumpPowerInfo))
-	end
+	RefreshJumpPowerText(jumpPowerInfo.lv)
 	RefreshRebirthRedPointView()
 	--ShowJumpPowerFloatingText(addAmount)
 end)

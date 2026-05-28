@@ -5,6 +5,7 @@ local GameTexts = {
 	BrainrotPickupObjectText = { key = "BrainrotPickupObjectText", source = "{1} (Lv.{2})" },
 	YieldPerSecond = { key = "YieldPerSecond", source = "{1}/s" },
 	LevelWithNumber = { key = "LevelWithNumber", source = "Lv.{1}" },
+	LevelWithNumberCompact = { key = "LevelWithNumberCompact", source = "Lv{1}" },
 	LevelWithFullWidthParentheses = { key = "LevelWithFullWidthParentheses", source = "（Lv.{1}）" },
 	InsufficientCoin = { key = "", source = "Insufficient Coins!" },
 	InsufficientBrainrot = { key = "", source = "You don't have a brainrot!" },
