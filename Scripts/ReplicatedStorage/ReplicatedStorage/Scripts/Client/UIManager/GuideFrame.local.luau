@@ -163,6 +163,11 @@ local function RefreshGuideFrame()
 		StopGuideAni()
 		return
 	end
+	if ClientGameInfo.IsExercising() then
+		guideFrame.Visible = false
+		StopGuideAni()
+		return
+	end
 
 	local guideType = ClientGameInfo.GetCurrentGuideType()
 	if guideType == GameConfig.GuideType.None then
@@ -237,6 +242,10 @@ end
 
 runService.RenderStepped:Connect(function()
 	if localPlayer == nil then
+		return
+	end
+	if ClientGameInfo.IsExercising() then
+		StopGuideAni()
 		return
 	end
 	local t = ClientGameInfo.GetCurrentGuideType()

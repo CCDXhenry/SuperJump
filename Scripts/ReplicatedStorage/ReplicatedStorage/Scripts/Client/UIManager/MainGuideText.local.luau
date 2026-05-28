@@ -19,6 +19,10 @@ local function RefreshGuideText()
 		guideText.Visible = false
 		return
 	end
+	if ClientGameInfo.IsExercising() then
+		guideText.Visible = false
+		return
+	end
 	local currentGuideType = ClientGameInfo.GetCurrentGuideType()
 	if currentGuideType == GameConfig.GuideType.None then
 		guideText.Visible = false

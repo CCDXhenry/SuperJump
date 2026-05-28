@@ -50,15 +50,14 @@ local function GetPlayerControls(): any
 	return controls
 end
 
-local modelsFolder = replicatedStorage:FindFirstChild("Models")
-local exEquipModelsFolder: Folder? = if modelsFolder ~= nil then modelsFolder:FindFirstChild("ExEquip") :: Folder? else nil
 local uiFolder = replicatedStorage:WaitForChild("UI")
 local exercisePopupGuiTemplate = uiFolder:WaitForChild("ExerciseJumpPowerPopupGui") :: BillboardGui
-local exInfoGuiTemplate = uiFolder:WaitForChild("ExInfoUI") :: BillboardGui
 
 -- 锻炼模式常量
 -- 人物躯干高度（HumanoidRootPart 到脚底的参考偏移）
 local CHARACTER_TORSO_HEIGHT: number = 3
+local EXERCISE_OWNER_USER_ID_ATTR = "ExerciseOwnerUserId"
+local EXERCISE_MODEL_WAIT_TIMEOUT: number = 5
 -- 锻炼数值浮字对象池大小：允许同时显示多个浮字，超过时复用最早播放的浮字。
 local EXERCISE_POPUP_POOL_SIZE: number = 5
 -- 浮字完整动画时长，调大则跳出和落下更慢。
@@ -87,10 +86,7 @@ local exerciseInputConnection: RBXScriptConnection? = nil
 local exercisePrompt: ProximityPrompt? = nil
 local exerciseBikeAnimTrack: AnimationTrack? = nil
 local exercisePopupRandom = Random.new()
-local exerciseInfoGui: BillboardGui? = nil
-local exerciseInfoAttachment: Attachment? = nil
 local exerciseEquipId: number? = nil
-local activeExerciseModel: Model? = nil
 
 type ExercisePopupItem = {
 	gui: BillboardGui,
@@ -123,20 +119,21 @@ local function GetExercisePopupText(gui: BillboardGui): TextLabel?
 	return controllerFrame:FindFirstChild("JumpPowerPopupText") :: TextLabel?
 end
 
-local function GetExerciseInfoControllerFrame(): Frame?
-	if exerciseInfoGui == nil then
+local function GetExerciseEquipFrame(): Frame?
+	local frameRoot = UIManager.GetWindowRoot(UIManager.WindowId.ExEquipFrame)
+	if frameRoot == nil or not frameRoot:IsA("Frame") then
 		return nil
 	end
-	return exerciseInfoGui:FindFirstChild("ControllerFrame") :: Frame?
+	return frameRoot
 end
 
 local function SetExerciseInfoScaleBar(ratio: number)
-	local controllerFrame = GetExerciseInfoControllerFrame()
-	if controllerFrame == nil then
+	local equipFrame = GetExerciseEquipFrame()
+	if equipFrame == nil then
 		return
 	end
 
-	local expImage = controllerFrame:FindFirstChild("ExpImage")
+	local expImage = equipFrame:FindFirstChild("ExpImage")
 	if expImage == nil or not expImage:IsA("ImageLabel") then
 		return
 	end
@@ -154,20 +151,20 @@ local function SetExerciseInfoScaleBar(ratio: number)
 end
 
 local function UpdateExerciseInfoView()
-	local controllerFrame = GetExerciseInfoControllerFrame()
+	local equipFrame = GetExerciseEquipFrame()
 	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
-	if controllerFrame == nil or localPlayerInfo == nil then
+	if equipFrame == nil or localPlayerInfo == nil then
 		return
 	end
 
 	local equipData = if exerciseEquipId ~= nil then GameConfig.ExEquipDataMap[exerciseEquipId] else nil
-	local speedLabel = controllerFrame:FindFirstChild("ExSpeedLabel") :: TextLabel?
+	local speedLabel = equipFrame:FindFirstChild("ExSpeedLabel") :: TextLabel?
 	if speedLabel ~= nil then
 		local speedValue = if equipData ~= nil then equipData.ability else 0
 		speedLabel.Text = string.format("%s Speed", NumberExtension.FormatBigNumberAA(speedValue))
 	end
 
-	local expImage = controllerFrame:FindFirstChild("ExpImage")
+	local expImage = equipFrame:FindFirstChild("ExpImage")
 	if expImage == nil or not expImage:IsA("ImageLabel") then
 		return
 	end
@@ -187,43 +184,6 @@ local function UpdateExerciseInfoView()
 		)
 	end
 	SetExerciseInfoScaleBar(if requiredExp > 0 then jumpPowerInfo.exp / requiredExp else 0)
-end
-
-local function RemoveExerciseInfoGui()
-	if exerciseInfoGui ~= nil then
-		BillboardManager.Untrack(exerciseInfoGui)
-		exerciseInfoGui:Destroy()
-		exerciseInfoGui = nil
-	end
-	if exerciseInfoAttachment ~= nil then
-		exerciseInfoAttachment:Destroy()
-		exerciseInfoAttachment = nil
-	end
-end
-
-local function ShowExerciseInfoGui(adornee: BasePart)
-	RemoveExerciseInfoGui()
-
-	local playerGui = GetExercisePopupParent()
-	if playerGui == nil then
-		return
-	end
-
-	local infoAttachment = Instance.new("Attachment")
-	infoAttachment.Name = "ExerciseInfoAttachment"
-	infoAttachment.Position = Vector3.new(0, EXERCISE_POPUP_START_HEIGHT + 1.2, 0)
-	infoAttachment.Parent = adornee
-
-	local infoGui = exInfoGuiTemplate:Clone()
-	infoGui.Name = "ExInfoUI"
-	infoGui.Adornee = infoAttachment
-	infoGui.Enabled = true
-	infoGui.Parent = playerGui
-
-	exerciseInfoAttachment = infoAttachment
-	exerciseInfoGui = infoGui
-	UpdateExerciseInfoView()
-	BillboardManager.Track(infoGui)
 end
 
 local function StopExercisePopupTweens(item: ExercisePopupItem)
@@ -471,16 +431,11 @@ local function StopExerciseInternal()
 		end)
 	end
 
-	-- 恢复器材 Prompt 按钮
-	if exercisePrompt ~= nil then
+	-- 恢复器材 Prompt 按钮（模型由服务端销毁，仅做兜底）
+	if exercisePrompt ~= nil and exercisePrompt.Parent ~= nil then
 		exercisePrompt.Enabled = true
-		exercisePrompt = nil
 	end
-
-	if activeExerciseModel ~= nil then
-		activeExerciseModel:Destroy()
-		activeExerciseModel = nil
-	end
+	exercisePrompt = nil
 
 	-- 停止 Bike 专属动画
 	if exerciseBikeAnimTrack ~= nil then
@@ -492,9 +447,9 @@ local function StopExerciseInternal()
 	-- 关闭锻炼 UI
 	UIManager.CloseWindow(UIManager.WindowId.ExEquipFrame)
 	CleanupExercisePopups()
-	RemoveExerciseInfoGui()
 
 	isExercising = false
+	ClientGameInfo.SetExercising(false)
 	exerciseHumanoid = nil
 	exerciseHrp = nil
 	exerciseForward = Vector3.zero
@@ -516,13 +471,55 @@ local function GetExercisePromptFromModel(exerciseModel: Model): ProximityPrompt
 	return promptAttachment:FindFirstChild("ProximityPrompt") :: ProximityPrompt?
 end
 
+local function FindLocalActiveExerciseModel(): Model?
+	for _, child in workspace:GetChildren() do
+		if child:IsA("Model") and child:GetAttribute(EXERCISE_OWNER_USER_ID_ATTR) == localPlayer.UserId then
+			return child
+		end
+	end
+	return nil
+end
+
+local function WaitForLocalActiveExerciseModel(): Model?
+	local existingModel = FindLocalActiveExerciseModel()
+	if existingModel ~= nil then
+		return existingModel
+	end
+
+	local foundModel: Model? = nil
+	local childAddedConnection: RBXScriptConnection? = nil
+	local startTime = os.clock()
+
+	childAddedConnection = workspace.ChildAdded:Connect(function(child: Instance)
+		if not child:IsA("Model") then
+			return
+		end
+		if child:GetAttribute(EXERCISE_OWNER_USER_ID_ATTR) == localPlayer.UserId then
+			foundModel = child
+		end
+	end)
+
+	while foundModel == nil and os.clock() - startTime < EXERCISE_MODEL_WAIT_TIMEOUT do
+		foundModel = FindLocalActiveExerciseModel()
+		if foundModel ~= nil then
+			break
+		end
+		task.wait()
+	end
+
+	if childAddedConnection ~= nil then
+		childAddedConnection:Disconnect()
+	end
+	return foundModel
+end
+
 local function GetExerciseStandCFrame(equipmentModel: Model, equipData: GameConfig.ExEquipData, character: Model, hrp: BasePart): CFrame
 	local modelRootPart: BasePart? = equipmentModel.PrimaryPart
 	local rootCf: CFrame
 	if modelRootPart ~= nil then
 		rootCf = modelRootPart.CFrame
 	else
-		rootCf = equipmentModel:GetModelCFrame()
+		rootCf = equipmentModel:GetPivot()
 	end
 
 	local forwardZ: Vector3 = -rootCf.LookVector
@@ -576,69 +573,6 @@ local function GetExerciseStandCFrame(equipmentModel: Model, equipData: GameConf
 	return CFrame.lookAt(standPos, standPos + forwardZ)
 end
 
-local function DisableExerciseModelPrompts(equipmentModel: Model)
-	for _, descendant in equipmentModel:GetDescendants() do
-		if descendant:IsA("ProximityPrompt") then
-			descendant.Enabled = false
-		end
-	end
-end
-
-local function MoveExerciseModelStandXzToPlayer(equipmentModel: Model, equipData: GameConfig.ExEquipData, character: Model, hrp: BasePart)
-	local standCf = GetExerciseStandCFrame(equipmentModel, equipData, character, hrp)
-	local deltaXz = Vector3.new(hrp.Position.X - standCf.Position.X, 0, hrp.Position.Z - standCf.Position.Z)
-	equipmentModel:PivotTo(equipmentModel:GetPivot() + deltaXz)
-end
-
-local function MoveExerciseModelPrimaryPartToGround(equipmentModel: Model, character: Model)
-	local primaryPart = equipmentModel.PrimaryPart
-	if primaryPart == nil then
-		warn("[ExEquipManager] Active exercise equipment missing PrimaryPart")
-		return
-	end
-
-	local rayParams = RaycastParams.new()
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	rayParams.FilterDescendantsInstances = { equipmentModel, character }
-
-	local rayOrigin = primaryPart.Position + Vector3.new(0, primaryPart.Size.Y + 20, 0)
-	local rayDirection = Vector3.new(0, -(primaryPart.Size.Y + 80), 0)
-	local rayResult = workspace:Raycast(rayOrigin, rayDirection, rayParams)
-	if rayResult == nil then
-		return
-	end
-
-	local targetPrimaryPartY = rayResult.Position.Y + primaryPart.Size.Y * 0.5
-	local deltaY = targetPrimaryPartY - primaryPart.Position.Y
-	equipmentModel:PivotTo(equipmentModel:GetPivot() + Vector3.new(0, deltaY, 0))
-end
-
-local function CreateExerciseModelAtPlayer(equipData: GameConfig.ExEquipData, character: Model, hrp: BasePart): Model?
-	if exEquipModelsFolder == nil then
-		return nil
-	end
-
-	local sourceModel = exEquipModelsFolder:FindFirstChild(equipData.resourceName) :: Model?
-	if sourceModel == nil then
-		return nil
-	end
-
-	local lookVector = hrp.CFrame.LookVector
-	local flatLook = Vector3.new(lookVector.X, 0, lookVector.Z)
-	if flatLook.Magnitude <= 0 then
-		flatLook = Vector3.new(0, 0, -1)
-	end
-
-	local equipmentModel = sourceModel:Clone()
-	equipmentModel.Name = "ActiveExerciseEquip"
-	equipmentModel.Parent = workspace
-	equipmentModel:PivotTo(CFrame.lookAt(hrp.Position, hrp.Position - flatLook.Unit))
-	DisableExerciseModelPrompts(equipmentModel)
-	MoveExerciseModelStandXzToPlayer(equipmentModel, equipData, character, hrp)
-	MoveExerciseModelPrimaryPartToGround(equipmentModel, character)
-	return equipmentModel
-end
-
 --------------------------------------------------------------------
 -- 锻炼模式逻辑
 --------------------------------------------------------------------
@@ -670,13 +604,15 @@ local function StartExercise(equipId: number)
 		return
 	end
 
-	local equipmentModel = CreateExerciseModelAtPlayer(equipData, character, hrp)
+	local equipmentModel = WaitForLocalActiveExerciseModel()
 	if equipmentModel == nil then
+		warn("[ExEquipManager] Server exercise model not found")
+		NetMsg.FireRequestStopExercise()
 		return
 	end
 
 	isExercising = true
-	activeExerciseModel = equipmentModel
+	ClientGameInfo.SetExercising(true)
 
 	local standCf = GetExerciseStandCFrame(equipmentModel, equipData, character, hrp)
 	local standPos: Vector3 = standCf.Position
@@ -714,10 +650,10 @@ local function StartExercise(equipId: number)
 	exerciseForward = forwardZ
 	exerciseEquipId = equipId
 	EnsureExercisePopupPool()
-	ShowExerciseInfoGui(hrp)
 
 	-- 打开锻炼 UI
 	UIManager.OpenWindow(UIManager.WindowId.ExEquipFrame)
+	UpdateExerciseInfoView()
 
 	-- 站立稳定：前几帧保持 CFrame 精确定位，防止物理引擎推开人物
 	local settleFrames: number = 0

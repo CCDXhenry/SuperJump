@@ -502,6 +502,10 @@ local function UpdateGuideArrow()
 	if guideArrowModel == nil or guideArrowStartAttachment == nil or guideArrowEndAttachment == nil then
 		return
 	end
+	if ClientGameInfo.IsExercising() then
+		guideArrowModel.Parent = nil
+		return
+	end
 	local guideType = ClientGameInfo.GetCurrentGuideType()
 	local needsWorldArrow = guideType == GameConfig.GuideType.TutorialBrainrotPickup
 		or guideType == GameConfig.GuideType.TutorialBrainrotPlace
@@ -538,6 +542,10 @@ end
 local function ResolveGuideType(): number
 	-- JumpRunway 跑道阶段隐藏非跑道引导
 	if ClientGameInfo.IsInJumpRunway() and not ClientGameInfo.IsInJumpRunwayEscapePhase() then
+		return GameConfig.GuideType.None
+	end
+	-- 锻炼模式隐藏非锻炼引导
+	if ClientGameInfo.IsExercising() then
 		return GameConfig.GuideType.None
 	end
 	local info = ClientGameInfo.GetLocalPlayerInfo()

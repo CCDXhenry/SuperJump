@@ -13,6 +13,7 @@ local localPlayerInfo: GameConfig.ClientLocalPlayerInfo?
 local otherPlayerInfoMap: { [number]: GameConfig.ClientOtherPlayerInfo } = {}
 local isInJumpRunway = false
 local isInJumpRunwayEscapePhase = false
+local isExercising = false
 
 -- 用于“新增 uid 才显示获得奖励提示”的增量判定
 -- 避免玩家重新进游戏时把旧队列也触发提示。
@@ -454,6 +455,18 @@ function ClientGameInfo.SetInJumpRunwayEscapePhase(value: boolean)
 		return
 	end
 	isInJumpRunwayEscapePhase = value
+	ClientMsg.FireCurrentGuideTypeChanged()
+end
+
+function ClientGameInfo.IsExercising(): boolean
+	return isExercising
+end
+
+function ClientGameInfo.SetExercising(value: boolean)
+	if isExercising == value then
+		return
+	end
+	isExercising = value
 	ClientMsg.FireCurrentGuideTypeChanged()
 end
 

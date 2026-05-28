@@ -1,6 +1,8 @@
 --!strict
 local ExEquipManager = {}
 
+local players: Players = game:GetService("Players")
+local workspace: Workspace = game:GetService("Workspace")
 local serverStorage: ServerStorage = game:GetService("ServerStorage")
 local serverScripts = serverStorage:WaitForChild("Scripts")
 local ServerGameInfo = require(serverScripts:FindFirstChild("ServerGameInfo"))
@@ -11,22 +13,159 @@ local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
 local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
 
+local modelsFolder = replicatedStorage:FindFirstChild("Models")
+local exEquipModelsFolder: Folder? = if modelsFolder ~= nil then modelsFolder:FindFirstChild("ExEquip") :: Folder? else nil
+
 local LOG_PREFIX = "[ExEquipManager]"
 
 -- 锻炼 JumpPower 递增
 local EXERCISE_JUMP_POWER_INTERVAL = GameConfig.JumpPowerExerciseInterval
+-- 人物躯干高度（HumanoidRootPart 到脚底的参考偏移）
+local CHARACTER_TORSO_HEIGHT: number = 3
+local ACTIVE_EXERCISE_EQUIP_NAME = "ActiveExerciseEquip"
+local EXERCISE_OWNER_USER_ID_ATTR = "ExerciseOwnerUserId"
+
 local exerciseRunningMap: { [number]: boolean } = {}
+local activeExerciseModelMap: { [number]: Model } = {}
 
 local function LogInfo(message: string)
 	print(string.format("%s %s", LOG_PREFIX, message))
 end
 
+local function DestroyExerciseModel(userId: number)
+	local equipmentModel = activeExerciseModelMap[userId]
+	if equipmentModel ~= nil then
+		equipmentModel:Destroy()
+		activeExerciseModelMap[userId] = nil
+	end
+end
+
+local function GetExerciseStandCFrame(equipmentModel: Model, equipData: GameConfig.ExEquipData, character: Model, hrp: BasePart): CFrame
+	local modelRootPart: BasePart? = equipmentModel.PrimaryPart
+	local rootCf: CFrame
+	if modelRootPart ~= nil then
+		rootCf = modelRootPart.CFrame
+	else
+		rootCf = equipmentModel:GetPivot()
+	end
+
+	local forwardZ: Vector3 = -rootCf.LookVector
+	local rootPos: Vector3 = rootCf.Position
+
+	local lowerTorsoOffset: Vector3 = Vector3.zero
+	local lowerTorso: BasePart? = character:FindFirstChild("LowerTorso") :: BasePart?
+	if lowerTorso ~= nil then
+		lowerTorsoOffset = lowerTorso.Position - hrp.Position
+	end
+
+	local standPos: Vector3
+	if equipData.type == 1 or equipData.type == 2 then
+		local exerciseAttachment: Attachment? = equipmentModel:FindFirstChild("ExerciseAttachment") :: Attachment?
+		if exerciseAttachment ~= nil then
+			local attachPos: Vector3 = exerciseAttachment.WorldPosition
+			if equipData.type == 2 then
+				standPos = attachPos - lowerTorsoOffset
+			else
+				standPos = Vector3.new(attachPos.X, attachPos.Y + CHARACTER_TORSO_HEIGHT, attachPos.Z)
+			end
+		else
+			standPos = Vector3.new(rootPos.X, rootPos.Y + CHARACTER_TORSO_HEIGHT, rootPos.Z)
+		end
+	else
+		local rayOrigin: Vector3 = rootPos + Vector3.new(0, 10, 0)
+		local rayDirection: Vector3 = Vector3.new(0, -20, 0)
+		local rayParams = RaycastParams.new()
+		rayParams.FilterType = Enum.RaycastFilterType.Include
+		rayParams.FilterDescendantsInstances = { equipmentModel }
+
+		local rayResult = workspace:Raycast(rayOrigin, rayDirection, rayParams)
+
+		local modelTopY: number
+		if rayResult ~= nil then
+			modelTopY = rayResult.Position.Y
+		else
+			local cframe: CFrame, size: Vector3 = equipmentModel:GetBoundingBox()
+			modelTopY = cframe.Y + size.Y / 2
+		end
+		standPos = Vector3.new(rootPos.X, modelTopY + CHARACTER_TORSO_HEIGHT, rootPos.Z)
+	end
+	return CFrame.lookAt(standPos, standPos + forwardZ)
+end
+
+local function DisableExerciseModelPrompts(equipmentModel: Model)
+	for _, descendant in equipmentModel:GetDescendants() do
+		if descendant:IsA("ProximityPrompt") then
+			descendant.Enabled = false
+		end
+	end
+end
+
+local function MoveExerciseModelStandXzToPlayer(equipmentModel: Model, equipData: GameConfig.ExEquipData, character: Model, hrp: BasePart)
+	local standCf = GetExerciseStandCFrame(equipmentModel, equipData, character, hrp)
+	local deltaXz = Vector3.new(hrp.Position.X - standCf.Position.X, 0, hrp.Position.Z - standCf.Position.Z)
+	equipmentModel:PivotTo(equipmentModel:GetPivot() + deltaXz)
+end
+
+local function MoveExerciseModelPrimaryPartToGround(equipmentModel: Model, character: Model)
+	local primaryPart = equipmentModel.PrimaryPart
+	if primaryPart == nil then
+		warn(string.format("%s Active exercise equipment missing PrimaryPart", LOG_PREFIX))
+		return
+	end
+
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	rayParams.FilterDescendantsInstances = { equipmentModel, character }
+
+	local rayOrigin = primaryPart.Position + Vector3.new(0, primaryPart.Size.Y + 20, 0)
+	local rayDirection = Vector3.new(0, -(primaryPart.Size.Y + 80), 0)
+	local rayResult = workspace:Raycast(rayOrigin, rayDirection, rayParams)
+	if rayResult == nil then
+		return
+	end
+
+	local targetPrimaryPartY = rayResult.Position.Y + primaryPart.Size.Y * 0.5
+	local deltaY = targetPrimaryPartY - primaryPart.Position.Y
+	equipmentModel:PivotTo(equipmentModel:GetPivot() + Vector3.new(0, deltaY, 0))
+end
+
+local function CreateExerciseModelAtPlayer(player: Player, equipData: GameConfig.ExEquipData, character: Model, hrp: BasePart): Model?
+	if exEquipModelsFolder == nil then
+		warn(string.format("%s ExEquip models folder not found", LOG_PREFIX))
+		return nil
+	end
+
+	local sourceModel = exEquipModelsFolder:FindFirstChild(equipData.resourceName) :: Model?
+	if sourceModel == nil then
+		warn(string.format("%s ExEquip model not found: %s", LOG_PREFIX, equipData.resourceName))
+		return nil
+	end
+
+	local lookVector = hrp.CFrame.LookVector
+	local flatLook = Vector3.new(lookVector.X, 0, lookVector.Z)
+	if flatLook.Magnitude <= 0 then
+		flatLook = Vector3.new(0, 0, -1)
+	end
+
+	local equipmentModel = sourceModel:Clone()
+	equipmentModel.Name = ACTIVE_EXERCISE_EQUIP_NAME
+	equipmentModel:SetAttribute(EXERCISE_OWNER_USER_ID_ATTR, player.UserId)
+	equipmentModel.Parent = workspace
+	equipmentModel:PivotTo(CFrame.lookAt(hrp.Position, hrp.Position - flatLook.Unit))
+	DisableExerciseModelPrompts(equipmentModel)
+	MoveExerciseModelStandXzToPlayer(equipmentModel, equipData, character, hrp)
+	MoveExerciseModelPrimaryPartToGround(equipmentModel, character)
+	return equipmentModel
+end
+
 local function StopExerciseForPlayer(player: Player, logReason: string)
 	local userId = player.UserId
 	if not exerciseRunningMap[userId] then
+		DestroyExerciseModel(userId)
 		return
 	end
 	exerciseRunningMap[userId] = nil
+	DestroyExerciseModel(userId)
 	NetMsg.FireNotifyExerciseEnd(player)
 	LogInfo(string.format("ExerciseStopped userId=%d reason=%s", userId, logReason))
 end
@@ -188,6 +327,20 @@ function ExEquipManager.OnRequestStartExercise(player: Player, equipId: number)
 		return
 	end
 
+	local character: Model? = player.Character
+	local hrp: BasePart? = if character ~= nil then character:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
+	if character == nil or hrp == nil then
+		LogInfo(string.format("StartRejected userId=%d reason=no_character", userId))
+		return
+	end
+
+	local equipmentModel = CreateExerciseModelAtPlayer(player, equipData, character, hrp)
+	if equipmentModel == nil then
+		LogInfo(string.format("StartRejected userId=%d reason=model_create_failed equipId=%d", userId, equipId))
+		return
+	end
+
+	activeExerciseModelMap[userId] = equipmentModel
 	exerciseRunningMap[userId] = true
 
 	task.spawn(function()
@@ -212,6 +365,22 @@ function ExEquipManager.Init()
 	NetMsg.ConnectRequestClaimGroupReward(ExEquipManager.OnRequestClaimGroupReward)
 	NetMsg.ConnectRequestStartExercise(ExEquipManager.OnRequestStartExercise)
 	NetMsg.ConnectRequestStopExercise(ExEquipManager.OnRequestStopExercise)
+
+	players.PlayerRemoving:Connect(function(player: Player)
+		StopExerciseForPlayer(player, "player_leaving")
+	end)
+
+	local function BindPlayerCharacterCleanup(player: Player)
+		player.CharacterRemoving:Connect(function()
+			StopExerciseForPlayer(player, "character_removing")
+		end)
+	end
+
+	for _, player in players:GetPlayers() do
+		BindPlayerCharacterCleanup(player)
+	end
+	players.PlayerAdded:Connect(BindPlayerCharacterCleanup)
+
 	LogInfo("Init success")
 end
 
