@@ -91,6 +91,9 @@ local Refs: {
 	ringBaseSizeY: number,
 	ringBaseSizeZ: number,
 	ringLastGroundY: number?,
+	ringTrackStroke: UIStroke?,
+	ringFixedStroke: UIStroke?,
+	ringSmoothedColor: Color3?,
 	ringTemplateWarned: boolean,
 	runwayDistanceRecorderPart: BasePart?,
 	runwayDistanceRecorderText: TextLabel?,
@@ -1602,6 +1605,7 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 			RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoidOpt)
 		end
 	elseif slideKind == SlideKindMiss then
+		RunwaySession.DestroyRunwayRing()
 		localState.jumpBoostVy = nil
 		localState.jumpBoostUntilClock = 0
 		localState.finalLandSubPhase = 2
@@ -2509,6 +2513,143 @@ function RunwaySession.DestroyRunwayRing()
 		Refs.runwayRingPart = nil
 	end
 	Refs.ringLastGroundY = nil
+	Refs.ringTrackStroke = nil
+	Refs.ringFixedStroke = nil
+	Refs.ringSmoothedColor = nil
+end
+
+function RunwaySession.ResolveBeginLineAlongMetrics(hrp: BasePart): (boolean, number, number)
+	local _, beginLine = RunwaySession.ResolveSceneParts()
+	if beginLine == nil or not beginLine:IsA("BasePart") or localState.runwayOrigin == nil then
+		return false, 0, 0
+	end
+	local fwd = NormalizeRunwayForward(localState.runwayForward)
+	local beginEdgeWorld = beginLine.CFrame * Vector3.new(beginLine.Size.X / 2, 0, 0)
+	local beginEdgeAlong = (beginEdgeWorld - localState.runwayOrigin):Dot(fwd)
+	local currentAlong = (hrp.Position - localState.runwayOrigin):Dot(fwd)
+	local distToBegin = beginEdgeAlong - currentAlong
+	local maxDist = beginEdgeAlong - localState.alongBaseline
+	return true, distToBegin, maxDist
+end
+
+function RunwaySession.ComputeRunwayRingTargetColorBeforeBeginLine(hrp: BasePart): Color3?
+	if localState.phase ~= Ph.AutoRun or localState.passedBeginLineOnce then
+		return nil
+	end
+	local yellow = cfg.RUNWAY_RING_COLOR_YELLOW
+	local red = cfg.RUNWAY_RING_COLOR_RED
+	local ok, distToBegin, maxDist = RunwaySession.ResolveBeginLineAlongMetrics(hrp)
+	if not ok or maxDist <= 1e-4 then
+		return yellow
+	end
+	local t = math.clamp(1 - distToBegin / maxDist, 0, 1)
+	return yellow:Lerp(red, t)
+end
+
+function RunwaySession.ResolveRunwayRingFeetBandThresholds(): (number, number)
+	local maxPreLandDist = cfg.RUNWAY_PRELAND_MAX_DIST_STUDS
+	local maxChainDist = cfg.RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS
+	local baseline = localState.preLandRayBaselineStuds
+	if typeof(baseline) == "number" and baseline == baseline then
+		maxPreLandDist = baseline + cfg.RUNWAY_PRELAND_MAX_DIST_STUDS
+		maxChainDist = baseline + cfg.RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS
+	end
+	return maxPreLandDist, maxChainDist
+end
+
+function RunwaySession.ComputeRunwayRingTargetColorFromFeetDist(ok: boolean, dist: number): Color3
+	local green = cfg.RUNWAY_RING_COLOR_GREEN
+	local yellow = cfg.RUNWAY_RING_COLOR_YELLOW
+	local red = cfg.RUNWAY_RING_COLOR_RED
+	if not ok then
+		return green
+	end
+	local maxPreLandDist, maxChainDist = RunwaySession.ResolveRunwayRingFeetBandThresholds()
+	local fadeWidth = cfg.RUNWAY_RING_COLOR_GREEN_FADE_ABOVE_PRELAND_STUDS
+	if fadeWidth <= 0 then
+		fadeWidth = math.max(maxPreLandDist - maxChainDist, 1e-4)
+	end
+	local greenStart = maxPreLandDist + fadeWidth
+	if dist >= greenStart then
+		return green
+	end
+	if dist > maxPreLandDist then
+		local t = math.clamp((dist - maxPreLandDist) / fadeWidth, 0, 1)
+		return yellow:Lerp(green, t)
+	end
+	if dist <= maxChainDist then
+		return red
+	end
+	local band = math.max(maxPreLandDist - maxChainDist, 1e-4)
+	local t = math.clamp((dist - maxChainDist) / band, 0, 1)
+	return red:Lerp(yellow, t)
+end
+
+function RunwaySession.CacheRunwayRingUiStrokes(ringPart: BasePart)
+	Refs.ringTrackStroke = nil
+	Refs.ringFixedStroke = nil
+	local surfaceGui = ringPart:FindFirstChild("RingSurfaceGui")
+	if surfaceGui == nil or not surfaceGui:IsA("SurfaceGui") then
+		surfaceGui = ringPart:FindFirstChildOfClass("SurfaceGui")
+	end
+	if surfaceGui == nil then
+		return
+	end
+	local rootFrame = surfaceGui:FindFirstChild("RingUiRootFrame")
+	if rootFrame ~= nil and rootFrame:IsA("Frame") then
+		local trackFrame = rootFrame:FindFirstChild("RingTrackFrame")
+		if trackFrame ~= nil then
+			local trackStroke = trackFrame:FindFirstChildOfClass("UIStroke")
+			if trackStroke ~= nil then
+				Refs.ringTrackStroke = trackStroke
+			end
+		end
+		local fixedFrame = rootFrame:FindFirstChild("RingFixedFrame")
+		if fixedFrame ~= nil then
+			local fixedStroke = fixedFrame:FindFirstChildOfClass("UIStroke")
+			if fixedStroke ~= nil then
+				Refs.ringFixedStroke = fixedStroke
+			end
+		end
+	end
+	if Refs.ringTrackStroke ~= nil and Refs.ringFixedStroke ~= nil then
+		return
+	end
+	for _, desc in surfaceGui:GetDescendants() do
+		if desc:IsA("UIStroke") then
+			if Refs.ringTrackStroke == nil then
+				Refs.ringTrackStroke = desc
+			elseif Refs.ringFixedStroke == nil then
+				Refs.ringFixedStroke = desc
+				break
+			end
+		end
+	end
+end
+
+function RunwaySession.UpdateRunwayRingColor(humanoid: Humanoid, hrp: BasePart, dt: number)
+	local trackStroke = Refs.ringTrackStroke
+	if trackStroke == nil then
+		return
+	end
+	local targetColor: Color3
+	local beforeBeginColor = RunwaySession.ComputeRunwayRingTargetColorBeforeBeginLine(hrp)
+	if beforeBeginColor ~= nil then
+		targetColor = beforeBeginColor
+	else
+		local okFeet, distFeet = RunwaySession.RaycastFeet(humanoid)
+		targetColor = RunwaySession.ComputeRunwayRingTargetColorFromFeetDist(okFeet, distFeet)
+	end
+	local smoothed = Refs.ringSmoothedColor
+	if smoothed == nil or dt <= 0 then
+		smoothed = targetColor
+	else
+		local rate = cfg.RUNWAY_RING_COLOR_SMOOTH_RATE
+		local alpha = if rate <= 0 then 1 else 1 - math.exp(-rate * dt)
+		smoothed = smoothed:Lerp(targetColor, alpha)
+	end
+	Refs.ringSmoothedColor = smoothed
+	trackStroke.Color = smoothed
 end
 
 function RunwaySession.SetupJumpRunwayRingSurfaceUi(ringPart: BasePart)
@@ -2642,10 +2783,12 @@ function RunwaySession.EnsureRunwayRing()
 	if cfg.RUNWAY_RING_SCRIPTED_SURFACE_UI == true then
 		RunwaySession.SetupJumpRunwayRingSurfaceUi(clone)
 	end
+	RunwaySession.CacheRunwayRingUiStrokes(clone)
+	Refs.ringSmoothedColor = nil
 	Refs.runwayRingPart = clone
 end
 
-function RunwaySession.UpdateRunwayRingTransform(humanoid: Humanoid, hrp: BasePart)
+function RunwaySession.UpdateRunwayRingTransform(humanoid: Humanoid, hrp: BasePart, dt: number)
 	local ring = Refs.runwayRingPart
 	if ring == nil or ring.Parent == nil then
 		return
@@ -2660,21 +2803,12 @@ function RunwaySession.UpdateRunwayRingTransform(humanoid: Humanoid, hrp: BasePa
 	end
 	local sizeMul: number
 	if localState.phase == Ph.AutoRun and not localState.passedBeginLineOnce then
-		-- AutoRun 且未过 BeginLine：根据距 BeginLine 的沿轴距离缩放
-		local _, beginLine = RunwaySession.ResolveSceneParts()
-		if beginLine ~= nil and beginLine:IsA("BasePart") and localState.runwayOrigin ~= nil then
-			local fwd = NormalizeRunwayForward(localState.runwayForward)
-			local beginAlong = (beginLine.Position - localState.runwayOrigin):Dot(fwd)
-			local currentAlong = (hrp.Position - localState.runwayOrigin):Dot(fwd)
-			local distToBegin = beginAlong - currentAlong
-			local maxDist = beginAlong - localState.alongBaseline
-			if distToBegin > 0 and maxDist > 1e-4 then
-				local beginMaxMul = cfg.RUNWAY_RING_BEGINLINE_MAX_MULTIPLIER
-				local t = math.clamp(distToBegin / maxDist, 0, 1)
-				sizeMul = 1 + (beginMaxMul - 1) * t
-			else
-				sizeMul = 1
-			end
+		-- AutoRun 且未过 BeginLine：根据距 BeginLine 负 X 边缘的沿轴距离缩放
+		local okBegin, distToBegin, maxDist = RunwaySession.ResolveBeginLineAlongMetrics(hrp)
+		if okBegin and distToBegin > 0 and maxDist > 1e-4 then
+			local beginMaxMul = cfg.RUNWAY_RING_BEGINLINE_MAX_MULTIPLIER
+			local t = math.clamp(distToBegin / maxDist, 0, 1)
+			sizeMul = 1 + (beginMaxMul - 1) * t
 		else
 			sizeMul = 1
 		end
@@ -2695,6 +2829,7 @@ function RunwaySession.UpdateRunwayRingTransform(humanoid: Humanoid, hrp: BasePa
 	end
 	local center = Vector3.new(hrp.Position.X, yCenter, hrp.Position.Z)
 	ring.CFrame = CFrame.lookAt(center, center + flatFwd)
+	RunwaySession.UpdateRunwayRingColor(humanoid, hrp, dt)
 end
 
 function RunwaySession.DestroyDistanceRecorder()
@@ -4834,7 +4969,7 @@ function RunwaySession.UpdateTick(dt: number)
 	RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid, nowClock)
 	RunwaySession.ApplyRunwayHumanoidJumpState(humanoid, true)
 	RunwaySession.PollBeginLineOverlapForJumpWindow()
-	RunwaySession.UpdateRunwayRingTransform(humanoid, hrp)
+	RunwaySession.UpdateRunwayRingTransform(humanoid, hrp, dt)
 	RunwaySession.UpdateDistanceRecorder(humanoid, hrp)
 	RunwaySession.UpdateBestDistanceWall(hrp)
 	local phaseBeforeForwardBlocked = localState.phase
@@ -5480,7 +5615,7 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	RunwaySession.EnsureRunwayGravityForce(hrp)
 	RunwaySession.UpdateRunwayGravityForce(hrp)
 	RunwaySession.EnsureRunwayRing()
-	RunwaySession.UpdateRunwayRingTransform(humanoid, hrp)
+	RunwaySession.UpdateRunwayRingTransform(humanoid, hrp, 0)
 	local okBaseline, baselineDist = RunwaySession.RaycastFeet(humanoid)
 	localState.preLandRayBaselineStuds = if okBaseline then baselineDist else nil
 	localState.prevLocalGroundedForLand = RunwaySession.IsRunwayScriptedGrounded(humanoid)

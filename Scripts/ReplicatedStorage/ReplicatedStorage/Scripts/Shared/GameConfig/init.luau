@@ -967,6 +967,13 @@ GameConfig.JumpRunway = {
 	RUNWAY_RING_UI_FIXED_DIAMETER_PX = 120,
 	RUNWAY_RING_UI_FIXED_STROKE_PX = 15,
 	RUNWAY_RING_UI_FIXED_COLOR = Color3.fromRGB(255, 220, 80),
+	-- 脚下跑道环：脚线距离驱动的目标色（绿/黄/红）与显示平滑
+	RUNWAY_RING_COLOR_GREEN = Color3.fromRGB(70, 210, 90),
+	RUNWAY_RING_COLOR_YELLOW = Color3.fromRGB(255, 220, 80),
+	RUNWAY_RING_COLOR_RED = Color3.fromRGB(255, 55, 55),
+	RUNWAY_RING_COLOR_SMOOTH_RATE = 14,
+	-- 0 表示在 maxPreLand 上方使用 (PRELAND_MAX - CHAIN_START) 作为绿→黄过渡宽度
+	RUNWAY_RING_COLOR_GREEN_FADE_ABOVE_PRELAND_STUDS = 0,
 
 	-- —— 成绩条、占位背包与喷气背包模型 ——
 	-- 终局 DistanceRecorder（ReplicatedStorage.Models.DistanceRecorder）：相对 HRP 水平朝向前移（stud），底部贴地
