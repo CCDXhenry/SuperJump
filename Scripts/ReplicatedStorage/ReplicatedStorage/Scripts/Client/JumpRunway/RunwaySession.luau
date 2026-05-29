@@ -6046,23 +6046,25 @@ function RunwaySession.OnJumpRunwayState(payload: NetMsg.JumpRunwayStatePayload)
 	RunwaySession.HudRefresh()
 end
 
+local function IsRunwayPrimaryActionInput(input: InputObject): boolean
+	return input.KeyCode == Enum.KeyCode.Space
+		or input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch
+end
+
 function RunwaySession.OnInputBegan(input: InputObject, processed: boolean)
 	if processed then
 		return
 	end
-	if
-		input.KeyCode == Enum.KeyCode.Space
-		or input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.Touch
-	then
+	if IsRunwayPrimaryActionInput(input) then
 		if RunwaySession.IsRunwayActivePhase(localState.phase) then
 			if RunwaySession.JumpTry() then
 				RunwaySession.NetReportJump()
 			end
 		end
 	end
-	-- 冲刺：键盘空格（与起跳同键；终局空由 takeoffCount/fuel 决定是否叠加速）
-	if input.KeyCode == Enum.KeyCode.Space and RunwaySession.IsRunwayActivePhase(localState.phase) then
+	-- 冲刺：与起跳相同的主操作键（Space / 左键 / 触摸）；终局空由 takeoffCount/fuel 决定是否叠加速
+	if IsRunwayPrimaryActionInput(input) and RunwaySession.IsRunwayActivePhase(localState.phase) then
 		localState.dashHeld = true
 		RunwaySession.NetReportDashIfChanged()
 	end
@@ -6072,7 +6074,7 @@ function RunwaySession.OnInputEnded(input: InputObject, processed: boolean)
 	if processed then
 		return
 	end
-	if input.KeyCode == Enum.KeyCode.Space then
+	if IsRunwayPrimaryActionInput(input) then
 		localState.dashHeld = false
 		RunwaySession.NetReportDashIfChanged()
 	end
