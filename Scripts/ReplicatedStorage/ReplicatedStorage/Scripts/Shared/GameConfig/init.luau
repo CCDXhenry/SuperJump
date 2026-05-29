@@ -1130,10 +1130,10 @@ GameConfig.JumpRunway = {
 	CHASER_SPAWN_AHEAD_STUDS = 100,
 	-- 追击者消失淡出时长（秒）
 	CHASER_FADE_DURATION_SEC = 1.5,
-	-- 未显式传入定身时使用的默认追击延迟（秒）
+	-- 追击者开始追玩家前的总等待时长（秒，含定身阶段）
 	CHASER_START_DELAY_SEC = 3,
-	-- 追击者创建后保持不动的时长（秒）
-	CHASER_FREEZE_AFTER_SPAWN_SEC = 1,
+	-- 追击者创建后保持不动的定身时长（秒，须 <= CHASER_START_DELAY_SEC）
+	CHASER_FREEZE_AFTER_SPAWN_SEC = 1.5,
 	-- 摄像机插值移动到追击者镜头的时长（秒）
 	CHASER_CAMERA_FOCUS_TRANSITION_SEC = 1,
 	-- 摄像机对准追击者后保持的时长（秒）

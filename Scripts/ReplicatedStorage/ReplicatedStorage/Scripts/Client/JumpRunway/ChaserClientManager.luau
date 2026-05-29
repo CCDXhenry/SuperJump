@@ -97,6 +97,47 @@ local function IsTreePart(part: BasePart): boolean
 	return treeFolder ~= nil and part:IsDescendantOf(treeFolder)
 end
 
+local function ResolveChaserHipHeight(humanoid: Humanoid): number
+	local hipHeight = humanoid.HipHeight
+	if typeof(hipHeight) ~= "number" or hipHeight ~= hipHeight or hipHeight < 0.01 then
+		hipHeight = 2
+	end
+	return hipHeight
+end
+
+-- R6 模型 Humanoid.HipHeight 常为 0，不能作为 HRP 离地高度；改从模型几何量脚底相对 HRP 的距离
+local function GetModelFeetOffsetFromHrp(model: Model, hrp: BasePart): number
+	local lowestLocalY = -hrp.Size.Y * 0.5
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			local localCf = hrp.CFrame:ToObjectSpace(descendant.CFrame)
+			local partBottomLocalY = localCf.Position.Y - descendant.Size.Y * 0.5
+			if partBottomLocalY < lowestLocalY then
+				lowestLocalY = partBottomLocalY
+			end
+		end
+	end
+	return math.max(0, -lowestLocalY)
+end
+
+local function ResolveChaserHrpGroundHeight(model: Model, humanoid: Humanoid, chaserHrp: BasePart): number
+	local feetOffset = GetModelFeetOffsetFromHrp(model, chaserHrp)
+	local hipHeight = ResolveChaserHipHeight(humanoid)
+	return math.max(feetOffset, hipHeight)
+end
+
+local function GetGroundYAtPosition(pos: Vector3, excludeInstances: { Instance }): number?
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	rayParams.FilterDescendantsInstances = excludeInstances
+	local rayOrigin = pos + Vector3.new(0, 10, 0)
+	local rayResult = workspace:Raycast(rayOrigin, Vector3.new(0, -64, 0), rayParams)
+	if rayResult == nil then
+		return nil
+	end
+	return rayResult.Position.Y
+end
+
 local function IsChaserOverlappingTree(chaserHrp: BasePart): boolean
 	local treeFolder = GetTreeFolder()
 	if treeFolder == nil then
@@ -167,7 +208,7 @@ function ChaserClientManager.SpawnChaser(
 	character: Model,
 	forwardDir: Vector3,
 	speedOverride: number?,
-	startDelayOverrideSec: number?
+	freezeDurationOverrideSec: number?
 ): Model?
 	InternalCleanupFull()
 	EnsureTreeCollisionGroup()
@@ -198,18 +239,29 @@ function ChaserClientManager.SpawnChaser(
 	local spawnPos = hrp.Position + forwardH * spawnAhead
 	spawnPos = Vector3.new(spawnPos.X, hrp.Position.Y, spawnPos.Z)
 
-	-- 把 Chaser 放到地面高度
-	local rayParams = RaycastParams.new()
-	rayParams.FilterDescendantsInstances = if character then { character } else {}
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	local rayResult = workspace:Raycast(spawnPos + Vector3.new(0, 10, 0), Vector3.new(0, -20, 0), rayParams)
-	if rayResult then
-		spawnPos = Vector3.new(spawnPos.X, rayResult.Position.Y, spawnPos.Z)
+	local chaser = chaserTemplate:Clone()
+	local chaserHumanoidPreview = chaser:FindFirstChildOfClass("Humanoid")
+	local chaserHrpPreview = chaser:FindFirstChild("HumanoidRootPart") :: BasePart?
+
+	-- 把 Chaser HumanoidRootPart 放到地面高度（R6 需按模型几何抬高，不能直接用射线命中 Y 或 HipHeight=0）
+	local rayExclude: { Instance } = {}
+	if character then
+		table.insert(rayExclude, character)
+	end
+	local treeFolder = GetTreeFolder()
+	if treeFolder ~= nil then
+		table.insert(rayExclude, treeFolder)
+	end
+	local groundY = GetGroundYAtPosition(spawnPos, rayExclude)
+	if groundY ~= nil and chaserHumanoidPreview and chaserHrpPreview then
+		local hrpGroundHeight = ResolveChaserHrpGroundHeight(chaser, chaserHumanoidPreview, chaserHrpPreview)
+		spawnPos = Vector3.new(spawnPos.X, groundY + hrpGroundHeight, spawnPos.Z)
 	end
 
-	local chaser = chaserTemplate:Clone()
-	chaser:PivotTo(CFrame.lookAt(spawnPos, hrp.Position, Vector3.yAxis))
+	local spawnCFrame = CFrame.lookAt(spawnPos, hrp.Position, Vector3.yAxis)
+	local frozenSpawnCFrame = spawnCFrame
 	chaser.Parent = workspace
+	chaser:PivotTo(spawnCFrame)
 	activeChaser = chaser
 
 	local chaserSpeed = if speedOverride ~= nil then speedOverride else cfg.CHASER_SPEED
@@ -227,14 +279,34 @@ function ChaserClientManager.SpawnChaser(
 	end
 	local treeSlowUntilClock = 0
 
+	local freezeDurationSec = if freezeDurationOverrideSec ~= nil
+		then freezeDurationOverrideSec
+		else cfg.CHASER_FREEZE_AFTER_SPAWN_SEC
+	if typeof(freezeDurationSec) ~= "number" or freezeDurationSec ~= freezeDurationSec then
+		freezeDurationSec = 1
+	end
+	freezeDurationSec = math.max(0, freezeDurationSec)
+
+	local chaseStartDelaySec = cfg.CHASER_START_DELAY_SEC
+	if typeof(chaseStartDelaySec) ~= "number" or chaseStartDelaySec ~= chaseStartDelaySec then
+		chaseStartDelaySec = 3
+	end
+	chaseStartDelaySec = math.max(0, chaseStartDelaySec, freezeDurationSec)
+
 	-- 设置玩家角色的碰撞组
 	EnsurePlayerCollisionGroup()
 
-	-- 解除 HumanoidRootPart 的 Anchored，让 Humanoid 驱动移动和动画
+	-- 定身阶段锚定 HumanoidRootPart，结束后再交给 Humanoid 驱动
 	local chaserHrpInit = chaser:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local chaserHrpAnchoredDuringFreeze = false
 	if chaserHrpInit then
-		chaserHrpInit.Anchored = false
 		chaserHrpInit.CanCollide = true
+		if freezeDurationSec > 0 then
+			chaserHrpInit.Anchored = true
+			chaserHrpAnchoredDuringFreeze = true
+		else
+			chaserHrpInit.Anchored = false
+		end
 	end
 
 	-- 设置 Chaser 所有部件的碰撞组 + 绑定 Touched 事件
@@ -279,8 +351,8 @@ function ChaserClientManager.SpawnChaser(
 	local runAnimTrack: AnimationTrack? = nil
 	if chaserHumanoid then
 		chaserHumanoid.WalkSpeed = 0
-		chaserHumanoid.AutoRotate = true
-		chaserHumanoid.PlatformStand = false
+		chaserHumanoid.AutoRotate = freezeDurationSec <= 0
+		chaserHumanoid.PlatformStand = freezeDurationSec > 0
 
 		-- R6 模型需要手动加载跑步动画；R15 有内置动画，无需额外处理
 		if chaserHumanoid.RigType == Enum.HumanoidRigType.R6 then
@@ -308,12 +380,11 @@ function ChaserClientManager.SpawnChaser(
 	stopped = false
 	faded = false
 
-	local startDelaySec = if startDelayOverrideSec ~= nil then startDelayOverrideSec else cfg.CHASER_START_DELAY_SEC
-	if typeof(startDelaySec) ~= "number" or startDelaySec ~= startDelaySec then
-		startDelaySec = 3
-	end
-	local chaseStartClock = os.clock() + math.max(0, startDelaySec)
+	local spawnClock = os.clock()
+	local freezeEndClock = spawnClock + freezeDurationSec
+	local chaseStartClock = spawnClock + chaseStartDelaySec
 	local chaseStarted = false
+	local nextHopClock = freezeEndClock
 
 	heartbeatConn = runService.Heartbeat:Connect(function(dt: number)
 		if stopped or faded then
@@ -340,9 +411,33 @@ function ChaserClientManager.SpawnChaser(
 		end
 
 		local nowClock = os.clock()
+		if nowClock < freezeEndClock then
+			chaserHumanoidLive.WalkSpeed = 0
+			chaserHumanoidLive.AutoRotate = false
+			chaserHumanoidLive.PlatformStand = true
+			if chaserHrpAnchoredDuringFreeze then
+				if not chaserHrpLive.Anchored then
+					chaserHrpLive.Anchored = true
+				end
+				chaser:PivotTo(frozenSpawnCFrame)
+				chaserHrpLive.AssemblyLinearVelocity = Vector3.zero
+				chaserHrpLive.AssemblyAngularVelocity = Vector3.zero
+			end
+			return
+		end
+		if chaserHrpAnchoredDuringFreeze and chaserHrpLive.Anchored then
+			chaserHrpLive.Anchored = false
+			chaserHrpAnchoredDuringFreeze = false
+		end
+		chaserHumanoidLive.PlatformStand = false
+		chaserHumanoidLive.AutoRotate = true
 		if nowClock < chaseStartClock then
 			chaserHumanoidLive.WalkSpeed = 0
 			chaserHumanoidLive:MoveTo(chaserHrpLive.Position)
+			if nowClock >= nextHopClock then
+				chaserHumanoidLive.Jump = true
+				nextHopClock = nowClock + 0.65
+			end
 			return
 		end
 		if not chaseStarted then
