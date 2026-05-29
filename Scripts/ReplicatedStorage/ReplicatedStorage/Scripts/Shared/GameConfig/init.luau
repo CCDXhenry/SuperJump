@@ -714,11 +714,24 @@ GameConfig.JumpRunwayDesigner = {
 	FIRST_TAKEOFF_AUTORUN_SPEED = 20,
 	-- max 到 min 的降速比例（相对本次起跳前最终减速完的速度）；↑ 段内减速幅度更大
 	JUMP_SPEED_REDUCTION_RATIO = 0.3,
-	-- [1]=Perfect,[2]=Ok,[3]=Late 每次起跳增加 bonus（相对本次起跳前最终减速完的速度重新计算）；↑ 踩点好则全程更快
+	-- 每跳评级速度 bonus；外层 [jumpIndex]，内层 [1]=Perfect,[2]=Ok,[3]=Late。
+	-- 每次起跳增加 bonus（相对本次起跳前最终减速完的速度重新计算）；↑ 踩点好则全程更快
 	JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER = {
-		[1] = 0.5,
-		[2] = 0.3,
-		[3] = 0.17,
+		[1] = {
+			[1] = 0.5,
+			[2] = 0.3,
+			[3] = 0.17,
+		},
+		[2] = {
+			[1] = 0.7,
+			[2] = 0.5,
+			[3] = 0.3,
+		},
+		[3] = {
+			[1] = 1,
+			[2] = 0.7,
+			[3] = 0.5,
+		},
 	},
 
 	-- ═══════════════════════════════════════
@@ -874,13 +887,10 @@ GameConfig.JumpRunway = {
 	FIRST_TAKEOFF_AUTORUN_SPEED = jumpRunwayDesigner.FIRST_TAKEOFF_AUTORUN_SPEED,
 	-- 水平速度：每段 max = jumpPower + 累计起跳评级 bonus；min = max - 本次起跳前最终减速完的速度 * JUMP_SPEED_REDUCTION_RATIO
 	JUMP_SPEED_REDUCTION_RATIO = jumpRunwayDesigner.JUMP_SPEED_REDUCTION_RATIO,
-	-- 与 ComputeJumpWindowRatingTier 一致：1=Perfect，2=Ok，3=Late；每次起跳（含线前首跳配置的 tier）基于起跳前最终速度计算对应 bonus
+	-- 与 ComputeJumpWindowRatingTier 一致：外层 [jumpIndex]，内层 1=Perfect，2=Ok，3=Late；每次起跳（含线前首跳配置的 tier）基于起跳前最终速度计算对应 bonus
 	JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER = jumpRunwayDesigner.JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER,
-	-- AutoRun 且尚未触碰起跳线时起跳：速度 bonus 使用该 tier（默认 2=Ok）；浮层与之一致
+	-- AutoRun 且尚未触碰起跳线时起跳：速度 bonus 使用该 tier（默认 2=Ok）；浮层与之一致。
 	JUMP_FIRST_TAKEOFF_BEFORE_LINE_SPEED_RATING_TIER = 2,
-	-- 插值曲线：目前仅实现 ease_out；其他值按线性回退
-	JUMP_SPEED_LERP_CURVE = "ease_out",
-
 	-- —— 起跳竖直、冲量与各阶段有效重力 ——
 	-- 竖直速度 = jumpPower * JUMP_VERTICAL_RATIO；原 jumpPower 绝对值改为水平速度基准
 	JUMP_VERTICAL_RATIO = jumpRunwayDesigner.JUMP_VERTICAL_RATIO,

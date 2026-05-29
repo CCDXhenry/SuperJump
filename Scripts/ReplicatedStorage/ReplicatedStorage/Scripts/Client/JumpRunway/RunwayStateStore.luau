@@ -41,6 +41,7 @@ export type RunwayStateStoreShape = {
 	slideEndClock: number,
 	jumpHorizLerpStartClock: number?,
 	jumpHorizLerpDuration: number,
+	jumpHorizLerpInitialVy: number?,
 	finalDashAlongExtra: number,
 	runwaySlideKind: string,
 	finalLandSubPhase: number,
@@ -103,6 +104,7 @@ function RunwayStateStore.CreateDefault(phases: any, slideKindStandard: string):
 		slideEndClock = 0,
 		jumpHorizLerpStartClock = nil,
 		jumpHorizLerpDuration = 0,
+		jumpHorizLerpInitialVy = nil,
 		finalDashAlongExtra = 0,
 		runwaySlideKind = slideKindStandard,
 		finalLandSubPhase = 1,
@@ -157,6 +159,9 @@ function RunwayStateStore.ResetForIdle(localState: RunwayStateStoreShape, phases
 	localState.jumpedBeforeBeginLine = false
 	localState.slideStartClock = 0
 	localState.slideEndClock = 0
+	localState.jumpHorizLerpStartClock = nil
+	localState.jumpHorizLerpDuration = 0
+	localState.jumpHorizLerpInitialVy = nil
 	localState.runwaySlideKind = slideKindStandard
 	localState.finalLandSubPhase = 1
 	localState.finalLandPronePhaseStartClock = 0

@@ -95,6 +95,7 @@ local JumpWindowStumblePulseStrength = 0.18
 local JumpWindowStumbleMinSpeedScale = 0.72
 local JumpWindowR15WalkAnimationId = "rbxassetid://507777826"
 local JumpWindowR6WalkAnimationId = "rbxassetid://180426354"
+local FinalLandPhaseALeftGroundMinVy = 1.5
 
 local function ResolveConfigNumber(rawValue: any, fallbackValue: number): number
 	return if typeof(rawValue) == "number" and rawValue == rawValue then rawValue else fallbackValue
@@ -1051,14 +1052,10 @@ end
 function RunwaySession.ClearJumpHorizontalLerp()
 	localState.jumpHorizLerpStartClock = nil
 	localState.jumpHorizLerpDuration = 0
+	localState.jumpHorizLerpInitialVy = nil
 end
 
-function RunwaySession.EaseOutQuad01(t: number): number
-	local u = math.clamp(t, 0, 1)
-	return 1 - (1 - u) * (1 - u)
-end
-
-function RunwaySession.GetJumpHorizontalForwardSpeed(nowClock: number, segmentIndex: number): number
+function RunwaySession.GetJumpHorizontalForwardSpeed(nowClock: number, segmentIndex: number, currentVerticalY: number?): number
 	local maxSpd, minSpd =
 		GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(
 			segmentIndex,
@@ -1074,12 +1071,21 @@ function RunwaySession.GetJumpHorizontalForwardSpeed(nowClock: number, segmentIn
 	if duration < 1e-4 then
 		return minSpd
 	end
+	local initialVy = localState.jumpHorizLerpInitialVy
 	local progress = (nowClock - startClock) / duration
+	if
+		typeof(currentVerticalY) == "number"
+		and currentVerticalY == currentVerticalY
+		and typeof(initialVy) == "number"
+		and initialVy == initialVy
+		and initialVy > 1e-4
+	then
+		progress = 1 - math.max(0, currentVerticalY) / initialVy
+	end
 	if progress >= 1 then
 		return minSpd
 	end
-	local curveName = cfg.JUMP_SPEED_LERP_CURVE
-	local eased = if curveName == "ease_out" then RunwaySession.EaseOutQuad01(progress) else progress
+	local eased = progress
 	return maxSpd + (minSpd - maxSpd) * eased
 end
 
@@ -1105,7 +1111,7 @@ function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt
 		forwardSpeed = cfg.FIRST_TAKEOFF_AUTORUN_SPEED
 	elseif localState.phase == Ph.Airborne and localState.takeoffCount <= cfg.N_TOTAL_JUMPS then
 		if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
-			local base = RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, localState.takeoffCount)
+			local base = RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, localState.takeoffCount, vy)
 			local playerThrustSpeed = RunwaySession.GetExpectedPlayerMaxThrustSpeed()
 			local capExtra = math.max(0, playerThrustSpeed)
 			if localState.dashHeld and localState.fuel > 0 then
@@ -1124,7 +1130,7 @@ function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt
 			localState.finalDashAlongExtra = math.max(0, forwardSpeed - base)
 		else
 			-- Airborne 全程走跳跃水平 lerp，不因落地窗口内判地切回 minAlongGrounded（会触发 run 并覆盖起跳冲量）。
-			forwardSpeed = RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, localState.takeoffCount)
+			forwardSpeed = RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, localState.takeoffCount, vy)
 		end
 	end
 	hrp.AssemblyLinearVelocity = fwdH * forwardSpeed + Vector3.new(0, vy, 0) + perpH * perpDamp
@@ -1891,22 +1897,26 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 	if looseGroundTrack then
 		RunwaySession.DebugFinalLandPhaseA("physics_loose_ground_before_brake", humanoid, hrp, nowClock)
 	end
+	local boostedYForGround = RunwaySession.GetBoostedVerticalY(v.Y)
 	if localState.finalLandTumbleUseAirClock then
-		if not looseGroundTrack then
+		if not looseGroundTrack or boostedYForGround > FinalLandPhaseALeftGroundMinVy then
 			localState.finalLandTumbleLeftGround = true
 		end
 	else
 		localState.finalLandTumbleAirAccumSec += dt
 	end
 	local alongSpd = math.clamp(localState.finalLandLockedTumbleAlong, 0, cfg.ANTI_CHEAT_MAX_ALONG_SPEED)
-	if looseGroundTrack then
+	if
+		looseGroundTrack
+		and (not localState.finalLandTumbleUseAirClock or localState.finalLandTumbleLeftGround or boostedYForGround <= 0)
+	then
 		local brakeRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_GROUNDED_BRAKE_EXP
 		local brakeK = (typeof(brakeRaw) == "number" and brakeRaw == brakeRaw and brakeRaw > 0) and brakeRaw or 2.4
 		alongSpd *= math.exp(-brakeK * dt)
 		localState.finalLandLockedTumbleAlong = alongSpd
 		RunwaySession.DebugFinalLandPhaseA("physics_loose_ground_after_brake", humanoid, hrp, nowClock)
 	end
-	local vyPhaseA = RunwaySession.GetBoostedVerticalY(v.Y)
+	local vyPhaseA = boostedYForGround
 	-- Physics 状态下 Humanoid 引擎会抵抗竖直速度；如果尚未离地且应有弹跳，保持最小离地速度
 	if
 		localState.finalLandTumbleUseAirClock
@@ -1916,7 +1926,12 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 	then
 		local minVyKeep = cfg.RUNWAY_FINAL_LAND_PHASE_A_MIN_POP_VY
 		vyPhaseA = math.max(vyPhaseA, minVyKeep)
-	elseif looseGroundTrack and localState.finalLandTumbleUseAirClock and not localState.finalLandTumbleLeftGround then
+	elseif
+		looseGroundTrack
+		and localState.finalLandTumbleUseAirClock
+		and not localState.finalLandTumbleLeftGround
+		and boostedYForGround <= 0
+	then
 		vyPhaseA = math.min(vyPhaseA, 0)
 	end
 	local horiz = HorizontalVelocity(v)
@@ -2258,7 +2273,7 @@ function RunwaySession.GetRunwayTargetGroundAlongSpeed(humanoid: Humanoid, nowCl
 	end
 	local seg = math.max(1, localState.takeoffCount)
 	if localState.phase == Ph.Airborne and localState.jumpHorizLerpStartClock ~= nil then
-		return RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, seg)
+		return RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, seg, nil)
 	end
 	local _, minSpd = GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(
 		seg,
@@ -5735,14 +5750,36 @@ function RunwaySession.JumpComputeJumpWindowRatingTier(deltaT: number): number
 	end
 end
 
-function RunwaySession.JumpSpeedBonusForTier(tier: number, currentBaseSpeed: number): number
+function RunwaySession.ResolveJumpWindowRatingSpeedBonusRatio(jumpIndex: number, tier: number): number
 	local t = math.clamp(math.floor(tier), 1, 3)
-	local map = cfg.JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER :: { [number]: number }
-	local ratio = map[t]
-	if typeof(ratio) ~= "number" or ratio ~= ratio then
+	local index = math.clamp(math.floor(jumpIndex), 1, math.max(1, cfg.N_TOTAL_JUMPS))
+	local list = cfg.JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER
+	if typeof(list) ~= "table" then
 		return 0
 	end
-	ratio = math.max(0, ratio)
+	local jumpMap = list[index]
+	if typeof(jumpMap) ~= "table" then
+		local lastMap = list[#list]
+		if typeof(lastMap) == "table" then
+			jumpMap = lastMap
+		end
+	end
+	if typeof(jumpMap) == "table" then
+		local ratio = jumpMap[t]
+		if typeof(ratio) == "number" and ratio == ratio then
+			return math.max(0, ratio)
+		end
+	end
+	local legacyRatio = list[t]
+	if typeof(legacyRatio) == "number" and legacyRatio == legacyRatio then
+		return math.max(0, legacyRatio)
+	end
+	return 0
+end
+
+function RunwaySession.JumpSpeedBonusForTier(tier: number, currentBaseSpeed: number, jumpIndex: number): number
+	local t = math.clamp(math.floor(tier), 1, 3)
+	local ratio = RunwaySession.ResolveJumpWindowRatingSpeedBonusRatio(jumpIndex, t)
 	local baseSpd = currentBaseSpeed
 	if typeof(baseSpd) ~= "number" or baseSpd ~= baseSpd then
 		baseSpd = 0
@@ -5771,12 +5808,22 @@ function RunwaySession.GetJumpSpeedCurrentDeceleratedBaseSpeed(): number
 	return minSpd
 end
 
-function RunwaySession.ApplyJumpSpeedRatingForTier(tier: number, currentBaseSpeed: number)
-	local addedBonus = RunwaySession.JumpSpeedBonusForTier(tier, currentBaseSpeed)
+function RunwaySession.ApplyJumpSpeedRatingForTier(tier: number, currentBaseSpeed: number, jumpIndex: number)
+	local addedBonus = RunwaySession.JumpSpeedBonusForTier(tier, currentBaseSpeed, jumpIndex)
 	local nextMaxSpeed = currentBaseSpeed + addedBonus
 	local jumpPowerBaseSpeed = GetJumpPowerBaseSpeed()
 	localState.jumpSpeedCumulativeRatingBonus = math.max(0, nextMaxSpeed - jumpPowerBaseSpeed)
 	localState.jumpSpeedCurrentReductionDelta = RunwaySession.JumpSpeedReductionDeltaForBaseSpeed(currentBaseSpeed)
+end
+
+function RunwaySession.ComputeJumpHorizontalDecelerationDuration(vy: number, gGrav: number): number
+	local boostHoldSec = cfg.RUNWAY_JUMP_BOOST_HOLD_SEC
+	if typeof(boostHoldSec) ~= "number" or boostHoldSec ~= boostHoldSec then
+		boostHoldSec = 0
+	end
+	boostHoldSec = math.max(0, boostHoldSec)
+	local apexAfterBoostSec = if gGrav > 1e-6 then math.max(0, vy) / gGrav else 0.25
+	return math.max(0.01, boostHoldSec + apexAfterBoostSec)
 end
 
 function RunwaySession.JumpComputeSessionVy(): (number, number, number)
@@ -5811,10 +5858,11 @@ function RunwaySession.JumpApplyRatingForTakeoff(
 	inLineWindow: boolean,
 	inChainWindow: boolean
 )
+	local jumpIndex = math.clamp(localState.takeoffCount + 1, 1, cfg.N_TOTAL_JUMPS)
 	if inAuto then
 		local currentBaseSpeed = RunwaySession.GetJumpSpeedCurrentDeceleratedBaseSpeed()
 		local tierFirst = math.clamp(math.floor(cfg.JUMP_FIRST_TAKEOFF_BEFORE_LINE_SPEED_RATING_TIER), 1, 3)
-		RunwaySession.ApplyJumpSpeedRatingForTier(tierFirst, currentBaseSpeed)
+		RunwaySession.ApplyJumpSpeedRatingForTier(tierFirst, currentBaseSpeed, jumpIndex)
 		localState.ratingTier = tierFirst
 		JumpRunWayFrame.ShowRatingTier(tierFirst)
 		print("JumpApplyRatingForTakeoff inAuto", tierFirst, currentBaseSpeed, localState.jumpSpeedCumulativeRatingBonus, localState.jumpSpeedCurrentReductionDelta)
@@ -5826,7 +5874,7 @@ function RunwaySession.JumpApplyRatingForTakeoff(
 		else
 			tierLine = 2
 		end
-		RunwaySession.ApplyJumpSpeedRatingForTier(tierLine, currentBaseSpeed)
+		RunwaySession.ApplyJumpSpeedRatingForTier(tierLine, currentBaseSpeed, jumpIndex)
 		localState.ratingTier = tierLine
 		JumpRunWayFrame.ShowRatingTier(tierLine)
 		print("JumpApplyRatingForTakeoff inLineWindow", tierLine, currentBaseSpeed, localState.jumpSpeedCumulativeRatingBonus, localState.jumpSpeedCurrentReductionDelta)
@@ -5838,7 +5886,7 @@ function RunwaySession.JumpApplyRatingForTakeoff(
 		else
 			tierChain = 2
 		end
-		RunwaySession.ApplyJumpSpeedRatingForTier(tierChain, currentBaseSpeed)
+		RunwaySession.ApplyJumpSpeedRatingForTier(tierChain, currentBaseSpeed, jumpIndex)
 		localState.ratingTier = tierChain
 		JumpRunWayFrame.ShowRatingTier(tierChain)
 		print("JumpApplyRatingForTakeoff inChainWindow", tierChain, currentBaseSpeed, localState.jumpSpeedCumulativeRatingBonus, localState.jumpSpeedCurrentReductionDelta)
@@ -5912,9 +5960,9 @@ function RunwaySession.JumpApplyTakeoff(
 			bonusPart
 		)
 	)
-	local tApex = if gGrav > 1e-6 then vy / gGrav else 0.25
 	localState.jumpHorizLerpStartClock = nowClock
-	localState.jumpHorizLerpDuration = math.max(0.01, tApex)
+	localState.jumpHorizLerpDuration = RunwaySession.ComputeJumpHorizontalDecelerationDuration(vy, gGrav)
+	localState.jumpHorizLerpInitialVy = vy
 	RunwaySession.JumpAdvancePhaseAfterImpulse(inAuto, inLineWindow, inChainWindow)
 	-- 冲量起跳后首帧 Raycast/Humanoid 仍常判贴地或 preland；若 prev* 为 false 会被当成「着地/快触地上升沿」
 	-- 立刻武装链式 T_WINDOW，约 1s 超时进 Slide。置 true 表示上升沿已消费，仅真实再落地时才武装。
