@@ -778,8 +778,14 @@ GameConfig.JumpRunwayDesigner = {
 	RUNWAY_FINAL_LAND_PHASE_A_MIN_POP_VY = 10,
 	-- 终局落地触地检测：脚下射线距离阈值（stud）；实际落地距离小于此值判定触地
 	RUNWAY_FINAL_LAND_TOUCHDOWN_FEET_MAX_DIST_STUDS = 0,
-	-- 子阶段 B：趴滑沿轴速度衰减指数（每帧 exp(-brakeK * dt)）；越大停得越快
-	RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP = 1.6,
+	-- 趴滑统一线性减速度（studs/s^2）；终局 B 与 MISS 共用，滑行距离 = v0^2 / (2a)
+	RUNWAY_PRONE_SLIDE_DECELERATION = 20,
+	-- 终局趴滑：竖直落地速度相对标准竖直速度的额外减速度倍率；0 表示不加成
+	RUNWAY_FINAL_LAND_VERTICAL_DECELERATION_RATIO = 0.5,
+	-- 终局趴滑：竖直速度加成比例上限，避免极端碰撞导致滑行距离过短
+	RUNWAY_FINAL_LAND_VERTICAL_DECELERATION_MAX_RATIO = 2,
+	-- MISS 趴滑固定初始速度（studs/s）
+	RUNWAY_MISS_SLIDE_START_SPEED = 30,
 	-- 终局趴滑：HRP 中心离地高度（stud）；越大玩家视角越高
 	RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT = 1.7,
 	-- MISS 趴滑：HRP 中心离地高度（stud）；独立于终局趴滑
@@ -806,14 +812,14 @@ GameConfig.JumpRunwayDesigner = {
 	-- ═══════════════════════════════════════
 	-- 小精灵宝箱的配置 ID（对应 LittleElfChestData 中的 id）
 	RUNWAY_CHEST_CONFIG_ID = 1,
-	-- 旧字段：宝箱生成距离现在由 RUNWAY_CHEST_SLIDE_DISTANCE_* 控制，保留字段避免配置兼容问题
+	-- 旧字段：宝箱生成距离现在由脚本滑行总距离决定，保留字段避免配置兼容问题
 	RUNWAY_CHEST_SPAWN_AHEAD_STUDS = 3,
 	-- 旧字段：宝箱现在在 B 段入口直接贴地生成，不再按结束前时间生成
 	RUNWAY_CHEST_SPAWN_BEFORE_END_SEC = 4,
-	-- 玩家撞击宝箱后向后反弹速度（studs/s）wdsa
-	RUNWAY_CHEST_BOUNCE_BACK_SPEED = 12,
-	-- 撞击后保持趴姿反弹时长，之后站立等待开箱动画（秒）
-	RUNWAY_CHEST_BOUNCE_DELAY_SEC = 0.5,
+	-- 小精灵宝箱水平命中半径（stud）；越小越贴近宝箱才触发撞击
+	RUNWAY_CHEST_HIT_HORIZONTAL_MAX_DIST_STUDS = 5,
+	-- 小精灵宝箱撞击速度（studs/s）；滑到宝箱时保留该末速度，撞击后也用该速度反弹并按统一趴滑减速度减速
+	RUNWAY_CHEST_HIT_SPEED = 15,
 	-- 开箱动画结束后、触发回城传送前的等待时长（秒）
 	RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC = 0.5,
 }
@@ -1034,8 +1040,14 @@ GameConfig.JumpRunway = {
 	-- 终局落地触地检测：脚下射线距离阈值（stud），独立于 RUNWAY_SCRIPTED_GROUNDED_MAX_DIST_ABOVE_BASELINE_STUDS
 	RUNWAY_FINAL_LAND_TOUCHDOWN_FEET_MAX_DIST_STUDS = jumpRunwayDesigner.RUNWAY_FINAL_LAND_TOUCHDOWN_FEET_MAX_DIST_STUDS,
 
-	-- 子阶段 B 滑行速度衰减指数（每帧 exp(-brakeK * dt)）
-	RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP = jumpRunwayDesigner.RUNWAY_FINAL_LAND_PRONE_SLIDE_BRAKE_EXP,
+	-- 趴滑统一线性减速度（studs/s^2）；终局 B 与 MISS 共用
+	RUNWAY_PRONE_SLIDE_DECELERATION = jumpRunwayDesigner.RUNWAY_PRONE_SLIDE_DECELERATION,
+	-- 终局趴滑：竖直落地速度相对标准竖直速度的额外减速度倍率
+	RUNWAY_FINAL_LAND_VERTICAL_DECELERATION_RATIO = jumpRunwayDesigner.RUNWAY_FINAL_LAND_VERTICAL_DECELERATION_RATIO,
+	-- 终局趴滑：竖直速度加成比例上限
+	RUNWAY_FINAL_LAND_VERTICAL_DECELERATION_MAX_RATIO = jumpRunwayDesigner.RUNWAY_FINAL_LAND_VERTICAL_DECELERATION_MAX_RATIO,
+	-- MISS 趴滑固定初始速度（studs/s）
+	RUNWAY_MISS_SLIDE_START_SPEED = jumpRunwayDesigner.RUNWAY_MISS_SLIDE_START_SPEED,
 	-- 终局趴滑：HRP 中心离地高度（stud）
 	RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT = jumpRunwayDesigner.RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT,
 	-- MISS 趴滑：HRP 中心离地高度（stud）
@@ -1075,22 +1087,22 @@ GameConfig.JumpRunway = {
 	RUNWAY_CHEST_CONFIG_ID = jumpRunwayDesigner.RUNWAY_CHEST_CONFIG_ID,
 	RUNWAY_CHEST_SPAWN_AHEAD_STUDS = jumpRunwayDesigner.RUNWAY_CHEST_SPAWN_AHEAD_STUDS,
 	RUNWAY_CHEST_SPAWN_BEFORE_END_SEC = jumpRunwayDesigner.RUNWAY_CHEST_SPAWN_BEFORE_END_SEC,
-	RUNWAY_CHEST_BOUNCE_BACK_SPEED = jumpRunwayDesigner.RUNWAY_CHEST_BOUNCE_BACK_SPEED,
-	RUNWAY_CHEST_BOUNCE_DELAY_SEC = jumpRunwayDesigner.RUNWAY_CHEST_BOUNCE_DELAY_SEC,
+	RUNWAY_CHEST_HIT_HORIZONTAL_MAX_DIST_STUDS = jumpRunwayDesigner.RUNWAY_CHEST_HIT_HORIZONTAL_MAX_DIST_STUDS,
+	RUNWAY_CHEST_HIT_SPEED = jumpRunwayDesigner.RUNWAY_CHEST_HIT_SPEED,
 	RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC = jumpRunwayDesigner.RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC,
-	-- B 段追宝箱最小滑行速度（stud/s）；提高可减少末段慢漂，但过高会显得撞击过快
+	-- 旧字段：B 段不再追宝箱，保留字段避免配置兼容问题
 	RUNWAY_CHEST_SLIDE_MIN_CHASE_SPEED = 16,
-	-- B 段追宝箱最大滑行速度（stud/s）；限制整体滑行速度上限
+	-- 旧字段：B 段不再追宝箱，保留字段避免配置兼容问题
 	RUNWAY_CHEST_SLIDE_MAX_CHASE_SPEED = 30,
-	-- 默认 JumpPower 下，宝箱生成在玩家前方的基础距离（stud）
+	-- 旧字段：宝箱距离现在由脚本滑行总距离决定，保留字段避免配置兼容问题
 	RUNWAY_CHEST_SLIDE_DISTANCE_BASE_STUDS = 32,
-	-- 宝箱生成距离下限（stud）
+	-- 旧字段：宝箱距离现在由脚本滑行总距离决定，保留字段避免配置兼容问题
 	RUNWAY_CHEST_SLIDE_DISTANCE_MIN_STUDS = 36,
-	-- 宝箱生成距离上限（stud）
+	-- 旧字段：宝箱距离现在由脚本滑行总距离决定，保留字段避免配置兼容问题
 	RUNWAY_CHEST_SLIDE_DISTANCE_MAX_STUDS = 96,
-	-- JumpPower 距离增长衰减参考值；值越大，JumpPower 增加带来的距离增长越平缓
+	-- 旧字段：宝箱距离现在由脚本滑行总距离决定，保留字段避免配置兼容问题
 	RUNWAY_CHEST_SLIDE_DISTANCE_DECAY_REFERENCE_JUMP_POWER = 80,
-	-- 宝箱生成距离整体倍率；>1 整体更远，<1 整体更近
+	-- 旧字段：宝箱距离现在由脚本滑行总距离决定，保留字段避免配置兼容问题
 	RUNWAY_CHEST_SLIDE_DISTANCE_MULTIPLIER = 1,
 	-- 宝箱落点/贴地射线起点抬高距离（stud）；用于从障碍物高度向下找真实地面
 	RUNWAY_CHEST_GROUND_RAYCAST_HEIGHT_STUDS = 256,
