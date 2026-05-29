@@ -81,6 +81,9 @@ for i, originName in ipairs(validZoneNames) do
     if #origItems > 0 then
         -- Calculate target quantity based on size ratio
         local target_count = math.round(#origItems * (targetL / originL))
+        if targetName == "Zone1" or targetName == "Zone2" or targetName == "Zone3" then
+            target_count = math.round(target_count / 2)
+        end
         target_count = math.max(1, target_count) -- ensure at least 1 item
         
         if target_count <= #origItems then
