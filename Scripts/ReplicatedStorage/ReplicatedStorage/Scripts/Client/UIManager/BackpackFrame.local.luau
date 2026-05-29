@@ -456,6 +456,10 @@ ClientMsg.ConnectLocalPlayerExEquipInventoryUpdate(function()
 	RefreshBackpackUI(ClientGameInfo.GetBrainrotQueue())
 end)
 
+ClientMsg.ConnectCurrentGuideTypeChanged(function()
+	RefreshBackpackUI(ClientGameInfo.GetBrainrotQueue())
+end)
+
 NetMsg.ConnectNotifyExerciseStart(function()
 	isExEquipExercising = true
 end)
