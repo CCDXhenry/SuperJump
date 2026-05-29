@@ -27,6 +27,16 @@ local function syncCoilLocomotionForCharacter(character: Model)
 	if player ~= nil and player:GetAttribute("JumpRunwayActive") == true then
 		return
 	end
+	-- 锻炼中：使用固定跑步速度，避免商店 WalkSpeed 覆盖
+	if player ~= nil and player:GetAttribute("Exercising") == true then
+		humanoid.WalkSpeed = GameConfig.ExerciseRunWalkSpeed
+		if humanoid.UseJumpPower then
+			humanoid.JumpPower = defaultJumpPower
+		else
+			humanoid.JumpHeight = defaultJumpHeight
+		end
+		return
+	end
 	local baseWalk = defaultWalkSpeed
 	local isDecelerationOn = false
 	if player ~= nil then

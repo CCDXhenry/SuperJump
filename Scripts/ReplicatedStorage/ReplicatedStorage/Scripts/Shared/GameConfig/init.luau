@@ -710,6 +710,8 @@ GameConfig.JumpRunwayDesigner = {
 	DEFAULT_JUMP_POWER = 20,
 	-- 跳跃力锻炼间隔
 	JUMP_POWER_EXERCISE_INTERVAL = 1,
+	-- 跑步机锻炼固定跑步动画速度（等效 WalkSpeed，用于 AdjustSpeed 计算）
+	EXERCISE_RUN_WALK_SPEED = 20,
 	-- 首跳前线前 AutoRun 沿轴速；↑ 起跳前冲更快
 	FIRST_TAKEOFF_AUTORUN_SPEED = 20,
 	-- max 到 min 的降速比例（相对本次起跳前最终减速完的速度）；↑ 段内减速幅度更大
@@ -841,6 +843,7 @@ local jumpRunwayDesigner = GameConfig.JumpRunwayDesigner
 
 GameConfig.JumpPowerDefaultValue = jumpRunwayDesigner.DEFAULT_JUMP_POWER -- 默认跳跃力
 GameConfig.JumpPowerExerciseInterval = jumpRunwayDesigner.JUMP_POWER_EXERCISE_INTERVAL -- 跳跃力锻炼间隔
+GameConfig.ExerciseRunWalkSpeed = jumpRunwayDesigner.EXERCISE_RUN_WALK_SPEED -- 跑步机锻炼固定跑步动画速度
 
 GameConfig.JumpRunway = {
 	-- —— 会话与诊断 ——

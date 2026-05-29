@@ -56,6 +56,7 @@ local exercisePopupGuiTemplate = uiFolder:WaitForChild("ExerciseJumpPowerPopupGu
 -- 锻炼模式常量
 -- 人物躯干高度（HumanoidRootPart 到脚底的参考偏移）
 local CHARACTER_TORSO_HEIGHT: number = 3
+local ACTIVE_EXERCISE_EQUIP_NAME = "ActiveExerciseEquip"
 local EXERCISE_OWNER_USER_ID_ATTR = "ExerciseOwnerUserId"
 local EXERCISE_MODEL_WAIT_TIMEOUT: number = 5
 -- 锻炼数值浮字对象池大小：允许同时显示多个浮字，超过时复用最早播放的浮字。
@@ -75,6 +76,8 @@ local EXERCISE_POPUP_OUT_DISTANCE_MAX: number = 3
 local EXERCISE_POPUP_RANDOM_ANGLE_DEGREES: number = 360
 -- 第二段淡出开始时间占比，越小越早开始变透明。
 local EXERCISE_POPUP_FADE_START_RATIO: number = 0.45
+local EXERCISE_RUN_R15_ANIMATION_ID = "rbxassetid://507767968"
+local EXERCISE_RUN_R6_ANIMATION_ID = "rbxassetid://180426354"
 
 -- 锻炼模式状态
 local isExercising: boolean = false
@@ -85,6 +88,8 @@ local exerciseRunServiceConnection: RBXScriptConnection? = nil
 local exerciseInputConnection: RBXScriptConnection? = nil
 local exercisePrompt: ProximityPrompt? = nil
 local exerciseBikeAnimTrack: AnimationTrack? = nil
+local exerciseRunAnimTrack: AnimationTrack? = nil
+local exerciseRunAnimId: string? = nil
 local exercisePopupRandom = Random.new()
 local exerciseEquipId: number? = nil
 
@@ -444,6 +449,14 @@ local function StopExerciseInternal()
 		exerciseBikeAnimTrack = nil
 	end
 
+	-- 停止跑步机动画
+	if exerciseRunAnimTrack ~= nil then
+		exerciseRunAnimTrack:Stop()
+		exerciseRunAnimTrack:Destroy()
+		exerciseRunAnimTrack = nil
+	end
+	exerciseRunAnimId = nil
+
 	-- 关闭锻炼 UI
 	UIManager.CloseWindow(UIManager.WindowId.ExEquipFrame)
 	CleanupExercisePopups()
@@ -471,9 +484,102 @@ local function GetExercisePromptFromModel(exerciseModel: Model): ProximityPrompt
 	return promptAttachment:FindFirstChild("ProximityPrompt") :: ProximityPrompt?
 end
 
+local function GetExerciseRunAnimationSpeed(): number
+	local walkSpeedConfig = GameConfig.Shop.WalkSpeed
+	local referenceWalkSpeed = walkSpeedConfig.abilityList[1] or 16
+	return GameConfig.ExerciseRunWalkSpeed / referenceWalkSpeed
+end
+
+local function ResolveExerciseRunAnimationId(humanoid: Humanoid): string
+	local character = humanoid.Parent
+	if character ~= nil and character:IsA("Model") then
+		local animate = character:FindFirstChild("Animate")
+		if animate ~= nil then
+			local runGroup = animate:FindFirstChild("run")
+			if runGroup ~= nil then
+				for _, inst in runGroup:GetDescendants() do
+					if inst:IsA("Animation") and inst.AnimationId ~= "" then
+						return inst.AnimationId
+					end
+				end
+			end
+		end
+	end
+	if humanoid.RigType == Enum.HumanoidRigType.R6 then
+		return EXERCISE_RUN_R6_ANIMATION_ID
+	end
+	return EXERCISE_RUN_R15_ANIMATION_ID
+end
+
+local function StopExerciseRunAnimation()
+	if exerciseRunAnimTrack ~= nil then
+		exerciseRunAnimTrack:Stop()
+		exerciseRunAnimTrack:Destroy()
+		exerciseRunAnimTrack = nil
+	end
+	exerciseRunAnimId = nil
+end
+
+local function EnsureExerciseRunAnimation(humanoid: Humanoid)
+	local animationId = ResolveExerciseRunAnimationId(humanoid)
+	local animationSpeed = GetExerciseRunAnimationSpeed()
+
+	if exerciseRunAnimTrack ~= nil and exerciseRunAnimId ~= animationId then
+		StopExerciseRunAnimation()
+	end
+
+	if exerciseRunAnimTrack == nil then
+		local animator = humanoid:FindFirstChildOfClass("Animator")
+		if animator == nil then
+			local newAnimator = Instance.new("Animator")
+			newAnimator.Parent = humanoid
+			animator = newAnimator
+		end
+		local runAnim = Instance.new("Animation")
+		runAnim.AnimationId = animationId
+		local loadedTrack = animator:LoadAnimation(runAnim)
+		loadedTrack.Looped = true
+		loadedTrack.Priority = Enum.AnimationPriority.Movement
+		exerciseRunAnimTrack = loadedTrack
+		exerciseRunAnimId = animationId
+	end
+
+	local runAnimTrack = exerciseRunAnimTrack
+	if runAnimTrack == nil then
+		return
+	end
+	if not runAnimTrack.IsPlaying then
+		runAnimTrack:Play()
+	end
+	runAnimTrack:AdjustSpeed(animationSpeed)
+end
+
+local function IsLocalActiveExerciseModel(instance: Instance): boolean
+	if not instance:IsA("Model") then
+		return false
+	end
+	if instance.Name == ACTIVE_EXERCISE_EQUIP_NAME then
+		return true
+	end
+	return instance:GetAttribute(EXERCISE_OWNER_USER_ID_ATTR) == localPlayer.UserId
+end
+
 local function FindLocalActiveExerciseModel(): Model?
+	local character = localPlayer.Character
+	if character ~= nil then
+		local namedModel = character:FindFirstChild(ACTIVE_EXERCISE_EQUIP_NAME)
+		if namedModel ~= nil and namedModel:IsA("Model") then
+			return namedModel
+		end
+		for _, child in character:GetChildren() do
+			if IsLocalActiveExerciseModel(child) then
+				return child
+			end
+		end
+	end
+
 	for _, child in workspace:GetChildren() do
-		if child:IsA("Model") and child:GetAttribute(EXERCISE_OWNER_USER_ID_ATTR) == localPlayer.UserId then
+		if IsLocalActiveExerciseModel(child) then
 			return child
 		end
 	end
@@ -487,17 +593,21 @@ local function WaitForLocalActiveExerciseModel(): Model?
 	end
 
 	local foundModel: Model? = nil
-	local childAddedConnection: RBXScriptConnection? = nil
+	local childAddedConnections: { RBXScriptConnection } = {}
 	local startTime = os.clock()
 
-	childAddedConnection = workspace.ChildAdded:Connect(function(child: Instance)
-		if not child:IsA("Model") then
-			return
-		end
-		if child:GetAttribute(EXERCISE_OWNER_USER_ID_ATTR) == localPlayer.UserId then
+	local function OnPotentialExerciseModelAdded(child: Instance)
+		if IsLocalActiveExerciseModel(child) then
 			foundModel = child
 		end
-	end)
+	end
+
+	table.insert(childAddedConnections, workspace.ChildAdded:Connect(OnPotentialExerciseModelAdded))
+
+	local character = localPlayer.Character
+	if character ~= nil then
+		table.insert(childAddedConnections, character.ChildAdded:Connect(OnPotentialExerciseModelAdded))
+	end
 
 	while foundModel == nil and os.clock() - startTime < EXERCISE_MODEL_WAIT_TIMEOUT do
 		foundModel = FindLocalActiveExerciseModel()
@@ -507,8 +617,8 @@ local function WaitForLocalActiveExerciseModel(): Model?
 		task.wait()
 	end
 
-	if childAddedConnection ~= nil then
-		childAddedConnection:Disconnect()
+	for _, connection in childAddedConnections do
+		connection:Disconnect()
 	end
 	return foundModel
 end
@@ -687,14 +797,8 @@ local function StartExercise(equipId: number)
 				end
 			end
 		else
-			-- 其他类型：强制走/跑状态产生动画
-			if exerciseHumanoid:GetState() ~= Enum.HumanoidStateType.Running
-				and exerciseHumanoid:GetState() ~= Enum.HumanoidStateType.RunningNoPhysics then
-				pcall(function()
-					exerciseHumanoid:ChangeState(Enum.HumanoidStateType.Running)
-				end)
-			end
-			exerciseHumanoid:Move(exerciseForward, false)
+			-- 跑步机：直接播放固定速度的跑步动画，不依赖 Humanoid:Move / WalkSpeed
+			EnsureExerciseRunAnimation(exerciseHumanoid)
 		end
 	end)
 

@@ -2,6 +2,7 @@
 local ExEquipManager = {}
 
 local players: Players = game:GetService("Players")
+local runService: RunService = game:GetService("RunService")
 local workspace: Workspace = game:GetService("Workspace")
 local serverStorage: ServerStorage = game:GetService("ServerStorage")
 local serverScripts = serverStorage:WaitForChild("Scripts")
@@ -24,9 +25,12 @@ local EXERCISE_JUMP_POWER_INTERVAL = GameConfig.JumpPowerExerciseInterval
 local CHARACTER_TORSO_HEIGHT: number = 3
 local ACTIVE_EXERCISE_EQUIP_NAME = "ActiveExerciseEquip"
 local EXERCISE_OWNER_USER_ID_ATTR = "ExerciseOwnerUserId"
+local EXERCISING_ATTR = "Exercising"
 
 local exerciseRunningMap: { [number]: boolean } = {}
 local activeExerciseModelMap: { [number]: Model } = {}
+local activeExerciseWorldPivotMap: { [number]: CFrame } = {}
+local exerciseModelPivotLockConnection: RBXScriptConnection? = nil
 
 local function LogInfo(message: string)
 	print(string.format("%s %s", LOG_PREFIX, message))
@@ -38,6 +42,21 @@ local function DestroyExerciseModel(userId: number)
 		equipmentModel:Destroy()
 		activeExerciseModelMap[userId] = nil
 	end
+	activeExerciseWorldPivotMap[userId] = nil
+end
+
+local function EnsureExerciseModelPivotLockConnection()
+	if exerciseModelPivotLockConnection ~= nil then
+		return
+	end
+	exerciseModelPivotLockConnection = runService.Heartbeat:Connect(function()
+		for userId, equipmentModel in activeExerciseModelMap do
+			local worldPivot = activeExerciseWorldPivotMap[userId]
+			if worldPivot ~= nil and equipmentModel.Parent ~= nil then
+				equipmentModel:PivotTo(worldPivot)
+			end
+		end
+	end)
 end
 
 local function GetExerciseStandCFrame(equipmentModel: Model, equipData: GameConfig.ExEquipData, character: Model, hrp: BasePart): CFrame
@@ -150,24 +169,27 @@ local function CreateExerciseModelAtPlayer(player: Player, equipData: GameConfig
 	local equipmentModel = sourceModel:Clone()
 	equipmentModel.Name = ACTIVE_EXERCISE_EQUIP_NAME
 	equipmentModel:SetAttribute(EXERCISE_OWNER_USER_ID_ATTR, player.UserId)
-	equipmentModel.Parent = workspace
+	-- 挂到玩家角色下，避免 Invisicam 将本地玩家的健身器材当作遮挡物隐藏
+	equipmentModel.Parent = character
 	equipmentModel:PivotTo(CFrame.lookAt(hrp.Position, hrp.Position - flatLook.Unit))
 	DisableExerciseModelPrompts(equipmentModel)
 	MoveExerciseModelStandXzToPlayer(equipmentModel, equipData, character, hrp)
 	MoveExerciseModelPrimaryPartToGround(equipmentModel, character)
+	EnsureExerciseModelPivotLockConnection()
 	return equipmentModel
 end
 
 local function StopExerciseForPlayer(player: Player, logReason: string)
 	local userId = player.UserId
-	if not exerciseRunningMap[userId] then
-		DestroyExerciseModel(userId)
-		return
-	end
+	local wasExercising = exerciseRunningMap[userId] == true
 	exerciseRunningMap[userId] = nil
+	player:SetAttribute(EXERCISING_ATTR, false)
 	DestroyExerciseModel(userId)
-	NetMsg.FireNotifyExerciseEnd(player)
-	LogInfo(string.format("ExerciseStopped userId=%d reason=%s", userId, logReason))
+	if wasExercising then
+		ServerGameInfo.ApplyWalkSpeed(player)
+		NetMsg.FireNotifyExerciseEnd(player)
+		LogInfo(string.format("ExerciseStopped userId=%d reason=%s", userId, logReason))
+	end
 end
 
 local function CanAffordExEquip(playerInfo: GameConfig.PlayerInfo, equipData: GameConfig.ExEquipData): boolean
@@ -341,7 +363,16 @@ function ExEquipManager.OnRequestStartExercise(player: Player, equipId: number)
 	end
 
 	activeExerciseModelMap[userId] = equipmentModel
+	activeExerciseWorldPivotMap[userId] = equipmentModel:GetPivot()
 	exerciseRunningMap[userId] = true
+	player:SetAttribute(EXERCISING_ATTR, true)
+
+	if equipData.type ~= 2 then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid ~= nil then
+			humanoid.WalkSpeed = GameConfig.ExerciseRunWalkSpeed
+		end
+	end
 
 	task.spawn(function()
 		while exerciseRunningMap[userId] do
