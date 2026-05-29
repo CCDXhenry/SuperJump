@@ -8,6 +8,7 @@ local coreScripts = core:WaitForChild("Scripts")
 local coreSharedScripts = coreScripts:WaitForChild("Shared")
 local DateTimeExtension = require(coreSharedScripts:FindFirstChild("DateTimeExtension"))
 local BrainrotDataModule = require(script:WaitForChild("BrainrotData"))
+local BrainrotVariantDataModule = require(script:WaitForChild("BrainrotVariantData"))
 local LittleElfChestDataModule = require(script:WaitForChild("LittleElfChestData"))
 local LittleElfChestRewardPoolDataModule = require(script:WaitForChild("LittleElfChestRewardPoolData"))
 local UpgradeShopRawData = require(script:WaitForChild("UpgradeShopData"))
@@ -201,6 +202,29 @@ function GameConfig.GetBrainrotAbility(baseAbility: number, level: number): numb
 	return math.max(linear, expo)
 end
 
+export type BrainrotVariantConfigData = {
+	id: number,
+	coinBonusPercent: number,
+	resourceName: string,
+	name_t: string,
+}
+
+function GameConfig.GetBrainrotVariant(variantId: number?): BrainrotVariantConfigData?
+	if variantId == nil or variantId <= 0 then
+		return nil
+	end
+	return GameConfig.BrainrotVariantIdMap[variantId]
+end
+
+function GameConfig.GetBrainrotAbilityWithVariant(baseAbility: number, level: number, variantId: number?): number
+	local ability = GameConfig.GetBrainrotAbility(baseAbility, level)
+	local variant = GameConfig.GetBrainrotVariant(variantId)
+	if variant == nil then
+		return ability
+	end
+	return math.ceil(ability * (1 + variant.coinBonusPercent / 100))
+end
+
 function GameConfig.GetBrainrotUpgradeCost(baseAbility: number, level: number): number
 	local basePaybackTime = 5
 	local maxPaybackTime = 600
@@ -234,6 +258,7 @@ export type BrainrotQueueItem = {
 	configId: number,
 	quality: number,
 	level: number,
+	variantId: number?,
 	chestStoredExp: number?,
 	grantTipKey: string?,
 	grantExpectedCount: number?,
@@ -254,6 +279,15 @@ GameConfig.BrainrotIdMap = {} :: { [number]: BrainrotData }
 for _, config in pairs(BrainrotDataModule) do
 	GameConfig.BrainrotNameMap[config.resourceName] = config
 	GameConfig.BrainrotIdMap[config.id] = config
+end
+
+GameConfig.BrainrotVariants = BrainrotVariantDataModule
+GameConfig.BrainrotVariantIdMap = {} :: { [number]: BrainrotVariantConfigData }
+for _, variantRow in pairs(BrainrotVariantDataModule) do
+	if type(variantRow) == "table" and variantRow.id ~= nil then
+		local variantCfg = variantRow :: BrainrotVariantConfigData
+		GameConfig.BrainrotVariantIdMap[variantCfg.id] = variantCfg
+	end
 end
 
 local function BuildResourceNameCandidates(resourceName: string): { string }
@@ -413,7 +447,52 @@ export type LittleElfChestRewardPoolEntry = {
 	itemType: number,
 	itemId: number,
 	weight: number,
+	variantList: { number }?,
+	variantWeight: { [number]: number }?,
 }
+
+function GameConfig.FindLittleElfChestRewardEntry(chestConfigId: number, brainrotId: number): LittleElfChestRewardPoolEntry?
+	local rewardPool = GameConfig.LittleElfChestRewardPoolMap[chestConfigId]
+	if rewardPool == nil then
+		return nil
+	end
+	for _, entry in ipairs(rewardPool) do
+		if entry.itemId == brainrotId then
+			return entry
+		end
+	end
+	return nil
+end
+
+function GameConfig.RollVariantIdFromEntry(entry: LittleElfChestRewardPoolEntry): number
+	local variantList = entry.variantList
+	if variantList == nil or #variantList == 0 then
+		return 0
+	end
+	local variantWeight = entry.variantWeight
+	local totalWeight = 0
+	for i = 1, #variantList do
+		local w = if variantWeight then variantWeight[i] or 0 else 1
+		if w > 0 then
+			totalWeight += w
+		end
+	end
+	if totalWeight <= 0 then
+		return variantList[1]
+	end
+	local roll = math.random(1, totalWeight)
+	local cumulative = 0
+	for i = 1, #variantList do
+		local w = if variantWeight then variantWeight[i] or 0 else 1
+		if w > 0 then
+			cumulative += w
+			if roll <= cumulative then
+				return variantList[i]
+			end
+		end
+	end
+	return variantList[1]
+end
 
 export type LittleElfChestRewardPoolData = LittleElfChestRewardPoolEntry
 
@@ -1362,6 +1441,7 @@ export type ModelInfo = {
 	configId: number,
 	rarity: ModelRarity,
 	level: number,
+	variantId: number?,
 	unclaimedYield: number?,
 	yieldAccrueStartUnix: number?,
 	yieldAccruedSeconds: number?,

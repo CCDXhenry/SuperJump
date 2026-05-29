@@ -28,6 +28,7 @@ local RunwayUiController = require(jumpRunwayScripts:WaitForChild("RunwayUiContr
 local RunwayNetBridge = require(jumpRunwayScripts:WaitForChild("RunwayNetBridge"))
 local ChaserClientManager = require(jumpRunwayScripts:WaitForChild("ChaserClientManager"))
 local ChestOpenAnimationManager = require(clientScripts:WaitForChild("ChestOpenAnimationManager"))
+local BrainrotClientManager = require(clientScripts:WaitForChild("BrainrotClientManager"))
 local core = replicatedStorage:WaitForChild("Core")
 local coreClientScripts = core:WaitForChild("Scripts"):WaitForChild("Client")
 local TranslationTool = require(coreClientScripts:WaitForChild("TranslationTool"))
@@ -167,6 +168,7 @@ local Refs: {
 	chestSpawnedModel: Model?,
 	chestSpawnedConnList: { RBXScriptConnection }?,
 	chestPickedBrainrotId: number?,
+	chestPickedVariantId: number?,
 	chestPickedConfigId: number?,
 	chestAnimPlaying: boolean?,
 	chestReadyForHit: boolean?,
@@ -179,7 +181,7 @@ local Refs: {
 	chestRewardWaitPose: boolean?,
 	chestLandedOnGround: boolean?,
 	chestGroundOpenCFrame: CFrame?,
-	chestPendingReward: { brainrotId: number, chestConfigId: number, chestLevel: number }?,
+	chestPendingReward: { brainrotId: number, chestConfigId: number, chestLevel: number, variantId: number }?,
 	chestRewardPresentationStarted: boolean?,
 	chestBounceMotion: ChestBounceMotion?,
 	chestLandClock: number?,
@@ -228,6 +230,7 @@ local Refs: {
 	chestSpawnedModel = nil,
 	chestSpawnedConnList = nil,
 	chestPickedBrainrotId = nil,
+	chestPickedVariantId = nil,
 	chestPickedConfigId = nil,
 	chestAnimPlaying = false,
 	chestReadyForHit = false,
@@ -4718,6 +4721,7 @@ function RunwaySession.ClearLittleElfChestRefs()
 	RunwaySession.DestroyLittleElfChestSpawnedModel()
 	Refs.chestSpawnedForThisRun = false
 	Refs.chestPickedBrainrotId = nil
+	Refs.chestPickedVariantId = nil
 	Refs.chestPickedConfigId = nil
 	Refs.chestAnimPlaying = false
 	Refs.chestReadyForHit = false
@@ -4917,8 +4921,42 @@ function RunwaySession.ShouldBlockJumpRunwayStartAtStartTrigger(): boolean
 	return Refs.chestCarryReturnActive == true
 end
 
+local RunwayCarryVisualMaxWaitSec = 3
+local RunwayCarryVisualPollIntervalSec = 0.05
+
+local function ResolveRunwayCarryVariantId(): number
+	if Refs.chestPendingReward and Refs.chestPendingReward.variantId > 0 then
+		return Refs.chestPendingReward.variantId
+	end
+	if Refs.chestPickedVariantId and Refs.chestPickedVariantId > 0 then
+		return Refs.chestPickedVariantId
+	end
+	return 0
+end
+
+local function EnsureLocalRunwayCarryBrainrotVisual()
+	local variantId = ResolveRunwayCarryVariantId()
+	task.spawn(function()
+		local deadline = os.clock() + RunwayCarryVisualMaxWaitSec
+		while os.clock() < deadline do
+			local character = localPlayer.Character
+			if character then
+				local carrying = character:FindFirstChild("CarryingBrainrot")
+				if carrying and carrying:IsA("BasePart") then
+					if carrying:GetAttribute(JumpRunwayLittleElfChestCarryAttr) == true then
+						BrainrotClientManager.SetupCarryingBrainrotVisual(carrying, if variantId > 0 then variantId else nil)
+						return
+					end
+				end
+			end
+			task.wait(RunwayCarryVisualPollIntervalSec)
+		end
+	end)
+end
+
 function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chestConfigId: number?)
 	NetMsg.FireRequestJumpRunwayLittleElfChestStartCarry(brainrotId, chestConfigId)
+	EnsureLocalRunwayCarryBrainrotVisual()
 	RunwaySession.DestroyJumpRunwayRocketBackpack()
 	RunwaySession.DestroyRunwayGravityForce()
 	RunwaySession.DestroyRunwayRing()
@@ -5094,6 +5132,15 @@ function RunwaySession.TryPresentLittleElfChestReward()
 						return nil
 					end
 					return Refs.chestPickedBrainrotId
+				end,
+				resolveFinalVariantId = function()
+					if Refs.chestPickedConfigId ~= pickedConfigId then
+						return nil
+					end
+					if Refs.chestPendingReward then
+						return Refs.chestPendingReward.variantId
+					end
+					return Refs.chestPickedVariantId
 				end,
 			}
 		)
@@ -5316,6 +5363,7 @@ function RunwaySession.ProcessLittleElfChestHit(chestModel: Model, fwdH: Vector3
 	Refs.chestOpenCFrame = openCFrame
 	Refs.chestPickedConfigId = chestConfigId
 	Refs.chestPickedBrainrotId = nil
+	Refs.chestPickedVariantId = nil
 	Refs.chestPendingReward = nil
 	Refs.chestRewardPresentationStarted = false
 
@@ -5516,7 +5564,7 @@ function RunwaySession.ResolveLittleElfChestGroundPosition(targetPos: Vector3, c
 	return targetPos
 end
 
-function RunwaySession.OnLittleElfChestRewardReceived(brainrotId: number, chestConfigId: number, chestLevel: number)
+function RunwaySession.OnLittleElfChestRewardReceived(brainrotId: number, chestConfigId: number, chestLevel: number, variantId: number)
 	if Refs.chestPickedConfigId ~= chestConfigId then
 		return
 	end
@@ -5524,10 +5572,12 @@ function RunwaySession.OnLittleElfChestRewardReceived(brainrotId: number, chestC
 		return
 	end
 	Refs.chestPickedBrainrotId = brainrotId
+	Refs.chestPickedVariantId = variantId
 	Refs.chestPendingReward = {
 		brainrotId = brainrotId,
 		chestConfigId = chestConfigId,
 		chestLevel = chestLevel,
+		variantId = variantId,
 	}
 	RunwaySession.TryPresentLittleElfChestReward()
 end
@@ -6382,8 +6432,8 @@ function RunwaySession.Init()
 	end
 	Refs.initDone = true
 	RunwaySession.BindRunwayExitOnCharacterDeathOrRemove()
-	NetMsg.ConnectNotifyJumpRunwayLittleElfChestReward(function(brainrotId: number, chestConfigId: number, chestLevel: number)
-		RunwaySession.OnLittleElfChestRewardReceived(brainrotId, chestConfigId, chestLevel)
+	NetMsg.ConnectNotifyJumpRunwayLittleElfChestReward(function(brainrotId: number, chestConfigId: number, chestLevel: number, variantId: number)
+		RunwaySession.OnLittleElfChestRewardReceived(brainrotId, chestConfigId, chestLevel, variantId)
 	end)
 	task.defer(function()
 		localPlayer:WaitForChild("PlayerGui", 60)

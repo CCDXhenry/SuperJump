@@ -50,6 +50,7 @@ type PendingLittleElfChestReward = {
 	brainrotId: number,
 	chestConfigId: number,
 	quality: number,
+	variantId: number,
 }
 
 local pendingLittleElfChestRewardMap: { [number]: PendingLittleElfChestReward } = {}
@@ -496,6 +497,9 @@ local function CreateLittleElfChestCarryPart(pending: PendingLittleElfChestRewar
 	carryPart:SetAttribute("Quality", pending.quality)
 	carryPart:SetAttribute("Level", 1)
 	carryPart:SetAttribute("BrainrotUID", httpService:GenerateGUID(false))
+	if pending.variantId > 0 then
+		carryPart:SetAttribute("VariantId", pending.variantId)
+	end
 	carryPart:SetAttribute(JumpRunwayLittleElfChestCarryAttr, true)
 	return carryPart
 end
@@ -547,7 +551,9 @@ local function GrantLittleElfChestPendingToPlayer(player: Player): boolean
 		nil,
 		nil,
 		GameConfig.ModelGetSource.LittleElfChest,
-		pending.chestConfigId
+		pending.chestConfigId,
+		nil,
+		pending.variantId
 	)
 	if not success then
 		warn("[JumpRunwayServerManager] GrantLittleElfChestPending: AddItem failed for", player.Name)
@@ -582,10 +588,13 @@ local function TryCreateFallbackLittleElfChestPending(player: Player, brainrotId
 	if brainrotData == nil then
 		return false
 	end
+	local rewardEntry = GameConfig.FindLittleElfChestRewardEntry(chestConfigId, brainrotId)
+	local variantId = if rewardEntry then GameConfig.RollVariantIdFromEntry(rewardEntry) else 0
 	pendingLittleElfChestRewardMap[player.UserId] = {
 		brainrotId = brainrotId,
 		chestConfigId = chestConfigId,
 		quality = brainrotData.quality,
+		variantId = variantId,
 	}
 	return true
 end
@@ -602,7 +611,8 @@ local function HandleLittleElfChestReward(player: Player, chestConfigId: number)
 			player,
 			existingPending.brainrotId,
 			existingPending.chestConfigId,
-			1
+			1,
+			existingPending.variantId
 		)
 		return
 	end
@@ -638,13 +648,15 @@ local function HandleLittleElfChestReward(player: Player, chestConfigId: number)
 		warn("[JumpRunwayServerManager] HandleLittleElfChestReward: brainrotId", brainrotId, "not found in BrainrotIdMap")
 		return
 	end
+	local variantId = GameConfig.RollVariantIdFromEntry(chosenEntry)
 	-- 服务端只 Notify 一次：Roll 结果缓存，入背包由客户端开箱动画结束后再请求
 	pendingLittleElfChestRewardMap[player.UserId] = {
 		brainrotId = brainrotId,
 		chestConfigId = chestConfigId,
 		quality = brainrotData.quality,
+		variantId = variantId,
 	}
-	NetMsg.FireNotifyJumpRunwayLittleElfChestReward(player, brainrotId, chestConfigId, 1)
+	NetMsg.FireNotifyJumpRunwayLittleElfChestReward(player, brainrotId, chestConfigId, 1, variantId)
 end
 
 local function HandleLittleElfChestStartCarry(player: Player, brainrotId: number?, chestConfigId: number?)

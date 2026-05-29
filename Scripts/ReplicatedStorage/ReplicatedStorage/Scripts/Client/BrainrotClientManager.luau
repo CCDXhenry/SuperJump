@@ -27,6 +27,7 @@ local BillboardManager = require(scripts:WaitForChild("Client"):WaitForChild("Bi
 local ModelBillboardOffsetTool = require(scripts:WaitForChild("Client"):WaitForChild("ModelBillboardOffsetTool"))
 local NumberExtension = require(coreSharedScripts:WaitForChild("NumberExtension"))
 local ChestOpenAnimationManager = require(scripts:WaitForChild("Client"):WaitForChild("ChestOpenAnimationManager"))
+local BrainrotVariantVisualTool = require(scripts:WaitForChild("Client"):WaitForChild("BrainrotVariantVisualTool"))
 
 local islandsFolder = workspace:FindFirstChild("Islands")
 local actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
@@ -60,9 +61,64 @@ local AttachInfoUIToModel -- 向前声明
 local pendingOpenChestToolMap: { [string]: Tool } = {}
 local pendingOpenChestCFrameMap: { [string]: CFrame } = {}
 
-local function SetupVisualBrainrot(targetPart: BasePart)
-	if targetPart:FindFirstChild("VisualModel") then
-		return -- Already setup
+local function ResolveTargetVariantId(targetPart: BasePart, overrideVariantId: number?): number
+	if overrideVariantId ~= nil and overrideVariantId > 0 then
+		return overrideVariantId
+	end
+	return tonumber(targetPart:GetAttribute("VariantId")) or 0
+end
+
+local function RefreshVariantUiOnTarget(targetPart: BasePart, overrideVariantId: number?)
+	local variantId = ResolveTargetVariantId(targetPart, overrideVariantId)
+	local existingVisual = targetPart:FindFirstChild("VisualModel")
+	if existingVisual and existingVisual:IsA("Model") then
+		local resolvedVariantId = variantId or 0
+		BrainrotVariantVisualTool.AttachVariantEffect(existingVisual, resolvedVariantId)
+		BrainrotVariantVisualTool.ApplyVisualCarryWeld(targetPart, existingVisual, resolvedVariantId)
+	end
+	local infoUi = targetPart:FindFirstChild("BrainrotInfoUI")
+	if infoUi then
+		local controller = infoUi:FindFirstChild("Controller") or infoUi:FindFirstChild("ControllerFrame")
+		if controller then
+			BrainrotVariantVisualTool.ApplyVariantLabel(controller, variantId)
+		end
+	end
+end
+
+local VariantEffectAttrTrackedName = "VariantEffectAttrTracked"
+
+local function EnsureVariantEffectAttributeTracking(targetPart: BasePart)
+	if targetPart:GetAttribute(VariantEffectAttrTrackedName) == true then
+		return
+	end
+	targetPart:SetAttribute(VariantEffectAttrTrackedName, true)
+	targetPart:GetAttributeChangedSignal("VariantId"):Connect(function()
+		RefreshVariantUiOnTarget(targetPart)
+	end)
+end
+
+local VisualModelChildTrackedAttr = "VisualModelChildTracked"
+
+local function EnsureVisualModelChildTracking(targetPart: BasePart)
+	if targetPart:GetAttribute(VisualModelChildTrackedAttr) == true then
+		return
+	end
+	targetPart:SetAttribute(VisualModelChildTrackedAttr, true)
+	targetPart.ChildAdded:Connect(function(child)
+		if child.Name == "VisualModel" and child:IsA("Model") then
+			RefreshVariantUiOnTarget(targetPart)
+		end
+	end)
+end
+
+local function SetupVisualBrainrot(targetPart: BasePart, overrideVariantId: number?)
+	EnsureVariantEffectAttributeTracking(targetPart)
+	EnsureVisualModelChildTracking(targetPart)
+
+	local existingVisual = targetPart:FindFirstChild("VisualModel")
+	if existingVisual and existingVisual:IsA("Model") then
+		RefreshVariantUiOnTarget(targetPart, overrideVariantId)
+		return
 	end
 
 	local configId = targetPart:GetAttribute("ConfigId") :: number?
@@ -128,20 +184,11 @@ local function SetupVisualBrainrot(targetPart: BasePart)
 		end
 	end
 
-	local rootPart = (newVisual.PrimaryPart or newVisual:FindFirstChild("RootPart") or newVisual:FindFirstChildWhichIsA("BasePart")) :: BasePart?
-	local attachPart = (newVisual:FindFirstChild("FakeRootPart") or rootPart) :: BasePart?
-	if rootPart and attachPart then
-		local weld = Instance.new("Weld")
-		weld.Name = "IslandVisualWeld"
-		weld.Part0 = targetPart
-		weld.Part1 = attachPart
-		-- 显式固化当前相对位姿，兼容不同骨架中心点（RootPart/FakeRootPart）
-		weld.C0 = targetPart.CFrame:ToObjectSpace(attachPart.CFrame)
-		weld.C1 = CFrame.new()
-		weld.Parent = targetPart
-	end
-
 	newVisual.Parent = targetPart
+
+	local variantId = ResolveTargetVariantId(targetPart, overrideVariantId)
+	BrainrotVariantVisualTool.AttachVariantEffect(newVisual, variantId)
+	BrainrotVariantVisualTool.ApplyVisualCarryWeld(targetPart, newVisual, variantId)
 
 	local level = (targetPart:GetAttribute("Level") :: number) or 1
 	AttachInfoUIToModel(targetPart, targetPart :: BasePart, configId, level, data.quality or 1, newVisual)
@@ -222,9 +269,16 @@ function AttachInfoUIToModel(targetParent: Instance, adornee: BasePart, configId
 		end
 		if abilityText then
 			abilityText.Visible = itemType == GameConfig.ItemType.Brainrot
-			local ability = if itemType == GameConfig.ItemType.Brainrot then GameConfig.GetBrainrotAbility(data.baseAbility, level) else 0
+			local variantId = tonumber(targetParent:GetAttribute("VariantId"))
+			local ability = if itemType == GameConfig.ItemType.Brainrot
+				then GameConfig.GetBrainrotAbilityWithVariant(data.baseAbility, level, variantId)
+				else 0
 			local abilityStr = NumberExtension.FormatBigNumberAA(ability)
 			TranslationTool.CustomAutoLocalizeTextLabel(abilityText, GameTexts.YieldPerSecond.source, GameTexts.YieldPerSecond.key, { abilityStr })
+		end
+		if itemType == GameConfig.ItemType.Brainrot then
+			local variantIdForLabel = tonumber(targetParent:GetAttribute("VariantId"))
+			BrainrotVariantVisualTool.ApplyVariantLabel(controller, variantIdForLabel)
 		end
 		if sellPriceText then
 			sellPriceText.Visible = false
@@ -282,6 +336,8 @@ local function ProcessDescendantAdded(descendant: Instance)
 				local configId = descendant:GetAttribute("ConfigId") :: number
 				local level = (descendant:GetAttribute("Level") :: number) or 1
 				local quality = (descendant:GetAttribute("Quality") :: number) or 1
+				local variantId = tonumber(descendant:GetAttribute("VariantId")) or 0
+				BrainrotVariantVisualTool.AttachVariantEffect(visualModel, variantId)
 				AttachInfoUIToModel(
 					descendant,
 					visualModel.PrimaryPart or visualModel:FindFirstChildWhichIsA("BasePart") or (visualModel:GetChildren()[1] :: any),
@@ -296,14 +352,19 @@ local function ProcessDescendantAdded(descendant: Instance)
 end
 
 local function OnLocalToolEquipped(tool: Tool, character: Model)
+	local visualModel = tool:FindFirstChild("VisualModel") :: Model?
+	if visualModel and tool:GetAttribute("ItemType") == GameConfig.ItemType.Brainrot then
+		local variantId = tonumber(tool:GetAttribute("VariantId")) or 0
+		BrainrotVariantVisualTool.AttachVariantEffect(visualModel, variantId)
+	end
+
 	-- Motor6D Tween 视觉位置
 	local handle = tool:FindFirstChild("Handle")
 	if handle then
 		local visualMotor = handle:FindFirstChild("VisualMotor") :: Motor6D
 		if visualMotor then
-			local visualModel = tool:FindFirstChild("VisualModel") :: Model
 			local targetC0 = CFrame.new()
-			if isPlayerOnIsland and visualModel then
+			if isPlayerOnIsland and visualModel ~= nil then
 				local extents = visualModel:GetExtentsSize()
 				targetC0 = CFrame.new(0, (extents.Y / 2) + 1.5, 0) -- 1.5 为预估头部偏移量
 			end
@@ -373,12 +434,18 @@ local function SetupLocalPlayerCarryingBrainrotTracking(character: Model)
 	do
 		local carrying = character:FindFirstChild("CarryingBrainrot")
 		if carrying and carrying:GetAttribute("ItemType") == GameConfig.ItemType.Brainrot then
+			if carrying:IsA("BasePart") then
+				SetupVisualBrainrot(carrying)
+			end
 			PlayHoldAnim(character)
 		end
 	end
 
 	character.ChildAdded:Connect(function(child)
 		if child.Name == "CarryingBrainrot" and child:GetAttribute("ItemType") == GameConfig.ItemType.Brainrot then
+			if child:IsA("BasePart") then
+				SetupVisualBrainrot(child)
+			end
 			PlayHoldAnim(character)
 		end
 	end)
@@ -484,6 +551,18 @@ function BrainrotClientManager.Init()
 	end)
 
 	NetMsg.ConnectNotifyChestOpenResult(OnNotifyChestOpenResult)
+end
+
+function BrainrotClientManager.SetupCarryingBrainrotVisual(carryPart: BasePart, variantId: number?)
+	local resolvedVariantId = if variantId ~= nil and variantId > 0 then variantId else (tonumber(carryPart:GetAttribute("VariantId")) or 0)
+	if resolvedVariantId > 0 then
+		carryPart:SetAttribute("VariantId", resolvedVariantId)
+	end
+	SetupVisualBrainrot(carryPart, if resolvedVariantId > 0 then resolvedVariantId else nil)
+	local visualModel = carryPart:FindFirstChild("VisualModel")
+	if visualModel and visualModel:IsA("Model") and resolvedVariantId > 0 then
+		BrainrotVariantVisualTool.AttachVariantEffect(visualModel, resolvedVariantId)
+	end
 end
 
 return BrainrotClientManager

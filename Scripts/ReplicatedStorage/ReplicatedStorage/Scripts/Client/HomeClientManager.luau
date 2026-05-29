@@ -21,6 +21,7 @@ local GameTexts = require(sharedScripts:FindFirstChild("GameTexts"))
 
 local BillboardManager = require(clientScripts:FindFirstChild("BillboardManager"))
 local ModelBillboardOffsetTool = require(clientScripts:FindFirstChild("ModelBillboardOffsetTool"))
+local BrainrotVariantVisualTool = require(clientScripts:FindFirstChild("BrainrotVariantVisualTool"))
 local NumberExtension = require(coreSharedScripts:FindFirstChild("NumberExtension"))
 
 local actualModels = replicatedStorage:WaitForChild("Models"):FindFirstChild("Brainrots")
@@ -105,7 +106,7 @@ local function getPerSecondUnclaimedIncrement(placedData: any, rebirthLevel: num
 	if not brainrotData then
 		return 0
 	end
-	local baseYield = GameConfig.GetBrainrotAbility(brainrotData.baseAbility, placedData.level or 1)
+	local baseYield = GameConfig.GetBrainrotAbilityWithVariant(brainrotData.baseAbility, placedData.level or 1, placedData.variantId)
 	return math.ceil(baseYield * getCollectMultipleForRebirth(rebirthLevel))
 end
 
@@ -1033,9 +1034,12 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 			-- 收益与售价逻辑 (根据等级索引列表)
 			local levelIdx = placedData.level or 1
 			if abilityText then
-				local abilityStr = NumberExtension.FormatBigNumberAA(GameConfig.GetBrainrotAbility(brainrotData.baseAbility, levelIdx))
+				local abilityStr = NumberExtension.FormatBigNumberAA(
+					GameConfig.GetBrainrotAbilityWithVariant(brainrotData.baseAbility, levelIdx, placedData.variantId)
+				)
 				TranslationTool.CustomAutoLocalizeTextLabel(abilityText, GameTexts.YieldPerSecond.source, GameTexts.YieldPerSecond.key, { abilityStr })
 			end
+			BrainrotVariantVisualTool.ApplyVariantLabel(controller, placedData.variantId)
 		end
 	elseif infoUI then
 		infoUI.Enabled = false
@@ -1211,6 +1215,8 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 				end
 
 				newVisual.Parent = folder
+				local placedVariantId = if placedData.variantId and placedData.variantId > 0 then placedData.variantId else 0
+				BrainrotVariantVisualTool.AttachVariantEffect(newVisual, placedVariantId)
 				-- Keep local reference in sync so this frame can immediately refresh BrainrotInfoUI.
 				visualModel = newVisual
 			elseif brainrotData and actualModels then
@@ -1267,9 +1273,12 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 
 				local levelIdx = placedData.level or 1
 				if abilityText then
-					local abilityStr = NumberExtension.FormatBigNumberAA(GameConfig.GetBrainrotAbility(brainrotData.baseAbility, levelIdx))
+					local abilityStr = NumberExtension.FormatBigNumberAA(
+						GameConfig.GetBrainrotAbilityWithVariant(brainrotData.baseAbility, levelIdx, placedData.variantId)
+					)
 					TranslationTool.CustomAutoLocalizeTextLabel(abilityText, GameTexts.YieldPerSecond.source, GameTexts.YieldPerSecond.key, { abilityStr })
 				end
+				BrainrotVariantVisualTool.ApplyVariantLabel(controller, placedData.variantId)
 			end
 		end
 	else
@@ -1461,7 +1470,7 @@ local function UpdateRebirthMultiplierUI(slotName: string, homeInfo: any, isLoca
 	for _, model in pairs(homeInfo.placedModels) do
 		local brainrotData = GameConfig.BrainrotIdMap[model.configId]
 		if brainrotData then
-			totalBaseRevenue += GameConfig.GetBrainrotAbility(brainrotData.baseAbility, model.level)
+			totalBaseRevenue += GameConfig.GetBrainrotAbilityWithVariant(brainrotData.baseAbility, model.level, model.variantId)
 		end
 	end
 	local totalFinalRevenue = math.ceil(totalBaseRevenue * multiplier)

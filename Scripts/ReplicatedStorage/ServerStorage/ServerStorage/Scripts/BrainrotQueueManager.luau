@@ -55,6 +55,9 @@ local function CreateToolForItem(player: Player, item: GameConfig.BrainrotQueueI
 		tool:SetAttribute("ConfigId", item.configId)
 		tool:SetAttribute("Quality", item.quality)
 		tool:SetAttribute("Level", item.level)
+		if item.variantId and item.variantId > 0 then
+			tool:SetAttribute("VariantId", item.variantId)
+		end
 
 		-- 创建 Handle
 		local handle = Instance.new("Part")
@@ -242,7 +245,8 @@ function BrainrotQueueManager.AddItem(
 	grantShopBundleId: number?,
 	analyticsGetSource: number?,
 	analyticsGetSourceId: number?,
-	chestStoredExp: number?
+	chestStoredExp: number?,
+	variantId: number?
 ): boolean
 	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
 	if not playerInfo then
@@ -250,12 +254,14 @@ function BrainrotQueueManager.AddItem(
 		return false
 	end
 
+	local resolvedVariantId = if variantId and variantId > 0 then variantId else nil
 	local item: GameConfig.BrainrotQueueItem = {
 		uid = GenerateUID(),
 		itemType = itemType or GameConfig.ItemType.Brainrot,
 		configId = configId,
 		quality = quality,
 		level = level,
+		variantId = resolvedVariantId,
 		chestStoredExp = chestStoredExp,
 
 		grantTipKey = grantTipKey,

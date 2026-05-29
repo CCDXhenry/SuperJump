@@ -370,6 +370,8 @@ local function onRequestPickupHomeModel(player: Player, pointIndex: number)
 		local heldQuality = tonumber(heldBrainrot:GetAttribute("Quality")) or 1
 		local heldLevel = tonumber(heldBrainrot:GetAttribute("Level")) or 1
 		local heldUid = heldBrainrot:GetAttribute("BrainrotUID") :: string?
+		local heldVariantId = tonumber(heldBrainrot:GetAttribute("VariantId"))
+		local resolvedHeldVariantId = if heldVariantId and heldVariantId > 0 then heldVariantId else nil
 
 		if heldConfigId and heldUid then
 			if heldBrainrot:IsA("Tool") then
@@ -396,10 +398,12 @@ local function onRequestPickupHomeModel(player: Player, pointIndex: number)
 				quality = heldQuality,
 				instanceId = heldUid or httpService:GenerateGUID(false),
 				rarity = if heldQualityCfg then heldQualityCfg.rarity else if defaultQualityCfg then defaultQualityCfg.rarity else "Common",
+				variantId = resolvedHeldVariantId,
 			}
 			ServerGameInfo.UpdatePlayerPlacedModel(player, pointIndex, newPlacedData :: any)
 
-			if BrainrotQueueManager.AddItem(player, oldConfigId, oldQuality, oldLevel, true, nil, false) then
+			local oldVariantId = (model :: any).variantId
+			if BrainrotQueueManager.AddItem(player, oldConfigId, oldQuality, oldLevel, true, nil, false, nil, nil, nil, nil, nil, nil, oldVariantId) then
 				AnalyticsTool.LogModelHold(player, oldConfigId, oldLevel)
 			end
 
@@ -410,9 +414,10 @@ local function onRequestPickupHomeModel(player: Player, pointIndex: number)
 	local configId = model.configId
 	local level = (model :: any).level or 1
 	local quality = (model :: any).quality or 1
+	local modelVariantId = (model :: any).variantId
 	ServerGameInfo.UpdatePlayerPlacedModel(player, pointIndex, nil :: any)
 
-	if BrainrotQueueManager.AddItem(player, configId, quality, level, true, nil, false) then
+	if BrainrotQueueManager.AddItem(player, configId, quality, level, true, nil, false, nil, nil, nil, nil, nil, nil, modelVariantId) then
 		AnalyticsTool.LogModelHold(player, configId, level)
 	end
 end
@@ -433,7 +438,7 @@ local function onHeartbeat(dt: number)
 				for pointIndexStr, model in pairs(playerInfo.homeInfo.placedModels) do
 					local bData = GameConfig.BrainrotIdMap[model.configId]
 					if bData then
-						local baseYield = GameConfig.GetBrainrotAbility(bData.baseAbility, model.level)
+						local baseYield = GameConfig.GetBrainrotAbilityWithVariant(bData.baseAbility, model.level, model.variantId)
 						local multiplier = ServerGameInfo.GetRebirthMultiplier(player)
 						local y = math.ceil(baseYield * multiplier)
 						if y > 0 then

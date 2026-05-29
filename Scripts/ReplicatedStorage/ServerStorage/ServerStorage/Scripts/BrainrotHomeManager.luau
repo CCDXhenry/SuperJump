@@ -228,12 +228,15 @@ local function onRequestPlaceCarryingBrainrot(player: Player, pointIndex: number
 				if qualityCfg then qualityCfg.rarity else if defaultQualityCfg then defaultQualityCfg.rarity else "Common"
 			) :: any
 			local placedLevel = tonumber(carryingBrainrot:GetAttribute("Level")) or 1
+			local variantId = tonumber(carryingBrainrot:GetAttribute("VariantId"))
+			local resolvedVariantId = if variantId and variantId > 0 then variantId else nil
 
 			ServerGameInfo.UpdatePlayerPlacedModel(player, pointIndex, {
 				instanceId = "brainrot_" .. tostring(math.floor(os.clock() * 1000)),
 				configId = tonumber(configId) or 1,
 				level = placedLevel,
 				rarity = rarity,
+				variantId = resolvedVariantId,
 			})
 
 			AnalyticsTool.LogModelPlace(player, tonumber(configId) or 1, placedLevel)

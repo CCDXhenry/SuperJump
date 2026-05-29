@@ -19,6 +19,7 @@ local NumberExtension = require(coreSharedScripts:WaitForChild("NumberExtension"
 local TranslationTool = require(coreClientScripts:WaitForChild("TranslationTool"))
 local BillboardManager = require(clientScripts:WaitForChild("BillboardManager"))
 local ModelBillboardOffsetTool = require(clientScripts:WaitForChild("ModelBillboardOffsetTool"))
+local BrainrotVariantVisualTool = require(clientScripts:WaitForChild("BrainrotVariantVisualTool"))
 
 local actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
 local modelsFolderForChests = replicatedStorage:WaitForChild("Models")
@@ -107,7 +108,8 @@ local function CreateOrUpdateInfoUI(
 	brainrotId: number,
 	level: number,
 	model: Model?,
-	hideTimers: boolean?
+	hideTimers: boolean?,
+	variantId: number?
 )
 
 	local brainrotData = GameConfig.BrainrotIdMap[brainrotId]
@@ -156,10 +158,11 @@ local function CreateOrUpdateInfoUI(
 	end
 	if abilityText then
 		abilityText.Visible = true
-		local ability = GameConfig.GetBrainrotAbility(brainrotData.baseAbility, level)
+		local ability = GameConfig.GetBrainrotAbilityWithVariant(brainrotData.baseAbility, level, variantId)
 		local abilityStr = NumberExtension.FormatBigNumberAA(ability)
 		TranslationTool.CustomAutoLocalizeTextLabel(abilityText, GameTexts.YieldPerSecond.source, GameTexts.YieldPerSecond.key, { abilityStr })
 	end
+	BrainrotVariantVisualTool.ApplyVariantLabel(controller, variantId)
 	if sellPriceText then
 		sellPriceText.Visible = false
 	end
@@ -325,6 +328,8 @@ type PlayInWorldOptions = {
 	existingChestModel: Model?,
 	lockFacing: boolean?,
 	resolveFinalBrainrotId: (() -> number?)?,
+	resolveFinalVariantId: (() -> number?)?,
+	finalVariantId: number?,
 	maxPlayTimeSec: number?,
 }
 
@@ -458,7 +463,7 @@ local function PlayInWorld(
 	local displayModel: Model? = nil
 	local displayRoot: BasePart? = nil
 	local lastId: number? = nil
-	local function ShowOne(brainrotId: number, stayAsFinal: boolean)
+	local function ShowOne(brainrotId: number, variantId: number, stayAsFinal: boolean)
 		local brainrotData = GameConfig.BrainrotIdMap[brainrotId]
 		if not brainrotData then
 			return
@@ -480,7 +485,9 @@ local function PlayInWorld(
 		if not displayModel or not displayRoot then
 			return
 		end
-		CreateOrUpdateInfoUI(displayModel, displayRoot, brainrotId, chestLevel, displayModel, true)
+		BrainrotVariantVisualTool.AttachVariantEffect(displayModel, variantId)
+		local resolvedVariantId = if variantId > 0 then variantId else nil
+		CreateOrUpdateInfoUI(displayModel, displayRoot, brainrotId, chestLevel, displayModel, true, resolvedVariantId)
 		TweenModelScale(
 			displayModel,
 			TinyScale,
@@ -538,11 +545,14 @@ local function PlayInWorld(
 		end
 		local randomId = randomEntry.itemId
 		lastId = randomId
-		ShowOne(randomId, false)
+		local randomVariantId = GameConfig.RollVariantIdFromEntry(randomEntry)
+		ShowOne(randomId, randomVariantId, false)
 	end
 
 	local resolvedFinalBrainrotId = finalBrainrotId
+	local resolvedFinalVariantId = if options ~= nil and options.finalVariantId then options.finalVariantId else 0
 	local resolveFinalBrainrotId = if options ~= nil then options.resolveFinalBrainrotId else nil
+	local resolveFinalVariantId = if options ~= nil then options.resolveFinalVariantId else nil
 	if resolveFinalBrainrotId ~= nil then
 		local deadlineClock = startedClock + maxPlayTimeSec
 		while os.clock() < deadlineClock do
@@ -557,8 +567,25 @@ local function PlayInWorld(
 			resolvedFinalBrainrotId = GetSmallestRewardBrainrotId(rewardPool) or 0
 		end
 	end
+	if resolveFinalVariantId ~= nil then
+		local deadlineClock = startedClock + maxPlayTimeSec
+		while os.clock() < deadlineClock do
+			local resolvedVariant = resolveFinalVariantId()
+			if resolvedVariant ~= nil then
+				resolvedFinalVariantId = resolvedVariant
+				break
+			end
+			task.wait(0.05)
+		end
+	end
 	if resolvedFinalBrainrotId > 0 then
-		ShowOne(resolvedFinalBrainrotId, true)
+		if resolvedFinalVariantId <= 0 then
+			local finalEntry = GameConfig.FindLittleElfChestRewardEntry(chestConfigId, resolvedFinalBrainrotId)
+			if finalEntry then
+				resolvedFinalVariantId = GameConfig.RollVariantIdFromEntry(finalEntry)
+			end
+		end
+		ShowOne(resolvedFinalBrainrotId, resolvedFinalVariantId, true)
 	end
 	if chestModel and chestModel.Parent then
 		chestModel:Destroy()
@@ -637,13 +664,16 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 			end
 			local randomId = randomEntry.itemId
 			lastId = randomId
+			local randomVariantId = GameConfig.RollVariantIdFromEntry(randomEntry)
 
 			local showModel, root = CreateDisplayModel(tool, randomId)
 			if not showModel or not root then
 				continue
 			end
 
-			CreateOrUpdateInfoUI(tool, root, randomId, chestLevel, showModel, true)
+			BrainrotVariantVisualTool.AttachVariantEffect(showModel, randomVariantId)
+			local resolvedRandomVariantId = if randomVariantId > 0 then randomVariantId else nil
+			CreateOrUpdateInfoUI(tool, root, randomId, chestLevel, showModel, true, resolvedRandomVariantId)
 			TweenModelScale(
 				showModel,
 				TinyScale,
@@ -666,7 +696,11 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 
 		local finalModel, finalRoot = CreateDisplayModel(tool, finalBrainrotId)
 		if finalModel and finalRoot then
-			CreateOrUpdateInfoUI(tool, finalRoot, finalBrainrotId, chestLevel, finalModel, true)
+			local finalEntry = GameConfig.FindLittleElfChestRewardEntry(chestConfigId, finalBrainrotId)
+			local finalVariantId = if finalEntry then GameConfig.RollVariantIdFromEntry(finalEntry) else 0
+			BrainrotVariantVisualTool.AttachVariantEffect(finalModel, finalVariantId)
+			local resolvedFinalVariantId = if finalVariantId > 0 then finalVariantId else nil
+			CreateOrUpdateInfoUI(tool, finalRoot, finalBrainrotId, chestLevel, finalModel, true, resolvedFinalVariantId)
 			TweenModelScale(
 				finalModel,
 				TinyScale,

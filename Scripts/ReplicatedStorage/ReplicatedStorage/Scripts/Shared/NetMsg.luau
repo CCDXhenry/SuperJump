@@ -792,15 +792,23 @@ function NetMsg.ConnectRequestJumpRunwayLittleElfChestGrant(callback: (player: P
 end
 
 -- 服务端通知客户端 JumpRunway 小精灵宝箱开箱奖励结果
-function NetMsg.FireNotifyJumpRunwayLittleElfChestReward(player: Player, brainrotId: number, chestConfigId: number, chestLevel: number)
+function NetMsg.FireNotifyJumpRunwayLittleElfChestReward(
+	player: Player,
+	brainrotId: number,
+	chestConfigId: number,
+	chestLevel: number,
+	variantId: number
+)
 	if notifyJumpRunwayLittleElfChestRewardEvent == nil then
 		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
 		return
 	end
-	notifyJumpRunwayLittleElfChestRewardEvent:FireClient(player, brainrotId, chestConfigId, chestLevel)
+	notifyJumpRunwayLittleElfChestRewardEvent:FireClient(player, brainrotId, chestConfigId, chestLevel, variantId)
 end
 
-function NetMsg.ConnectNotifyJumpRunwayLittleElfChestReward(callback: (brainrotId: number, chestConfigId: number, chestLevel: number) -> ())
+function NetMsg.ConnectNotifyJumpRunwayLittleElfChestReward(
+	callback: (brainrotId: number, chestConfigId: number, chestLevel: number, variantId: number) -> ()
+)
 	if notifyJumpRunwayLittleElfChestRewardEvent == nil then
 		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
 		return
