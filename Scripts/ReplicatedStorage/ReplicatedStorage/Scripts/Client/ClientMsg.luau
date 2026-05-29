@@ -31,6 +31,10 @@ local showRescuePopupEvent: BindableEvent = bindableEventsFolder:FindFirstChild(
 local resumeFallingEvent: BindableEvent = bindableEventsFolder:FindFirstChild("ResumeFalling") :: BindableEvent
 local earthquakeUiUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("EarthquakeUiUpdate") :: BindableEvent
 local localPlayerJumpPowerUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("LocalPlayerJumpPowerUpdate") :: BindableEvent
+local jumpRunWayRefreshStatsEvent: BindableEvent = bindableEventsFolder:FindFirstChild("JumpRunWayRefreshStats") :: BindableEvent
+local jumpRunWayShowRatingTierEvent: BindableEvent = bindableEventsFolder:FindFirstChild("JumpRunWayShowRatingTier") :: BindableEvent
+local jumpRunWayShowMissEvent: BindableEvent = bindableEventsFolder:FindFirstChild("JumpRunWayShowMiss") :: BindableEvent
+local jumpRunWayShowNewRecordTipEvent: BindableEvent = bindableEventsFolder:FindFirstChild("JumpRunWayShowNewRecordTip") :: BindableEvent
 
 --关闭窗口事件
 function ClientMsg.FireCloseWindow(windowName: string)
@@ -264,6 +268,70 @@ end
 function ClientMsg.ConnectLocalPlayerJumpPowerUpdate(callback: (jumpPowerInfo: GameConfig.JumpPowerInfo, addExp: number) -> ())
 	if localPlayerJumpPowerUpdateEvent then
 		localPlayerJumpPowerUpdateEvent.Event:Connect(callback)
+	end
+end
+
+-- 跑道 HUD：刷新距离/燃料
+function ClientMsg.FireJumpRunWayRefreshStats(
+	distanceStuds: number,
+	currentFuel: number,
+	maxFuel: number,
+	fuelVisible: boolean,
+	distanceVisible: boolean
+)
+	if jumpRunWayRefreshStatsEvent then
+		jumpRunWayRefreshStatsEvent:Fire(distanceStuds, currentFuel, maxFuel, fuelVisible, distanceVisible)
+	end
+end
+
+function ClientMsg.ConnectJumpRunWayRefreshStats(callback: (
+	distanceStuds: number,
+	currentFuel: number,
+	maxFuel: number,
+	fuelVisible: boolean,
+	distanceVisible: boolean
+) -> ())
+	if jumpRunWayRefreshStatsEvent then
+		jumpRunWayRefreshStatsEvent.Event:Connect(callback)
+	end
+end
+
+-- 跑道 HUD：评级动画
+function ClientMsg.FireJumpRunWayShowRatingTier(tier: number)
+	if jumpRunWayShowRatingTierEvent then
+		jumpRunWayShowRatingTierEvent:Fire(tier)
+	end
+end
+
+function ClientMsg.ConnectJumpRunWayShowRatingTier(callback: (tier: number) -> ())
+	if jumpRunWayShowRatingTierEvent then
+		jumpRunWayShowRatingTierEvent.Event:Connect(callback)
+	end
+end
+
+-- 跑道 HUD：Miss 动画
+function ClientMsg.FireJumpRunWayShowMiss()
+	if jumpRunWayShowMissEvent then
+		jumpRunWayShowMissEvent:Fire()
+	end
+end
+
+function ClientMsg.ConnectJumpRunWayShowMiss(callback: () -> ())
+	if jumpRunWayShowMissEvent then
+		jumpRunWayShowMissEvent.Event:Connect(callback)
+	end
+end
+
+-- 跑道 HUD：新纪录 Tip
+function ClientMsg.FireJumpRunWayShowNewRecordTip()
+	if jumpRunWayShowNewRecordTipEvent then
+		jumpRunWayShowNewRecordTipEvent:Fire()
+	end
+end
+
+function ClientMsg.ConnectJumpRunWayShowNewRecordTip(callback: () -> ())
+	if jumpRunWayShowNewRecordTipEvent then
+		jumpRunWayShowNewRecordTipEvent.Event:Connect(callback)
 	end
 end
 

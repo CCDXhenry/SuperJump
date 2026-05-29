@@ -16,7 +16,8 @@ local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
 local GameTexts = require(sharedScripts:FindFirstChild("GameTexts"))
 local ClientGameInfo = require(clientScripts:WaitForChild("ClientGameInfo"))
-local JumpRunWayFrame = require(clientScripts:WaitForChild("JumpRunWayFrame"))
+local ClientMsg = require(clientScripts:WaitForChild("ClientMsg"))
+local UIManager = require(clientScripts:WaitForChild("UIManager"))
 local jumpRunwayScripts = clientScripts:WaitForChild("JumpRunway")
 local RunwayStateStore = require(jumpRunwayScripts:WaitForChild("RunwayStateStore"))
 local RunwayConstants = require(jumpRunwayScripts:WaitForChild("RunwayConstants"))
@@ -595,7 +596,7 @@ function RunwaySession.ProcessRunwayForwardBlocked(character: Model, humanoid: H
 	hrp.AssemblyAngularVelocity = Vector3.zero
 	RunwaySession.CancelJumpWindowTimeoutUntilGroundedAgain()
 	RunwaySession.SnapCharacterHrpToGround(humanoid, hrp, forward)
-	JumpRunWayFrame.ShowMiss()
+	ClientMsg.FireJumpRunWayShowMiss()
 	RunwaySession.EnterSlidePhase(nowClock, SlideKindMiss, humanoid)
 end
 
@@ -731,7 +732,7 @@ function RunwaySession.RefreshJumpRunWayFrameStats(hrp: BasePart?)
 		and localState.finalLandSubPhase == 2
 		and (localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss)
 	local distanceVisible = not isFinalSlideSecondStage and distanceStuds > 0
-	JumpRunWayFrame.RefreshRunwayStats(distanceStuds, localState.fuel, maxFuel, fuelVisible, distanceVisible)
+	ClientMsg.FireJumpRunWayRefreshStats(distanceStuds, localState.fuel, maxFuel, fuelVisible, distanceVisible)
 end
 
 function RunwaySession.RestoreRunningStateAfterFinalSegment(humanoid: Humanoid?)
@@ -3902,7 +3903,7 @@ function RunwaySession.UpdateBestDistanceWall(hrp: BasePart)
 		return
 	end
 	Refs.bestDistanceWallPassed = true
-	JumpRunWayFrame.ShowNewRecordTip()
+	ClientMsg.FireJumpRunWayShowNewRecordTip()
 	Refs.bestDistanceWallDestroyToken += 1
 	local destroyToken = Refs.bestDistanceWallDestroyToken
 	task.delay(BestDistanceWallDestroyDelaySec, function()
@@ -3941,7 +3942,7 @@ function RunwaySession.ResetLocalRunToIdle()
 	RunwaySession.DestroyBestDistanceWall()
 	RunwaySession.SlideTraceScheduleDestroyAfterRunwayEnd()
 	RunwayUiController.Destroy(RunwaySession.HudDestroy)
-	JumpRunWayFrame.EndSession()
+	UIManager.CloseWindow(UIManager.WindowId.JumpRunWayFrame)
 	-- Humanoid 状态恢复延迟到下一帧，避免 Physics 引擎竞争条件
 	task.defer(function()
 		if RunwaySession.IsRunwayActivePhase(localState.phase) and localState.phase ~= Ph.RunEnded then
@@ -4112,7 +4113,7 @@ function RunwaySession.UpdateLocalJumpWindowPrediction(humanoid: Humanoid, nowCl
 			and localState.takeoffCount < cfg.N_TOTAL_JUMPS
 			and g
 		then
-			JumpRunWayFrame.ShowMiss()
+			ClientMsg.FireJumpRunWayShowMiss()
 			RunwaySession.EnterSlidePhase(nowClock, SlideKindMiss, humanoid)
 			localState.predictJumpWindowUntil = nil
 			localState.chainJumpWindowAwaitingGround = false
@@ -4372,7 +4373,7 @@ function RunwaySession.ProcessJumpWindowTimeout(nowClock: number)
 			RunwaySession.CancelJumpWindowTimeoutUntilGroundedAgain()
 			return
 		end
-		JumpRunWayFrame.ShowMiss()
+		ClientMsg.FireJumpRunWayShowMiss()
 		localState.lineWindowConsumed = true
 		RunwaySession.EnterSlidePhase(nowClock, SlideKindMiss, humanoidTimeout)
 	end
@@ -4981,7 +4982,7 @@ function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chest
 	end
 	ClientGameInfo.SetInJumpRunwayEscapePhase(true)
 	Refs.chestCarryReturnActive = true
-	JumpRunWayFrame.EndSession()
+	UIManager.CloseWindow(UIManager.WindowId.JumpRunWayFrame)
 end
 
 function RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger: Part)
@@ -5864,7 +5865,7 @@ function RunwaySession.JumpApplyRatingForTakeoff(
 		local tierFirst = math.clamp(math.floor(cfg.JUMP_FIRST_TAKEOFF_BEFORE_LINE_SPEED_RATING_TIER), 1, 3)
 		RunwaySession.ApplyJumpSpeedRatingForTier(tierFirst, currentBaseSpeed, jumpIndex)
 		localState.ratingTier = tierFirst
-		JumpRunWayFrame.ShowRatingTier(tierFirst)
+		ClientMsg.FireJumpRunWayShowRatingTier(tierFirst)
 		print("JumpApplyRatingForTakeoff inAuto", tierFirst, currentBaseSpeed, localState.jumpSpeedCumulativeRatingBonus, localState.jumpSpeedCurrentReductionDelta)
 	elseif inLineWindow then
 		local currentBaseSpeed = RunwaySession.GetJumpSpeedCurrentDeceleratedBaseSpeed()
@@ -5876,7 +5877,7 @@ function RunwaySession.JumpApplyRatingForTakeoff(
 		end
 		RunwaySession.ApplyJumpSpeedRatingForTier(tierLine, currentBaseSpeed, jumpIndex)
 		localState.ratingTier = tierLine
-		JumpRunWayFrame.ShowRatingTier(tierLine)
+		ClientMsg.FireJumpRunWayShowRatingTier(tierLine)
 		print("JumpApplyRatingForTakeoff inLineWindow", tierLine, currentBaseSpeed, localState.jumpSpeedCumulativeRatingBonus, localState.jumpSpeedCurrentReductionDelta)
 	elseif inChainWindow then
 		local currentBaseSpeed = RunwaySession.GetJumpSpeedCurrentDeceleratedBaseSpeed()
@@ -5888,7 +5889,7 @@ function RunwaySession.JumpApplyRatingForTakeoff(
 		end
 		RunwaySession.ApplyJumpSpeedRatingForTier(tierChain, currentBaseSpeed, jumpIndex)
 		localState.ratingTier = tierChain
-		JumpRunWayFrame.ShowRatingTier(tierChain)
+		ClientMsg.FireJumpRunWayShowRatingTier(tierChain)
 		print("JumpApplyRatingForTakeoff inChainWindow", tierChain, currentBaseSpeed, localState.jumpSpeedCumulativeRatingBonus, localState.jumpSpeedCurrentReductionDelta)
 	end
 end
@@ -6265,7 +6266,7 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	Refs.prevGroundedHeartbeat = localState.prevLocalGroundedForLand
 	RunwayCameraController.Enable(workspace, cfg, hrp, localState.runwayForward, NormalizeRunwayForward)
 	RunwaySession.EnsureJumpRunwayRocketBackpack(character)
-	JumpRunWayFrame.EnsureSession()
+	UIManager.OpenWindow(UIManager.WindowId.JumpRunWayFrame)
 	return true
 end
 
