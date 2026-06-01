@@ -370,7 +370,7 @@ local function InitFrame()
 			end
 		elseif currencyType == GameConfig.CurrencyType.Rb then
 			if jetpackData.productId and jetpackData.productId > 0 then
-				marketplaceService:PromptProductPurchase(players.LocalPlayer, jetpackData.productId)
+				NetMsg.FireRequestBuyJetpackPaid(equipIdLookAt)
 			else
 				warn("No productId for jetpack", equipIdLookAt)
 			end

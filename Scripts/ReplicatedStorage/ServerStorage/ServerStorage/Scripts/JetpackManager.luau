@@ -1,9 +1,11 @@
 --!strict
 local JetpackManager = {}
 
+local marketplaceService: MarketplaceService = game:GetService("MarketplaceService")
 local serverStorage: ServerStorage = game:GetService("ServerStorage")
 local serverScripts = serverStorage:WaitForChild("Scripts")
 local ServerGameInfo = require(serverScripts:FindFirstChild("ServerGameInfo"))
+local AnalyticsTool = require(serverScripts:FindFirstChild("AnalyticsTool"))
 
 local replicatedStorage: ReplicatedStorage = game:GetService("ReplicatedStorage")
 local scripts = replicatedStorage:WaitForChild("Scripts")
@@ -46,6 +48,10 @@ local function SpendJetpackCost(player: Player, jetpackData: GameConfig.JetpackD
 	end
 end
 
+local function GetMoneyCount(playerInfo: GameConfig.PlayerInfo): number
+	return playerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
+end
+
 -- 处理客户端购买火箭背包请求
 function JetpackManager.OnRequestBuyJetpack(player: Player, jetpackId: number)
 	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
@@ -72,6 +78,7 @@ function JetpackManager.OnRequestBuyJetpack(player: Player, jetpackId: number)
 		ServerGameInfo.AddJetpackToInventory(player, jetpackIdStr)
 		-- 自动装备
 		JetpackManager.OnRequestUpdateJetpackUsing(player, jetpackId)
+		AnalyticsTool.LogJetpackGet(player, jetpackId, GetMoneyCount(playerInfo), 0)
 	else
 		local rejectReason = "insufficient_currency"
 		if jetpackData.costType == GameConfig.CostType.Rb then
@@ -81,6 +88,31 @@ function JetpackManager.OnRequestBuyJetpack(player: Player, jetpackId: number)
 		end
 		LogInfo(string.format("BuyRejected userId=%d reason=%s jetpackId=%d", player.UserId, rejectReason, jetpackId))
 	end
+end
+
+function JetpackManager.OnRequestBuyJetpackPaid(player: Player, jetpackId: number)
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return
+	end
+
+	local jetpackData = GameConfig.JetpackDataMap[jetpackId]
+	if jetpackData == nil or jetpackData.productId <= 0 then
+		warn(string.format("%s PaidBuyRejected userId=%d reason=invalid_product jetpackId=%d", LOG_PREFIX, player.UserId, jetpackId))
+		return
+	end
+
+	if playerInfo.jetpackInventory.ownedList[tostring(jetpackId)] then
+		LogInfo(string.format("PaidBuyRejected userId=%d reason=already_owned jetpackId=%d", player.UserId, jetpackId))
+		return
+	end
+
+	if not ServerGameInfo.SetPendingPaidShopItem(player, GameConfig.ItemType.Jetpack, jetpackId, jetpackData.productId) then
+		LogInfo(string.format("PaidBuyRejected userId=%d reason=pending_failed jetpackId=%d", player.UserId, jetpackId))
+		return
+	end
+
+	marketplaceService:PromptProductPurchase(player, jetpackData.productId)
 end
 
 -- 处理客户端更换火箭背包请求
@@ -147,6 +179,7 @@ end
 
 function JetpackManager.Init()
 	NetMsg.ConnectRequestBuyJetpack(JetpackManager.OnRequestBuyJetpack)
+	NetMsg.ConnectRequestBuyJetpackPaid(JetpackManager.OnRequestBuyJetpackPaid)
 	NetMsg.ConnectRequestUpdateJetpackUsing(JetpackManager.OnRequestUpdateJetpackUsing)
 	NetMsg.ConnectRequestClaimJetpackGroupReward(JetpackManager.OnRequestClaimJetpackGroupReward)
 	LogInfo("Init success")

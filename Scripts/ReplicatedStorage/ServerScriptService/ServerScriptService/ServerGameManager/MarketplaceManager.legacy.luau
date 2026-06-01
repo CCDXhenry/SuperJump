@@ -191,6 +191,11 @@ local function ProcessReceipt(receiptInfo: GameConfig.ReceiptInfo): Enum.Product
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 
+	if ServerGameInfo.TryConsumePendingPaidShopItem(player, receiptInfo.ProductId) then
+		AnalyticsTool.AddProductPurchaseEvent(player, receiptInfo)
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+
 	if receiptInfo.ProductId == GameConfig.Paving.DeathRescueProductId then
 		-- 取消付款无收据，不会进入此处；客户端 GameTipFrame 中 PromptProductPurchaseFinished 会触发坠落恢复
 		NetMsg.FireNotifyRescueStart(player)

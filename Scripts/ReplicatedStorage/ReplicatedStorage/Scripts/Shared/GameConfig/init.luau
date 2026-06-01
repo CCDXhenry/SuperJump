@@ -1534,6 +1534,7 @@ export type PlayerSaveInfo = {
 	shopInfo: ShopInfo,
 	jumpPower: JumpPowerInfo,
 	jumpRunwayBestDistance: number,
+	jumpRunwayJumpCount: number,
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },
 	exEquipInventory: ExEquipInventory,
@@ -1596,6 +1597,7 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 		},
 		jumpPower = GameConfig.CreateDefaultJumpPowerInfo(),
 		jumpRunwayBestDistance = 0,
+		jumpRunwayJumpCount = 0,
 		brainrotsInfo = {
 			ownedBrainrots = {},
 			equippedBrainrots = {},
@@ -1631,6 +1633,7 @@ export type ClientLocalPlayerSaveInfo = {
 	shopInfo: ShopInfo,
 	jumpPower: JumpPowerInfo,
 	jumpRunwayBestDistance: number,
+	jumpRunwayJumpCount: number,
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },
 	exEquipInventory: ExEquipInventory,

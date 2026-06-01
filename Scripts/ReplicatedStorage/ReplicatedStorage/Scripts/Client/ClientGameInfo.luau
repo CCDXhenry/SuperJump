@@ -47,6 +47,7 @@ function ClientGameInfo.InitPlayerInfo(
 		shopInfo = localPlayerSaveInfo.shopInfo,
 		jumpPower = localPlayerSaveInfo.jumpPower,
 		jumpRunwayBestDistance = localPlayerSaveInfo.jumpRunwayBestDistance or 0,
+		jumpRunwayJumpCount = localPlayerSaveInfo.jumpRunwayJumpCount or 0,
 		brainrotsInfo = localPlayerSaveInfo.brainrotsInfo,
 		brainrotQueue = localPlayerSaveInfo.brainrotQueue or {},
 		exEquipInventory = localPlayerSaveInfo.exEquipInventory or {

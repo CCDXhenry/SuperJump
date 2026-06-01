@@ -19,6 +19,7 @@ local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
 local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
 local serverScripts = serverStorage:WaitForChild("Scripts")
 local ServerGameInfo = require(serverScripts:FindFirstChild("ServerGameInfo"))
+local AnalyticsTool = require(serverScripts:FindFirstChild("AnalyticsTool"))
 
 type RunState = {
 	runwayForward: Vector3,
@@ -30,6 +31,7 @@ type RunState = {
 	notifyDistQ: number,
 	diedConn: RBXScriptConnection?,
 	antiCheatRejectCount: number,
+	analyticsEndLogged: boolean,
 }
 
 local cfg = GameConfig.JumpRunway
@@ -265,6 +267,39 @@ local function ResetScoreTracking(userId: number)
 	playerFinalScore[userId] = nil
 end
 
+local function GetPlayerPowerLevel(player: Player): number
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return 0
+	end
+	return playerInfo.jumpPower.lv
+end
+
+local function LogJumpStart(player: Player)
+	AnalyticsTool.LogJumpStart(
+		player,
+		GetPlayerPowerLevel(player),
+		ServerGameInfo.GetResolvedWalkSpeedValue(player),
+		ServerGameInfo.GetJumpRunwayJumpCount(player)
+	)
+end
+
+local function LogJumpEnd(player: Player, st: RunState, isDead: number)
+	if st.analyticsEndLogged then
+		return
+	end
+	st.analyticsEndLogged = true
+	local distance = math.min(maxAlongByUserId[player.UserId] or 0, cfg.ANTI_CHEAT_DISTANCE_HARD_CAP)
+	AnalyticsTool.LogJumpEnd(
+		player,
+		GetPlayerPowerLevel(player),
+		ServerGameInfo.GetResolvedWalkSpeedValue(player),
+		distance,
+		isDead,
+		ServerGameInfo.GetJumpRunwayJumpCount(player)
+	)
+end
+
 local function NotifyJumpRunway(
 	player: Player,
 	phase: number,
@@ -309,6 +344,7 @@ end
 local function BeginCleaning(player: Player, st: RunState)
 	local runwayForward = st.runwayForward
 	local runwayOrigin = st.runwayOrigin
+	LogJumpEnd(player, st, 0)
 	TeleportPlayerToHomeSlot(player)
 	NotifyJumpRunway(player, Ph.Cleaning, maxAlongByUserId[player.UserId] or 0, nil, runwayForward, runwayOrigin, true)
 	DisconnectState(player, st)
@@ -413,6 +449,7 @@ local function TryStartSession(player: Player, report: NetMsg.JumpRunwayInputRep
 		notifyDistQ = -1,
 		diedConn = nil,
 		antiCheatRejectCount = 0,
+		analyticsEndLogged = false,
 	}
 	runMap[player.UserId] = st
 	ResetScoreTracking(player.UserId)
@@ -423,6 +460,7 @@ local function TryStartSession(player: Player, report: NetMsg.JumpRunwayInputRep
 		if s then
 			local fwd = s.runwayForward
 			local org = s.runwayOrigin
+			LogJumpEnd(player, s, 1)
 			DisconnectState(player, s)
 			ResetScoreTracking(player.UserId)
 			if NetMsg.JumpRunwayRemotesExist() then
@@ -441,6 +479,7 @@ local function TryStartSession(player: Player, report: NetMsg.JumpRunwayInputRep
 		end
 	end)
 	-- 客户端全表现：开局阶段服务端不再写 Humanoid locomotion，避免与客户端推速对抗。
+	LogJumpStart(player)
 	NotifyJumpRunway(player, Ph.AutoRun, 0, nil, forward, origin, true)
 	return true
 end
@@ -512,6 +551,7 @@ local function EndRunwaySessionWithoutTeleport(player: Player)
 	end
 	local runwayForward = st.runwayForward
 	local runwayOrigin = st.runwayOrigin
+	LogJumpEnd(player, st, 0)
 	DisconnectState(player, st)
 	ResetScoreTracking(player.UserId)
 	if NetMsg.JumpRunwayRemotesExist() then
@@ -755,6 +795,10 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 	elseif kind == Kind.Final then
 		print("[JumpRunwayServerManager] Final report for", player.Name, "distance", maxAlongByUserId[player.UserId])
 		LockScoreAndTeleport(player, st, nowClock)
+	elseif kind == Kind.Input then
+		if report.jumpPressed == true then
+			ServerGameInfo.IncrementJumpRunwayJumpCount(player)
+		end
 	elseif kind == Kind.Abort then
 		-- 验证 Abort 属于当前 run：需要 lastSampleClock 存在，且 Abort 的 clientClock 不应远大于最后一个 Sample 时钟
 		if st.lastSampleClock ~= nil and report.clientClock ~= nil then
@@ -767,7 +811,7 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 			BeginCleaning(player, st)
 		end
 	end
-	-- kind Input：客户端权威下服端不解析起跳，可忽略
+	-- kind Input：客户端权威下服端只记录累计起跳次数，不驱动物理表现
 end
 
 function JumpRunwayServerManager.Init()

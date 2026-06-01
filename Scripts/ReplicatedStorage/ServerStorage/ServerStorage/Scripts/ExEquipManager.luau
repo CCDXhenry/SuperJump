@@ -4,9 +4,11 @@ local ExEquipManager = {}
 local players: Players = game:GetService("Players")
 local runService: RunService = game:GetService("RunService")
 local workspace: Workspace = game:GetService("Workspace")
+local marketplaceService: MarketplaceService = game:GetService("MarketplaceService")
 local serverStorage: ServerStorage = game:GetService("ServerStorage")
 local serverScripts = serverStorage:WaitForChild("Scripts")
 local ServerGameInfo = require(serverScripts:FindFirstChild("ServerGameInfo"))
+local AnalyticsTool = require(serverScripts:FindFirstChild("AnalyticsTool"))
 
 local replicatedStorage: ReplicatedStorage = game:GetService("ReplicatedStorage")
 local scripts = replicatedStorage:WaitForChild("Scripts")
@@ -223,6 +225,10 @@ local function SpendExEquipCost(player: Player, equipData: GameConfig.ExEquipDat
 	end
 end
 
+local function GetMoneyCount(playerInfo: GameConfig.PlayerInfo): number
+	return playerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
+end
+
 -- 处理客户端购买器材请求
 function ExEquipManager.OnRequestBuyExEquip(player: Player, equipId: number)
 	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
@@ -249,6 +255,7 @@ function ExEquipManager.OnRequestBuyExEquip(player: Player, equipId: number)
 		ServerGameInfo.AddExEquipToInventory(player, equipIdStr)
 		-- 自动装备
 		ExEquipManager.OnRequestUpdateExEquipUsing(player, equipId)
+		AnalyticsTool.LogGymGet(player, equipId, GetMoneyCount(playerInfo), 0)
 	else
 		local rejectReason = "insufficient_currency"
 		if equipData.costType == GameConfig.CostType.Rb then
@@ -258,6 +265,31 @@ function ExEquipManager.OnRequestBuyExEquip(player: Player, equipId: number)
 		end
 		LogInfo(string.format("BuyRejected userId=%d reason=%s equipId=%d", player.UserId, rejectReason, equipId))
 	end
+end
+
+function ExEquipManager.OnRequestBuyExEquipPaid(player: Player, equipId: number)
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return
+	end
+
+	local equipData = GameConfig.ExEquipDataMap[equipId]
+	if equipData == nil or equipData.productId <= 0 then
+		warn(string.format("%s PaidBuyRejected userId=%d reason=invalid_product equipId=%d", LOG_PREFIX, player.UserId, equipId))
+		return
+	end
+
+	if playerInfo.exEquipInventory.ownedList[tostring(equipId)] then
+		LogInfo(string.format("PaidBuyRejected userId=%d reason=already_owned equipId=%d", player.UserId, equipId))
+		return
+	end
+
+	if not ServerGameInfo.SetPendingPaidShopItem(player, GameConfig.ItemType.ExEquip, equipId, equipData.productId) then
+		LogInfo(string.format("PaidBuyRejected userId=%d reason=pending_failed equipId=%d", player.UserId, equipId))
+		return
+	end
+
+	marketplaceService:PromptProductPurchase(player, equipData.productId)
 end
 
 -- 处理客户端更换器材请求
@@ -401,6 +433,7 @@ end
 
 function ExEquipManager.Init()
 	NetMsg.ConnectRequestBuyExEquip(ExEquipManager.OnRequestBuyExEquip)
+	NetMsg.ConnectRequestBuyExEquipPaid(ExEquipManager.OnRequestBuyExEquipPaid)
 	NetMsg.ConnectRequestUpdateExEquipUsing(ExEquipManager.OnRequestUpdateExEquipUsing)
 	NetMsg.ConnectRequestClaimGroupReward(ExEquipManager.OnRequestClaimGroupReward)
 	NetMsg.ConnectRequestStartExercise(ExEquipManager.OnRequestStartExercise)

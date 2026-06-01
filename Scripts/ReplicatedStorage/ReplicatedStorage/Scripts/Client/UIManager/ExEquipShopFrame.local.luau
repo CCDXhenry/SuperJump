@@ -366,7 +366,7 @@ local function InitFrame()
 			end
 		elseif currencyType == GameConfig.CurrencyType.Rb then
 			if equipData.productId and equipData.productId > 0 then
-				marketplaceService:PromptProductPurchase(players.LocalPlayer, equipData.productId)
+				NetMsg.FireRequestBuyExEquipPaid(equipIdLookAt)
 			else
 				warn("No productId for exEquip", equipIdLookAt)
 			end

@@ -212,19 +212,59 @@ function AnalyticsTool.LogBaseUpgrade(player: Player, baseLevelAfter: number)
 	})
 end
 
-function AnalyticsTool.LogPlayerUpgrade(player: Player, upgradeType: number, newLevel: number)
+function AnalyticsTool.LogJumpStart(player: Player, playerPowerLevel: number, playerSpeed: number, jumpCount: number)
+	AddCustomEvent(player, "jump_start", {
+		{ filed = "player_powerlv", value = tostring(playerPowerLevel) },
+		{ filed = "player_speed", value = tostring(playerSpeed) },
+		{ filed = "jump_count", value = tostring(jumpCount) },
+	})
+end
+
+function AnalyticsTool.LogJumpEnd(
+	player: Player,
+	playerPowerLevel: number,
+	playerSpeed: number,
+	distance: number,
+	isDead: number,
+	jumpCount: number
+)
+	AddCustomEvent(player, "jump_end", {
+		{ filed = "player_powerlv", value = tostring(playerPowerLevel) },
+		{ filed = "player_speed", value = tostring(playerSpeed) },
+		{ filed = "distance", value = tostring(distance) },
+		{ filed = "is_dead", value = tostring(isDead) },
+		{ filed = "jump_count", value = tostring(jumpCount) },
+	})
+end
+
+function AnalyticsTool.LogGymGet(player: Player, gymId: number, moneyCount: number, isPay: number)
+	AddCustomEvent(player, "gym_get", {
+		{ filed = "gym_id", value = tostring(gymId) },
+		{ filed = "money_count", value = tostring(moneyCount) },
+		{ filed = "is_pay", value = tostring(isPay) },
+	})
+end
+
+function AnalyticsTool.LogJetpackGet(player: Player, jetpackId: number, moneyCount: number, isPay: number)
+	AddCustomEvent(player, "jetpack_get", {
+		{ filed = "jetpack_id", value = tostring(jetpackId) },
+		{ filed = "is_pay", value = tostring(isPay) },
+		{ filed = "money_count", value = tostring(moneyCount) },
+	})
+end
+
+function AnalyticsTool.LogPlayerUpgrade(player: Player, newLevel: number)
 	AddCustomEvent(player, "player_upgrade", {
-		{ filed = "upgrade_type", value = tostring(upgradeType) },
 		{ filed = "new_level", value = tostring(newLevel) },
 		{ filed = "money_count", value = tostring(getMoneyCount(player)) },
 	})
 end
 
-function AnalyticsTool.LogPlayerRebirth(player: Player, rebirthCount: number, jumpPowerLevel: number, isSkipRebirth: number)
+function AnalyticsTool.LogPlayerRebirth(player: Player, rebirthCount: number, powerLevel: number, isPay: number)
 	AddCustomEvent(player, "player_rebirth", {
 		{ filed = "rebirth_count", value = tostring(rebirthCount) },
-		{ filed = "jump_power_level", value = tostring(jumpPowerLevel) },
-		{ filed = "is_Skip_Rebirth", value = tostring(isSkipRebirth) },
+		{ filed = "power_level", value = tostring(powerLevel) },
+		{ filed = "is_pay", value = tostring(isPay) },
 	})
 end
 

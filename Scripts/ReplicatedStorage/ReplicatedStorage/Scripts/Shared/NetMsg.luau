@@ -124,6 +124,7 @@ local notifyJumpRunwayLittleElfChestRewardEvent: RemoteEvent? =
 
 -- ExEquip 锻炼器材
 local requestBuyExEquipEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestBuyExEquip") :: RemoteEvent?
+local requestBuyExEquipPaidEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestBuyExEquipPaid") :: RemoteEvent?
 local requestUpdateExEquipUsingEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestUpdateExEquipUsing") :: RemoteEvent?
 local notifyPlayerExEquipInventoryUpdateEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyPlayerExEquipInventoryUpdate") :: RemoteEvent?
 local requestClaimGroupRewardEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestClaimGroupReward") :: RemoteEvent?
@@ -851,6 +852,21 @@ function NetMsg.ConnectRequestBuyExEquip(callback: (player: Player, equipId: num
 	requestBuyExEquipEvent.OnServerEvent:Connect(callback)
 end
 
+-- ExEquip: 客户端请求 R 币购买器材
+function NetMsg.FireRequestBuyExEquipPaid(equipId: number)
+	if requestBuyExEquipPaidEvent == nil then
+		return
+	end
+	requestBuyExEquipPaidEvent:FireServer(equipId)
+end
+
+function NetMsg.ConnectRequestBuyExEquipPaid(callback: (player: Player, equipId: number) -> ())
+	if requestBuyExEquipPaidEvent == nil then
+		return
+	end
+	requestBuyExEquipPaidEvent.OnServerEvent:Connect(callback)
+end
+
 -- ExEquip: 客户端请求装备器材
 function NetMsg.FireRequestUpdateExEquipUsing(equipId: number)
 	if requestUpdateExEquipUsingEvent == nil then
@@ -958,6 +974,7 @@ end
 
 -- Jetpack: 客户端请求购买火箭背包
 local requestBuyJetpackEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestBuyJetpack") :: RemoteEvent?
+local requestBuyJetpackPaidEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestBuyJetpackPaid") :: RemoteEvent?
 local requestUpdateJetpackUsingEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestUpdateJetpackUsing") :: RemoteEvent?
 local notifyPlayerJetpackInventoryUpdateEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyPlayerJetpackInventoryUpdate") :: RemoteEvent?
 local requestClaimJetpackGroupRewardEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestClaimJetpackGroupReward") :: RemoteEvent?
@@ -990,6 +1007,21 @@ function NetMsg.ConnectRequestBuyJetpack(callback: (player: Player, jetpackId: n
 		return
 	end
 	requestBuyJetpackEvent.OnServerEvent:Connect(callback)
+end
+
+-- Jetpack: 客户端请求 R 币购买火箭背包
+function NetMsg.FireRequestBuyJetpackPaid(jetpackId: number)
+	if requestBuyJetpackPaidEvent == nil then
+		return
+	end
+	requestBuyJetpackPaidEvent:FireServer(jetpackId)
+end
+
+function NetMsg.ConnectRequestBuyJetpackPaid(callback: (player: Player, jetpackId: number) -> ())
+	if requestBuyJetpackPaidEvent == nil then
+		return
+	end
+	requestBuyJetpackPaidEvent.OnServerEvent:Connect(callback)
 end
 
 -- Jetpack: 客户端请求装备火箭背包

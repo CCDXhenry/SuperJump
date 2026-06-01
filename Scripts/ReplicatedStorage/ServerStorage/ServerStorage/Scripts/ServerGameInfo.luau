@@ -53,6 +53,13 @@ end
 type PendingBrainrotPaidUpgrade = { pointIndex: number, levelAdd: number, createdAt: number }
 local pendingBrainrotPaidUpgradeByUserId: { [number]: PendingBrainrotPaidUpgrade } = {}
 
+type PendingPaidShopItem = {
+	itemType: number,
+	itemId: number,
+	productId: number,
+}
+local pendingPaidShopItemByUserId: { [number]: PendingPaidShopItem } = {}
+
 local analyticsToolModule: any = nil
 local function analyticsTool(): any
 	if analyticsToolModule == nil then
@@ -120,6 +127,7 @@ function ServerGameInfo.InitPlayerInfo(
 		shopInfo = playerSaveInfo.shopInfo,
 		jumpPower = playerSaveInfo.jumpPower,
 		jumpRunwayBestDistance = playerSaveInfo.jumpRunwayBestDistance or 0,
+		jumpRunwayJumpCount = playerSaveInfo.jumpRunwayJumpCount or 0,
 		brainrotsInfo = playerSaveInfo.brainrotsInfo,
 		brainrotQueue = playerSaveInfo.brainrotQueue or {},
 		exEquipInventory = playerSaveInfo.exEquipInventory or {
@@ -162,6 +170,7 @@ function ServerGameInfo.InitPlayerInfo(
 		shopInfo = playerInfo.shopInfo,
 		jumpPower = playerInfo.jumpPower,
 		jumpRunwayBestDistance = playerInfo.jumpRunwayBestDistance,
+		jumpRunwayJumpCount = playerInfo.jumpRunwayJumpCount,
 		brainrotsInfo = playerInfo.brainrotsInfo,
 		brainrotQueue = playerInfo.brainrotQueue,
 		exEquipInventory = playerInfo.exEquipInventory,
@@ -234,6 +243,7 @@ end
 function ServerGameInfo.RemovePlayerInfo(player: Player)
 	playerInfoMap[player.UserId] = nil
 	lastBroadcastModelYieldMap[player.UserId] = nil
+	pendingPaidShopItemByUserId[player.UserId] = nil
 	--print("[ServerGameInfo] RemovePlayerInfo for", player.Name)
 end
 
@@ -261,6 +271,7 @@ function ServerGameInfo.CreatePlayerSaveInfoByPlayerInfo(playerInfo: GameConfig.
 		shopInfo = playerInfo.shopInfo,
 		jumpPower = playerInfo.jumpPower,
 		jumpRunwayBestDistance = playerInfo.jumpRunwayBestDistance,
+		jumpRunwayJumpCount = playerInfo.jumpRunwayJumpCount,
 		brainrotsInfo = playerInfo.brainrotsInfo,
 		brainrotQueue = playerInfo.brainrotQueue,
 		guideProgressInfo = playerInfo.guideProgressInfo,
@@ -283,6 +294,38 @@ function ServerGameInfo.GetRebirthMultiplier(player: Player): number
 	-- rebirthLevel 语义改为 0-based “已重生次数”，1 次重生对应 RebirthMap[1]
 	local config = GameConfig.RebirthMap[rebirthLevel]
 	return if config then config.collectMultiple else 1
+end
+
+local function GetMoneyCount(playerInfo: GameConfig.PlayerInfo): number
+	return playerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
+end
+
+function ServerGameInfo.GetResolvedWalkSpeedValue(player: Player): number
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return 0
+	end
+	local walkShop = GameConfig.Shop.WalkSpeed
+	local walkSpeedLevel = playerInfo.shopInfo.walkSpeedLevel
+	return walkShop.abilityList[walkSpeedLevel] or walkShop.abilityList[walkShop.maxLevel] or walkShop.abilityList[1] or 0
+end
+
+function ServerGameInfo.GetJumpRunwayJumpCount(player: Player): number
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return 0
+	end
+	return playerInfo.jumpRunwayJumpCount or 0
+end
+
+function ServerGameInfo.IncrementJumpRunwayJumpCount(player: Player): number
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return 0
+	end
+	playerInfo.jumpRunwayJumpCount = (playerInfo.jumpRunwayJumpCount or 0) + 1
+	playerInfo.playerInfoChanged = true
+	return playerInfo.jumpRunwayJumpCount
 end
 
 --执行重生
@@ -378,6 +421,77 @@ function ServerGameInfo.SetPlayerGamePassAcquired(player: Player, gamePassId: nu
 	playerInfo.ownedGamePassMap[gamePassId] = true
 	playerInfo.playerInfoChanged = true
 	NetMsg.FireNotifyPlayerAcquiredGamePass(player, gamePassId)
+end
+
+function ServerGameInfo.SetPendingPaidShopItem(player: Player, itemType: number, itemId: number, productId: number): boolean
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil or productId <= 0 then
+		return false
+	end
+	if itemType == GameConfig.ItemType.ExEquip then
+		local equipData = GameConfig.ExEquipDataMap[itemId]
+		if equipData == nil or equipData.productId ~= productId then
+			return false
+		end
+		if playerInfo.exEquipInventory.ownedList[tostring(itemId)] then
+			return false
+		end
+	elseif itemType == GameConfig.ItemType.Jetpack then
+		local jetpackData = GameConfig.JetpackDataMap[itemId]
+		if jetpackData == nil or jetpackData.productId ~= productId then
+			return false
+		end
+		if playerInfo.jetpackInventory.ownedList[tostring(itemId)] then
+			return false
+		end
+	else
+		return false
+	end
+
+	pendingPaidShopItemByUserId[player.UserId] = {
+		itemType = itemType,
+		itemId = itemId,
+		productId = productId,
+	}
+	return true
+end
+
+function ServerGameInfo.TryConsumePendingPaidShopItem(player: Player, productId: number): boolean
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return false
+	end
+	local pending = pendingPaidShopItemByUserId[player.UserId]
+	if pending == nil or pending.productId ~= productId then
+		return false
+	end
+	pendingPaidShopItemByUserId[player.UserId] = nil
+
+	local itemIdStr = tostring(pending.itemId)
+	if pending.itemType == GameConfig.ItemType.ExEquip then
+		local equipData = GameConfig.ExEquipDataMap[pending.itemId]
+		if equipData == nil or equipData.productId ~= productId then
+			return false
+		end
+		if not playerInfo.exEquipInventory.ownedList[itemIdStr] then
+			ServerGameInfo.AddExEquipToInventory(player, itemIdStr)
+			ServerGameInfo.SetCurrentExEquip(player, itemIdStr)
+		end
+		analyticsTool().LogGymGet(player, pending.itemId, GetMoneyCount(playerInfo), 1)
+		return true
+	elseif pending.itemType == GameConfig.ItemType.Jetpack then
+		local jetpackData = GameConfig.JetpackDataMap[pending.itemId]
+		if jetpackData == nil or jetpackData.productId ~= productId then
+			return false
+		end
+		if not playerInfo.jetpackInventory.ownedList[itemIdStr] then
+			ServerGameInfo.AddJetpackToInventory(player, itemIdStr)
+			ServerGameInfo.SetCurrentJetpack(player, itemIdStr)
+		end
+		analyticsTool().LogJetpackGet(player, pending.itemId, GetMoneyCount(playerInfo), 1)
+		return true
+	end
+	return false
 end
 
 --更新玩家家园展示位模型信息
@@ -836,8 +950,7 @@ function ServerGameInfo.UpgradeAbility(player: Player, abilityName: string, leve
 	if abilityName == "HomeLevel" then
 		analyticsTool().LogBaseUpgrade(player, nextLevel)
 	elseif abilityName == "WalkSpeed" then
-		local upgradeType = if addLevels >= 10 then 4 else 3
-		analyticsTool().LogPlayerUpgrade(player, upgradeType, nextLevel)
+		analyticsTool().LogPlayerUpgrade(player, nextLevel)
 	end
 	return true
 end
@@ -896,8 +1009,7 @@ function ServerGameInfo.UpgradeAbilityPaid(player: Player, abilityName: string, 
 	if abilityName == "HomeLevel" then
 		analyticsTool().LogBaseUpgrade(player, nextLevel)
 	elseif abilityName == "WalkSpeed" then
-		local upgradeType = if upgradedCount >= 10 then 4 else 3
-		analyticsTool().LogPlayerUpgrade(player, upgradeType, nextLevel)
+		analyticsTool().LogPlayerUpgrade(player, nextLevel)
 	end
 	return true
 end
