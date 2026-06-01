@@ -17,6 +17,7 @@ local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
 local clientScripts = scripts:WaitForChild("Client")
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
 local ClientGameInfo = require(clientScripts:FindFirstChild("ClientGameInfo"))
+local JetpackModelTool = require(clientScripts:FindFirstChild("JetpackModelTool"))
 local RunwaySession = require(clientScripts:FindFirstChild("JumpRunway"):FindFirstChild("RunwaySession"))
 
 local cfg = GameConfig.JumpRunway
@@ -170,11 +171,12 @@ local function CreateDecorationFallbackPart(character: Model, hrp: BasePart, tor
 	decorationFallbackPart = p
 end
 
+local function ResolveJetpackPrimaryPart(jetpackRoot: Model): BasePart?
+	return JetpackModelTool.ResolvePrimaryPart(jetpackRoot, cfg.RUNWAY_JETPACK_ROOT_PART_NAME)
+end
+
 local function IsJetpackOuterTemplateReady(outerTemplate: Model?): boolean
-	if outerTemplate == nil or not outerTemplate:IsA("Model") then
-		return false
-	end
-	return outerTemplate.PrimaryPart ~= nil
+	return JetpackModelTool.IsTemplateReady(outerTemplate, cfg.RUNWAY_JETPACK_ROOT_PART_NAME)
 end
 
 local function TryResolveEquippedJetpackTemplate(): Model?
@@ -247,7 +249,7 @@ local function EnsurePlayerJetpackDecoration(character: Model)
 			clone.Parent = character
 			ConfigureDecorationJetpackBaseParts(clone)
 			DisableDecorationParticleEmitters(clone)
-			local primaryPart = clone.PrimaryPart
+			local primaryPart = ResolveJetpackPrimaryPart(clone)
 			if primaryPart == nil then
 				clone:Destroy()
 				if not decorationTemplateWarned then

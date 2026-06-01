@@ -31,6 +31,7 @@ local ChaserClientManager = require(jumpRunwayScripts:WaitForChild("ChaserClient
 local ChestOpenAnimationManager = require(clientScripts:WaitForChild("ChestOpenAnimationManager"))
 local GameSoundManager = require(clientScripts:WaitForChild("GameSoundManager"))
 local BrainrotClientManager = require(clientScripts:WaitForChild("BrainrotClientManager"))
+local JetpackModelTool = require(clientScripts:WaitForChild("JetpackModelTool"))
 local core = replicatedStorage:WaitForChild("Core")
 local coreClientScripts = core:WaitForChild("Scripts"):WaitForChild("Client")
 local TranslationTool = require(coreClientScripts:WaitForChild("TranslationTool"))
@@ -3720,7 +3721,6 @@ function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
 		local modelsFolder = replicatedStorage:FindFirstChild("Models")
 		local jetpackFolder = if modelsFolder then modelsFolder:FindFirstChild("Jetpack") :: Folder? else nil
 		local outerTemplate: Model? = nil
-		local innerTemplate: Instance? = nil
 
 		-- 尝试加载玩家当前装备的火箭背包模型
 		local function TryLoadEquippedJetpack(): boolean
@@ -3745,12 +3745,11 @@ function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
 			end
 			-- 用 resourceName 查找对应的子模型
 			outerTemplate = jetpackFolder:FindFirstChild(jetpackData.resourceName) :: Model?
-			if outerTemplate == nil or not outerTemplate:IsA("Model") or outerTemplate.PrimaryPart == nil then
+			if not JetpackModelTool.IsTemplateReady(outerTemplate, cfg.RUNWAY_JETPACK_ROOT_PART_NAME) then
 				outerTemplate = nil
 				return false
 			end
-			innerTemplate = outerTemplate:FindFirstChild(cfg.RUNWAY_JETPACK_INNER_MODEL_NAME)
-			return innerTemplate ~= nil and innerTemplate:IsA("Model")
+			return true
 		end
 
 		-- 备用：加载默认的 Jetpack 模板
@@ -3758,36 +3757,32 @@ function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
 			outerTemplate = if modelsFolder
 				then modelsFolder:FindFirstChild(cfg.RUNWAY_JETPACK_OUTER_MODEL_NAME) :: Model?
 				else nil
-			if outerTemplate == nil or not outerTemplate:IsA("Model") or outerTemplate.PrimaryPart == nil then
+			if not JetpackModelTool.IsTemplateReady(outerTemplate, cfg.RUNWAY_JETPACK_ROOT_PART_NAME) then
 				outerTemplate = nil
 				return false
 			end
-			innerTemplate = if outerTemplate and outerTemplate:IsA("Model")
-				then outerTemplate:FindFirstChild(cfg.RUNWAY_JETPACK_INNER_MODEL_NAME)
-				else nil
-			return innerTemplate ~= nil and innerTemplate:IsA("Model")
+			return true
 		end
 
 		local templateReady = TryLoadEquippedJetpack() or TryLoadDefaultJetpack()
 
-		if templateReady and outerTemplate ~= nil and innerTemplate ~= nil then
+		if templateReady and outerTemplate ~= nil then
 			local clone = outerTemplate:Clone() :: Model
 			clone.Name = "JumpRunwayJetpackClone"
 			clone.Parent = character
 			RunwaySession.ConfigureRunwayJetpackBaseParts(clone)
-			local primaryPart = clone.PrimaryPart
-			local inner = clone:FindFirstChild(cfg.RUNWAY_JETPACK_INNER_MODEL_NAME) :: Model?
-			if primaryPart == nil or inner == nil then
+			local primaryPart = JetpackModelTool.ResolvePrimaryPart(clone, cfg.RUNWAY_JETPACK_ROOT_PART_NAME)
+			if primaryPart == nil then
 				clone:Destroy()
 				if not Refs.jetpackTemplateWarned then
 					Refs.jetpackTemplateWarned = true
-					warn("[RunwaySession] Jetpack clone missing PrimaryPart or inner model; using fallback Part.")
+					warn("[RunwaySession] Jetpack clone missing RootPart/PrimaryPart (Part/MeshPart); using fallback Part.")
 				end
 				CreateFallbackRocketBackpackPart()
 				return
 			end
-			local flame1 = inner:FindFirstChild(cfg.RUNWAY_JETPACK_FLAME1_NAME)
-			local flame2 = inner:FindFirstChild(cfg.RUNWAY_JETPACK_FLAME2_NAME)
+			local flame1 = JetpackModelTool.FindJetpackModelPart(clone, cfg.RUNWAY_JETPACK_FLAME1_NAME)
+			local flame2 = JetpackModelTool.FindJetpackModelPart(clone, cfg.RUNWAY_JETPACK_FLAME2_NAME)
 			RunwaySession.WeldAllRunwayJetpackPartsToPrimaryPart(clone, primaryPart)
 			if torso ~= nil then
 				primaryPart.CFrame = torso.CFrame
@@ -3814,17 +3809,15 @@ function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
 			w.Parent = primaryPart
 			Refs.jetpackVisualRoot = clone
 			table.clear(Refs.jetpackDashParticleEmitters)
-			if flame1 ~= nil and flame1:IsA("BasePart") then
-				local fp = flame1 :: BasePart
-				Refs.jetpackFlame1Part = fp
-				Refs.jetpackFlame1IdleColor = fp.Color
-				RunwaySession.AppendParticleEmittersUnique(Refs.jetpackDashParticleEmitters, RunwaySession.CollectParticleEmittersUnderFlame(fp))
+			if flame1 ~= nil then
+				Refs.jetpackFlame1Part = flame1
+				Refs.jetpackFlame1IdleColor = flame1.Color
+				RunwaySession.AppendParticleEmittersUnique(Refs.jetpackDashParticleEmitters, RunwaySession.CollectParticleEmittersUnderFlame(flame1))
 			end
-			if flame2 ~= nil and flame2:IsA("BasePart") then
-				local fp = flame2 :: BasePart
-				Refs.jetpackFlame2Part = fp
-				Refs.jetpackFlame2IdleColor = fp.Color
-				RunwaySession.AppendParticleEmittersUnique(Refs.jetpackDashParticleEmitters, RunwaySession.CollectParticleEmittersUnderFlame(fp))
+			if flame2 ~= nil then
+				Refs.jetpackFlame2Part = flame2
+				Refs.jetpackFlame2IdleColor = flame2.Color
+				RunwaySession.AppendParticleEmittersUnique(Refs.jetpackDashParticleEmitters, RunwaySession.CollectParticleEmittersUnderFlame(flame2))
 			end
 			RunwaySession.SetJetpackDashParticlesEnabled(false)
 			return
