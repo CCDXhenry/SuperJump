@@ -92,6 +92,13 @@ local exerciseRunAnimTrack: AnimationTrack? = nil
 local exerciseRunAnimId: string? = nil
 local exercisePopupRandom = Random.new()
 local exerciseEquipId: number? = nil
+local exerciseClientSessionId: number = 0
+local exerciseScaleBarRatio: number = 0
+local exerciseScaleBarTween: Tween? = nil
+local exerciseScaleBarRatioValue: NumberValue? = nil
+local exerciseScaleBarRatioConnection: RBXScriptConnection? = nil
+local exerciseScaleBarSequenceId: number = 0
+local exerciseDisplayLv: number? = nil
 
 type ExercisePopupItem = {
 	gui: BillboardGui,
@@ -132,7 +139,101 @@ local function GetExerciseEquipFrame(): Frame?
 	return frameRoot
 end
 
-local function SetExerciseInfoScaleBar(ratio: number)
+local function GetExerciseScaleImage(): ImageLabel?
+	local equipFrame = GetExerciseEquipFrame()
+	if equipFrame == nil then
+		return nil
+	end
+
+	local expImage = equipFrame:FindFirstChild("ExpImage")
+	if expImage == nil or not expImage:IsA("ImageLabel") then
+		return nil
+	end
+	local scaleBar = expImage:FindFirstChild("ScaleBar")
+	if scaleBar == nil or not scaleBar:IsA("ImageLabel") then
+		return nil
+	end
+	local scaleImage = scaleBar:FindFirstChild("Scale")
+	if scaleImage == nil or not scaleImage:IsA("ImageLabel") then
+		return nil
+	end
+	return scaleImage
+end
+
+local function ApplyExerciseScaleBarRatio(ratio: number)
+	local scaleImage = GetExerciseScaleImage()
+	if scaleImage == nil then
+		return
+	end
+
+	local clampedRatio = math.clamp(ratio, 0, 1)
+	local currentSize = scaleImage.Size
+	scaleImage.Size = UDim2.new(clampedRatio, currentSize.X.Offset, currentSize.Y.Scale, currentSize.Y.Offset)
+	exerciseScaleBarRatio = clampedRatio
+end
+
+local function StopExerciseScaleBarTween()
+	if exerciseScaleBarTween ~= nil then
+		exerciseScaleBarTween:Cancel()
+		exerciseScaleBarTween = nil
+	end
+end
+
+local function CleanupExerciseScaleBar()
+	exerciseScaleBarSequenceId += 1
+	StopExerciseScaleBarTween()
+	if exerciseScaleBarRatioConnection ~= nil then
+		exerciseScaleBarRatioConnection:Disconnect()
+		exerciseScaleBarRatioConnection = nil
+	end
+	if exerciseScaleBarRatioValue ~= nil then
+		exerciseScaleBarRatioValue:Destroy()
+		exerciseScaleBarRatioValue = nil
+	end
+	exerciseDisplayLv = nil
+	exerciseScaleBarRatio = 0
+end
+
+local function EnsureExerciseScaleBarRatioValue(): NumberValue
+	if exerciseScaleBarRatioValue == nil then
+		local ratioValue = Instance.new("NumberValue")
+		ratioValue.Name = "ExerciseScaleBarRatio"
+		ratioValue.Value = exerciseScaleBarRatio
+		exerciseScaleBarRatioValue = ratioValue
+		exerciseScaleBarRatioConnection = ratioValue:GetPropertyChangedSignal("Value"):Connect(function()
+			ApplyExerciseScaleBarRatio(ratioValue.Value)
+		end)
+	end
+	return exerciseScaleBarRatioValue
+end
+
+local function TweenExerciseScaleBarToTarget(
+	ratioValue: NumberValue,
+	targetRatio: number,
+	duration: number,
+	onComplete: (() -> ())?
+)
+	StopExerciseScaleBarTween()
+	ratioValue.Value = exerciseScaleBarRatio
+	local sequenceId = exerciseScaleBarSequenceId
+	local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+	local tween = tweenService:Create(ratioValue, tweenInfo, { Value = targetRatio })
+	exerciseScaleBarTween = tween
+	if onComplete ~= nil then
+		tween.Completed:Connect(function(playbackState: Enum.PlaybackState)
+			if playbackState ~= Enum.PlaybackState.Completed then
+				return
+			end
+			if sequenceId ~= exerciseScaleBarSequenceId or not isExercising then
+				return
+			end
+			onComplete()
+		end)
+	end
+	tween:Play()
+end
+
+local function RefreshExerciseInfoLabels(jumpPowerInfo: GameConfig.JumpPowerInfo, requiredExp: number)
 	local equipFrame = GetExerciseEquipFrame()
 	if equipFrame == nil then
 		return
@@ -142,17 +243,19 @@ local function SetExerciseInfoScaleBar(ratio: number)
 	if expImage == nil or not expImage:IsA("ImageLabel") then
 		return
 	end
-	local scaleBar = expImage:FindFirstChild("ScaleBar")
-	if scaleBar == nil or not scaleBar:IsA("ImageLabel") then
-		return
-	end
-	local scaleImage = scaleBar:FindFirstChild("Scale")
-	if scaleImage == nil or not scaleImage:IsA("ImageLabel") then
-		return
-	end
 
-	local currentSize = scaleImage.Size
-	scaleImage.Size = UDim2.new(math.clamp(ratio, 0, 1), currentSize.X.Offset, currentSize.Y.Scale, currentSize.Y.Offset)
+	local lvLabel = expImage:FindFirstChild("LvLabel") :: TextLabel?
+	local expLabel = expImage:FindFirstChild("ExpLabel") :: TextLabel?
+	if lvLabel ~= nil then
+		lvLabel.Text = string.format("Lv%d", jumpPowerInfo.lv)
+	end
+	if expLabel ~= nil then
+		expLabel.Text = string.format(
+			"%s/%s",
+			NumberExtension.FormatBigNumberAA(jumpPowerInfo.exp),
+			NumberExtension.FormatBigNumberAA(requiredExp)
+		)
+	end
 end
 
 local function UpdateExerciseInfoView()
@@ -169,26 +272,43 @@ local function UpdateExerciseInfoView()
 		speedLabel.Text = string.format("%s Speed", NumberExtension.FormatBigNumberAA(speedValue))
 	end
 
-	local expImage = equipFrame:FindFirstChild("ExpImage")
-	if expImage == nil or not expImage:IsA("ImageLabel") then
+	local jumpPowerInfo = localPlayerInfo.jumpPower
+	local requiredExp = GameConfig.GetJumpPowerRequiredExp(jumpPowerInfo)
+	local targetRatio = if requiredExp > 0 then jumpPowerInfo.exp / requiredExp else 0
+	local interval = GameConfig.JumpPowerExerciseInterval
+
+	if exerciseDisplayLv == nil then
+		exerciseDisplayLv = jumpPowerInfo.lv
+		RefreshExerciseInfoLabels(jumpPowerInfo, requiredExp)
+		ApplyExerciseScaleBarRatio(targetRatio)
 		return
 	end
 
-	local jumpPowerInfo = localPlayerInfo.jumpPower
-	local requiredExp = GameConfig.GetJumpPowerRequiredExp(jumpPowerInfo)
-	local lvLabel = expImage:FindFirstChild("LvLabel") :: TextLabel?
-	local expLabel = expImage:FindFirstChild("ExpLabel") :: TextLabel?
-	if lvLabel ~= nil then
-		lvLabel.Text = string.format("Lv%d", jumpPowerInfo.lv)
+	if jumpPowerInfo.lv > exerciseDisplayLv then
+		exerciseDisplayLv = jumpPowerInfo.lv
+		RefreshExerciseInfoLabels(jumpPowerInfo, requiredExp)
+		exerciseScaleBarSequenceId += 1
+		ApplyExerciseScaleBarRatio(0)
+		if targetRatio <= 1e-5 then
+			StopExerciseScaleBarTween()
+			return
+		end
+		local ratioValue = EnsureExerciseScaleBarRatioValue()
+		ratioValue.Value = 0
+		TweenExerciseScaleBarToTarget(ratioValue, targetRatio, interval, nil)
+		return
 	end
-	if expLabel ~= nil then
-		expLabel.Text = string.format(
-			"%s/%s",
-			NumberExtension.FormatBigNumberAA(jumpPowerInfo.exp),
-			NumberExtension.FormatBigNumberAA(requiredExp)
-		)
+
+	exerciseDisplayLv = jumpPowerInfo.lv
+	RefreshExerciseInfoLabels(jumpPowerInfo, requiredExp)
+	exerciseScaleBarSequenceId += 1
+	local ratioValue = EnsureExerciseScaleBarRatioValue()
+	if math.abs(targetRatio - exerciseScaleBarRatio) <= 1e-5 then
+		StopExerciseScaleBarTween()
+		ApplyExerciseScaleBarRatio(targetRatio)
+		return
 	end
-	SetExerciseInfoScaleBar(if requiredExp > 0 then jumpPowerInfo.exp / requiredExp else 0)
+	TweenExerciseScaleBarToTarget(ratioValue, targetRatio, interval, nil)
 end
 
 local function StopExercisePopupTweens(item: ExercisePopupItem)
@@ -409,7 +529,43 @@ local function ShowExerciseJumpPowerPopup(addAmount: number)
 	end)
 end
 
+local function ReleaseExerciseCharacterPhysics()
+	local humanoid = exerciseHumanoid
+	local hrp = exerciseHrp
+	if humanoid == nil then
+		return
+	end
+
+	if exerciseBikeAnimTrack ~= nil then
+		exerciseBikeAnimTrack:Stop(0)
+		exerciseBikeAnimTrack:Destroy()
+		exerciseBikeAnimTrack = nil
+	end
+	if exerciseRunAnimTrack ~= nil then
+		exerciseRunAnimTrack:Stop(0)
+		exerciseRunAnimTrack:Destroy()
+		exerciseRunAnimTrack = nil
+	end
+	exerciseRunAnimId = nil
+
+	if hrp ~= nil then
+		hrp.AssemblyLinearVelocity = Vector3.zero
+		hrp.AssemblyAngularVelocity = Vector3.zero
+	end
+
+	humanoid:Move(Vector3.zero, false)
+	humanoid.AutoRotate = true
+	humanoid.PlatformStand = false
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
+	pcall(function()
+		humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+	end)
+end
+
 local function StopExerciseInternal()
+	exerciseClientSessionId += 1
+
 	if exerciseRunServiceConnection ~= nil then
 		exerciseRunServiceConnection:Disconnect()
 		exerciseRunServiceConnection = nil
@@ -420,21 +576,17 @@ local function StopExerciseInternal()
 		exerciseInputConnection = nil
 	end
 
-	if exerciseHumanoid ~= nil then
-		exerciseHumanoid.AutoRotate = true
-		exerciseHumanoid.PlatformStand = false
-		exerciseHumanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
-		exerciseHumanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
-		exerciseHumanoid:Move(Vector3.zero, false)
-	end
+	ReleaseExerciseCharacterPhysics()
 
-	-- 恢复玩家控制
-	local controls = GetPlayerControls()
-	if controls ~= nil then
-		pcall(function()
-			controls:Enable()
-		end)
-	end
+	-- 延迟一帧恢复控制，避免 PlatformStand 解除瞬间与输入/动画冲突
+	task.defer(function()
+		local controls = GetPlayerControls()
+		if controls ~= nil then
+			pcall(function()
+				controls:Enable()
+			end)
+		end
+	end)
 
 	-- 恢复器材 Prompt 按钮（模型由服务端销毁，仅做兜底）
 	if exercisePrompt ~= nil and exercisePrompt.Parent ~= nil then
@@ -442,22 +594,8 @@ local function StopExerciseInternal()
 	end
 	exercisePrompt = nil
 
-	-- 停止 Bike 专属动画
-	if exerciseBikeAnimTrack ~= nil then
-		exerciseBikeAnimTrack:Stop()
-		exerciseBikeAnimTrack:Destroy()
-		exerciseBikeAnimTrack = nil
-	end
-
-	-- 停止跑步机动画
-	if exerciseRunAnimTrack ~= nil then
-		exerciseRunAnimTrack:Stop()
-		exerciseRunAnimTrack:Destroy()
-		exerciseRunAnimTrack = nil
-	end
-	exerciseRunAnimId = nil
-
 	-- 关闭锻炼 UI
+	CleanupExerciseScaleBar()
 	UIManager.CloseWindow(UIManager.WindowId.ExEquipFrame)
 	CleanupExercisePopups()
 
@@ -693,9 +831,9 @@ local function StartExercise(equipId: number)
 		return
 	end
 
-	-- 如果已在锻炼中，则忽略后续的开始请求，防止竞态条件
-	if isExercising then
-		return
+	-- 若本地状态未清干净，先清理再开始，避免 Heartbeat 叠加
+	if isExercising or exerciseRunServiceConnection ~= nil then
+		StopExerciseInternal()
 	end
 
 	local character: Model? = localPlayer.Character
@@ -747,6 +885,12 @@ local function StartExercise(equipId: number)
 		end)
 	end
 
+	-- 进入锻炼时收起所有 Tool
+	humanoid:UnequipTools()
+	if _G.BackpackFrameManager then
+		(_G.BackpackFrameManager :: any).SetEquippedIndex(0)
+	end
+
 	-- 隐藏器材 Prompt 按钮
 	exercisePrompt = GetExercisePromptFromModel(equipmentModel)
 	if exercisePrompt ~= nil then
@@ -761,6 +905,9 @@ local function StartExercise(equipId: number)
 	exerciseEquipId = equipId
 	EnsureExercisePopupPool()
 
+	exerciseClientSessionId += 1
+	local clientSessionId = exerciseClientSessionId
+
 	-- 打开锻炼 UI
 	UIManager.OpenWindow(UIManager.WindowId.ExEquipFrame)
 	UpdateExerciseInfoView()
@@ -770,7 +917,7 @@ local function StartExercise(equipId: number)
 	local settleThreshold: number = 5
 
 	exerciseRunServiceConnection = runService.Heartbeat:Connect(function()
-		if not isExercising or exerciseHumanoid == nil or exerciseHrp == nil then
+		if not isExercising or exerciseClientSessionId ~= clientSessionId or exerciseHumanoid == nil or exerciseHrp == nil then
 			return
 		end
 
@@ -783,6 +930,19 @@ local function StartExercise(equipId: number)
 
 		-- 稳定结束，锁定站立高度
 		exerciseHrp.CFrame = CFrame.lookAt(standPos, standPos + forwardZ)
+
+		local character = exerciseHumanoid.Parent
+		if character ~= nil and character:IsA("Model") then
+			for _, child in character:GetChildren() do
+				if child:IsA("Tool") then
+					exerciseHumanoid:UnequipTools()
+					if _G.BackpackFrameManager then
+						(_G.BackpackFrameManager :: any).SetEquippedIndex(0)
+					end
+					break
+				end
+			end
+		end
 
 		if equipData.type == 2 then
 			-- Bike 类型：播放专属骑行动画

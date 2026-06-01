@@ -21,7 +21,6 @@ local DebugLogMissingTool = false
 
 local ToolLookupRetryCount = 4
 local ToolLookupRetryDelaySec = 0.05
-local isExercising = false
 
 -- 数字键映射
 local KeyIndexMap: { [Enum.KeyCode]: number } = {
@@ -129,7 +128,7 @@ local function ToggleCurrentExEquip()
 	if localPlayerInfo == nil then
 		return
 	end
-	if isExercising then
+	if ClientGameInfo.IsExercising() then
 		NetMsg.FireRequestStopExercise()
 		return
 	end
@@ -144,6 +143,10 @@ function BackpackInputManager.ToggleTool(index: number)
 	end
 	if IsExEquipSlotIndex(index) then
 		ToggleCurrentExEquip()
+		return
+	end
+
+	if ClientGameInfo.IsExercising() then
 		return
 	end
 
@@ -235,12 +238,6 @@ function BackpackInputManager.Init()
 
 			BackpackInputManager.ToggleTool(index)
 		end
-	end)
-	NetMsg.ConnectNotifyExerciseStart(function()
-		isExercising = true
-	end)
-	NetMsg.ConnectNotifyExerciseEnd(function()
-		isExercising = false
 	end)
 	--print("[BackpackInputManager] Initialized, listening keys 1-9 with debounce")
 end

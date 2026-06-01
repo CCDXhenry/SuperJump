@@ -28,6 +28,7 @@ local EXERCISE_OWNER_USER_ID_ATTR = "ExerciseOwnerUserId"
 local EXERCISING_ATTR = "Exercising"
 
 local exerciseRunningMap: { [number]: boolean } = {}
+local exerciseSessionMap: { [number]: number } = {}
 local activeExerciseModelMap: { [number]: Model } = {}
 local activeExerciseWorldPivotMap: { [number]: CFrame } = {}
 local exerciseModelPivotLockConnection: RBXScriptConnection? = nil
@@ -182,6 +183,7 @@ end
 local function StopExerciseForPlayer(player: Player, logReason: string)
 	local userId = player.UserId
 	local wasExercising = exerciseRunningMap[userId] == true
+	exerciseSessionMap[userId] = (exerciseSessionMap[userId] or 0) + 1
 	exerciseRunningMap[userId] = nil
 	player:SetAttribute(EXERCISING_ATTR, false)
 	DestroyExerciseModel(userId)
@@ -367,6 +369,9 @@ function ExEquipManager.OnRequestStartExercise(player: Player, equipId: number)
 	exerciseRunningMap[userId] = true
 	player:SetAttribute(EXERCISING_ATTR, true)
 
+	local sessionId = (exerciseSessionMap[userId] or 0) + 1
+	exerciseSessionMap[userId] = sessionId
+
 	if equipData.type ~= 2 then
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
 		if humanoid ~= nil then
@@ -375,9 +380,13 @@ function ExEquipManager.OnRequestStartExercise(player: Player, equipId: number)
 	end
 
 	task.spawn(function()
-		while exerciseRunningMap[userId] do
-			ServerGameInfo.UpdatePlayerJumpPower(player, equipData.ability)
+		local capturedSessionId = sessionId
+		while exerciseSessionMap[userId] == capturedSessionId do
 			task.wait(EXERCISE_JUMP_POWER_INTERVAL)
+			if exerciseSessionMap[userId] ~= capturedSessionId then
+				break
+			end
+			ServerGameInfo.UpdatePlayerJumpPower(player, equipData.ability)
 		end
 	end)
 
