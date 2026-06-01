@@ -28,6 +28,7 @@ local RunwayUiController = require(jumpRunwayScripts:WaitForChild("RunwayUiContr
 local RunwayNetBridge = require(jumpRunwayScripts:WaitForChild("RunwayNetBridge"))
 local ChaserClientManager = require(jumpRunwayScripts:WaitForChild("ChaserClientManager"))
 local ChestOpenAnimationManager = require(clientScripts:WaitForChild("ChestOpenAnimationManager"))
+local GameSoundManager = require(clientScripts:WaitForChild("GameSoundManager"))
 local BrainrotClientManager = require(clientScripts:WaitForChild("BrainrotClientManager"))
 local core = replicatedStorage:WaitForChild("Core")
 local coreClientScripts = core:WaitForChild("Scripts"):WaitForChild("Client")
@@ -6014,6 +6015,11 @@ function RunwaySession.JumpApplyTakeoff(
 	localState.jumpHorizLerpStartClock = nowClock
 	localState.jumpHorizLerpDuration = RunwaySession.ComputeJumpHorizontalDecelerationDuration(vy, gGrav)
 	localState.jumpHorizLerpInitialVy = vy
+	if impulseSeg >= cfg.N_TOTAL_JUMPS then
+		GameSoundManager.PlayJumpRunwayFinalTakeoffSound()
+	else
+		GameSoundManager.PlayJumpRunwayTakeoffSound()
+	end
 	RunwaySession.JumpAdvancePhaseAfterImpulse(inAuto, inLineWindow, inChainWindow)
 	-- 冲量起跳后首帧 Raycast/Humanoid 仍常判贴地或 preland；若 prev* 为 false 会被当成「着地/快触地上升沿」
 	-- 立刻武装链式 T_WINDOW，约 1s 超时进 Slide。置 true 表示上升沿已消费，仅真实再落地时才武装。

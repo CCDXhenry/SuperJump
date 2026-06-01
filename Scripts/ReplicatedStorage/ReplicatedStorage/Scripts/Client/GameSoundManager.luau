@@ -46,4 +46,12 @@ function GameSoundManager.PlayButtonClickSound()
 	playGlobalFromName("ButtonClickSound")
 end
 
+function GameSoundManager.PlayJumpRunwayTakeoffSound()
+	playGlobalFromName("JumpSound1")
+end
+
+function GameSoundManager.PlayJumpRunwayFinalTakeoffSound()
+	playGlobalFromName("JumpSound2")
+end
+
 return GameSoundManager

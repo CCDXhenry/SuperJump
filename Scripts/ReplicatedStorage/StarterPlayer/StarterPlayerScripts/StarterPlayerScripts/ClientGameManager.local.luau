@@ -31,6 +31,7 @@ local contentProvider: ContentProvider = game:GetService("ContentProvider")
 local modelOriginsFolder: Folder? = replicatedStorage:FindFirstChild("Models") :: Folder?
 local uiOriginsFolder: Folder? = replicatedStorage:FindFirstChild("UI") :: Folder?
 local soundOriginsFolder: Folder? = workspace:FindFirstChild("Sounds") :: Folder?
+local replicatedSoundOriginsFolder: Folder? = replicatedStorage:FindFirstChild("Sounds") :: Folder?
 
 local DesignScreenSize: Vector2 = Vector2.new(1920, 1080)
 local GameTipZIndex: number = 2000
@@ -117,6 +118,9 @@ PreloadAssets = function()
 	end
 	if soundOriginsFolder ~= nil then
 		table.insert(folderList, soundOriginsFolder)
+	end
+	if replicatedSoundOriginsFolder ~= nil then
+		table.insert(folderList, replicatedSoundOriginsFolder)
 	end
 	if uiOriginsFolder ~= nil then
 		table.insert(folderList, uiOriginsFolder)
