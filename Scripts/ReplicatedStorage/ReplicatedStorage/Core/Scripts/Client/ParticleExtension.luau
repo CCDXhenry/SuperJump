@@ -15,10 +15,10 @@ type SimulatedAutoPlayingEffect = {
 	isPlaying: boolean,
 	descendantAddedConnection: RBXScriptConnection,
 	destroyingConnection: RBXScriptConnection,
-	particleMap: {[ParticleEmitter]: SimulatedAutoPlayingParticle},
+	particleMap: { [ParticleEmitter]: SimulatedAutoPlayingParticle },
 }
 
-local simulatedAutoPlayingEffectMap: {[Instance]: SimulatedAutoPlayingEffect} = {}
+local simulatedAutoPlayingEffectMap: { [Instance]: SimulatedAutoPlayingEffect } = {}
 
 --播放粒子特效
 function ParticleExtension.PlayParticleEffect(particleInstanceOrigin: PVInstance, emitCFrame: CFrame)
@@ -43,12 +43,12 @@ function ParticleExtension.SimulateEffectAutoPlay(effect: Instance)
 	local simulatedAutoPlayingEffect: SimulatedAutoPlayingEffect = simulatedAutoPlayingEffectMap[effect]
 	if simulatedAutoPlayingEffect ~= nil then
 		for particleEmitter: ParticleEmitter, simulatedAutoPlayingParticle: SimulatedAutoPlayingParticle in simulatedAutoPlayingEffect.particleMap do
-			simulatedAutoPlayingParticle.emitTimer = simulatedAutoPlayingParticle.emitInterval
+			simulatedAutoPlayingParticle.emitTimer = 0
 		end
 		simulatedAutoPlayingEffect.isPlaying = true
 		return
 	end
-	local simulatedAutoPlayingParticleMap: {[ParticleEmitter]: SimulatedAutoPlayingParticle} = {}
+	local simulatedAutoPlayingParticleMap: { [ParticleEmitter]: SimulatedAutoPlayingParticle } = {}
 	local descendantAddedConnection: RBXScriptConnection = effect.DescendantAdded:Connect(function(descendant: Instance)
 		if descendant:IsA("ParticleEmitter") then
 			if simulatedAutoPlayingParticleMap[descendant] ~= nil then
@@ -61,7 +61,7 @@ function ParticleExtension.SimulateEffectAutoPlay(effect: Instance)
 				emitTimer = 0,
 			}
 			simulatedAutoPlayingParticleMap[descendant] = simulatedAutoPlayingParticle
-		end	
+		end
 	end)
 	for descendantIndex: number, descendant: Instance in effect:GetDescendants() do
 		if descendant:IsA("ParticleEmitter") then

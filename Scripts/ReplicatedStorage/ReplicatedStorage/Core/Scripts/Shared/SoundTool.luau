@@ -2,8 +2,8 @@
 local SoundTool = {}
 
 local sounds: Folder = workspace:FindFirstChild("Sounds")
-local localSoundAttachmentsPool: {Attachment} = {}
-local soundsPools: {[Sound]: {Sound}} = {}
+local localSoundAttachmentsPool: { Attachment } = {}
+local soundsPools: { [Sound]: { Sound } } = {}
 local soundService: SoundService = game:FindFirstChild("SoundService")
 local soundGroups: Folder = soundService:FindFirstChild("SoundGroups") :: Folder
 local bgmSoundGroup: SoundGroup = soundGroups:FindFirstChild("BGM") :: SoundGroup
@@ -19,7 +19,7 @@ localSoundsPart.Position = Vector3.zero
 localSoundsPart.Parent = sounds
 
 --回收声音
-local function RestoreSound(sound: Sound, soundsPool: {Sound})
+local function RestoreSound(sound: Sound, soundsPool: { Sound })
 	if sound.Parent ~= nil and sound.Parent:IsA("Attachment") then
 		table.insert(localSoundAttachmentsPool, sound.Parent)
 	end
@@ -29,14 +29,14 @@ end
 
 --获取声音
 local function GetSound(soundOrigin: Sound): Sound?
-	local soundsPool: {Sound}? = soundsPools[soundOrigin]
+	local soundsPool: { Sound }? = soundsPools[soundOrigin]
 	if soundsPool == nil then
 		soundsPool = {}
 		if soundsPool == nil then
 			return nil
 		end
 		soundsPools[soundOrigin] = soundsPool
-		soundOrigin.Destroying:Connect(function() 
+		soundOrigin.Destroying:Connect(function()
 			for soundIndex: number, sound: Sound in soundsPool do
 				sound:Destroy()
 			end
@@ -62,7 +62,7 @@ local function GetSound(soundOrigin: Sound): Sound?
 			RestoreSound(sound, soundsPool)
 		end
 	end)
-	sound.Stopped:Connect(function(soundId: string) 
+	sound.Stopped:Connect(function(soundId: string)
 		if soundsPool == nil then
 			sound:Destroy()
 		else
@@ -91,12 +91,12 @@ function SoundTool.PlayBGM(sound: Sound)
 end
 
 --播放一次全局音效
-function SoundTool.PlayGlobalSoundEffect(soundOrigin: Sound, looped: boolean) : Sound?
+function SoundTool.PlayGlobalSoundEffect(soundOrigin: Sound, looped: boolean, soundGroup: SoundGroup?): Sound?
 	local sound: Sound? = GetSound(soundOrigin)
 	if sound == nil then
 		return nil
 	end
-	sound.SoundGroup = soundEffectsGroup
+	sound.SoundGroup = soundGroup or soundEffectsGroup
 	sound.Looped = looped
 	sound.Parent = sounds
 	sound:Play()
@@ -104,7 +104,7 @@ function SoundTool.PlayGlobalSoundEffect(soundOrigin: Sound, looped: boolean) : 
 end
 
 --播放一次局部音效
-function SoundTool.PlayLocalSoundEffect(soundOrigin: Sound, soundPosition: Vector3, looped: boolean): Sound?
+function SoundTool.PlayLocalSoundEffect(soundOrigin: Sound, soundPosition: Vector3, looped: boolean, soundGroup: SoundGroup?): Sound?
 	local sound: Sound? = GetSound(soundOrigin)
 	if sound == nil then
 		return
@@ -113,7 +113,7 @@ function SoundTool.PlayLocalSoundEffect(soundOrigin: Sound, soundPosition: Vecto
 	if soundAttachment == nil then
 		return
 	end
-	sound.SoundGroup = soundEffectsGroup
+	sound.SoundGroup = soundGroup or soundEffectsGroup
 	sound.Looped = looped
 	soundAttachment.WorldCFrame = CFrame.new(soundPosition)
 	sound.Parent = soundAttachment
@@ -122,8 +122,8 @@ function SoundTool.PlayLocalSoundEffect(soundOrigin: Sound, soundPosition: Vecto
 end
 
 --播放指定的音效
-function SoundTool.PlayDesignatedSoundEffect(sound: Sound)
-	sound.SoundGroup = soundEffectsGroup
+function SoundTool.PlayDesignatedSoundEffect(sound: Sound, soundGroup: SoundGroup?)
+	sound.SoundGroup = soundGroup or soundEffectsGroup
 	sound:Play()
 end
 
