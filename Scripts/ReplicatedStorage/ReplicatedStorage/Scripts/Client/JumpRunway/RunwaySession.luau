@@ -3955,6 +3955,7 @@ function RunwaySession.UpdateBestDistanceWall(hrp: BasePart)
 end
 
 function RunwaySession.ResetLocalRunToIdle()
+	ClientMsg.FireJumpRunWayStopEscapeRedScreen()
 	local _, humanoid, hrp = RunwaySession.GetCharacterParts()
 	ClientGameInfo.SetInJumpRunway(false)
 	-- 先同步清理资源和状态（避免异步延迟导致新一局启动后资源混乱）
@@ -5052,12 +5053,27 @@ function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chest
 			chaser,
 			baseDirection,
 			cfg,
-			NormalizeRunwayForward
+			NormalizeRunwayForward,
+			function()
+				ClientMsg.FireJumpRunWayStartEscapeRedScreen()
+			end
+		)
+	else
+		RunwayCameraController.FocusChaserThenDisable(
+			workspace,
+			RunwaySession.GetCharacterParts,
+			nil,
+			baseDirection,
+			cfg,
+			NormalizeRunwayForward,
+			function()
+				ClientMsg.FireJumpRunWayStartEscapeRedScreen()
+			end
 		)
 	end
 	ClientGameInfo.SetInJumpRunwayEscapePhase(true)
 	Refs.chestCarryReturnActive = true
-	UIManager.CloseWindow(UIManager.WindowId.JumpRunWayFrame)
+	ClientMsg.FireJumpRunWayEnterEscapeHudMode()
 end
 
 function RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger: Part)
@@ -5080,6 +5096,7 @@ function RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger: Part
 	Refs.startTriggerOutsideVolumeClock = nil
 	Refs.chestCarryReturnActive = false
 	ChaserClientManager.StopAndFadeChaser()
+	ClientMsg.FireJumpRunWayStopEscapeRedScreen()
 	NetMsg.FireRequestJumpRunwayLittleElfChestGrant()
 	ClientGameInfo.SetInJumpRunway(false)
 	task.delay(1, function()

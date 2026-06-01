@@ -36,6 +36,24 @@ local jumpRunWayShowRatingTierEvent: BindableEvent = bindableEventsFolder:FindFi
 local jumpRunWayShowMissEvent: BindableEvent = bindableEventsFolder:FindFirstChild("JumpRunWayShowMiss") :: BindableEvent
 local jumpRunWayShowNewRecordTipEvent: BindableEvent = bindableEventsFolder:FindFirstChild("JumpRunWayShowNewRecordTip") :: BindableEvent
 
+local function EnsureBindableEvent(eventName: string): BindableEvent
+	local existing = bindableEventsFolder:FindFirstChild(eventName)
+	if existing and existing:IsA("BindableEvent") then
+		return existing
+	end
+	local created = Instance.new("BindableEvent")
+	created.Name = eventName
+	created.Parent = bindableEventsFolder
+	return created
+end
+
+local jumpRunWayEnterEscapeHudModeEvent: BindableEvent =
+	EnsureBindableEvent("JumpRunWayEnterEscapeHudMode")
+local jumpRunWayStartEscapeRedScreenEvent: BindableEvent =
+	EnsureBindableEvent("JumpRunWayStartEscapeRedScreen")
+local jumpRunWayStopEscapeRedScreenEvent: BindableEvent =
+	EnsureBindableEvent("JumpRunWayStopEscapeRedScreen")
+
 --关闭窗口事件
 function ClientMsg.FireCloseWindow(windowName: string)
 	closeWindowEvent:Fire(windowName)
@@ -333,6 +351,33 @@ function ClientMsg.ConnectJumpRunWayShowNewRecordTip(callback: () -> ())
 	if jumpRunWayShowNewRecordTipEvent then
 		jumpRunWayShowNewRecordTipEvent.Event:Connect(callback)
 	end
+end
+
+-- 跑道逃生：隐藏 HUD，保留窗口实例
+function ClientMsg.FireJumpRunWayEnterEscapeHudMode()
+	jumpRunWayEnterEscapeHudModeEvent:Fire()
+end
+
+function ClientMsg.ConnectJumpRunWayEnterEscapeHudMode(callback: () -> ())
+	jumpRunWayEnterEscapeHudModeEvent.Event:Connect(callback)
+end
+
+-- 跑道逃生：镜头序列结束后启动红屏闪烁
+function ClientMsg.FireJumpRunWayStartEscapeRedScreen()
+	jumpRunWayStartEscapeRedScreenEvent:Fire()
+end
+
+function ClientMsg.ConnectJumpRunWayStartEscapeRedScreen(callback: () -> ())
+	jumpRunWayStartEscapeRedScreenEvent.Event:Connect(callback)
+end
+
+-- 跑道逃生：停止红屏并恢复 HUD
+function ClientMsg.FireJumpRunWayStopEscapeRedScreen()
+	jumpRunWayStopEscapeRedScreenEvent:Fire()
+end
+
+function ClientMsg.ConnectJumpRunWayStopEscapeRedScreen(callback: () -> ())
+	jumpRunWayStopEscapeRedScreenEvent.Event:Connect(callback)
 end
 
 return ClientMsg

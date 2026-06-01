@@ -13,6 +13,8 @@ local coreClientScripts = core:WaitForChild("Scripts"):WaitForChild("Client")
 local GameConfig = require(sharedScripts:WaitForChild("GameConfig"))
 local GameTexts = require(sharedScripts:WaitForChild("GameTexts"))
 local ClientMsg = require(clientScripts:WaitForChild("ClientMsg"))
+local ClientGameInfo = require(clientScripts:WaitForChild("ClientGameInfo"))
+local ChaserClientManager = require(clientScripts:WaitForChild("JumpRunway"):WaitForChild("ChaserClientManager"))
 local TranslationTool = require(coreClientScripts:WaitForChild("TranslationTool"))
 local UIAdapter = require(coreClientScripts:WaitForChild("UIAdapter"))
 
@@ -49,6 +51,188 @@ local activeColorConn: RBXScriptConnection? = nil
 local activeScaleTween: Tween? = nil
 local activeFadeTween: Tween? = nil
 local activeTipTweenList: { Tween } = {}
+
+local redScreen: ImageLabel? = nil
+local escapeHudVisibleSnapshot: { [GuiObject]: boolean } = {}
+local escapeRedScreenToken = 0
+local escapeRedScreenConn: RBXScriptConnection? = nil
+local escapeHudModeActive = false
+local escapePulsePhase = 0
+local escapeSmoothedPeriod = 2
+local escapeSmoothedTransMin = 0
+local escapeSmoothedTransMax = 0.6
+-- 周期/透明度区间平滑系数（越大跟得越紧）
+local EscapeRedScreenParamSmoothSpeed = 6
+
+local function ResolveRedScreen()
+	local screen = thisFrame:FindFirstChild("RedScreen")
+	if screen == nil or not screen:IsA("ImageLabel") then
+		warn("[JumpRunWayFrame] RedScreen missing or not ImageLabel")
+		return
+	end
+	redScreen = screen :: ImageLabel
+	redScreen.Visible = false
+	redScreen.ImageTransparency = 1
+end
+
+local function CaptureEscapeHudVisibility()
+	table.clear(escapeHudVisibleSnapshot)
+	for _, child in thisFrame:GetChildren() do
+		if child:IsA("GuiObject") and child ~= redScreen then
+			escapeHudVisibleSnapshot[child] = child.Visible
+		end
+	end
+end
+
+local function SetEscapeHudMode(enabled: boolean)
+	if enabled then
+		if escapeHudModeActive then
+			return
+		end
+		escapeHudModeActive = true
+		CaptureEscapeHudVisibility()
+		for guiObject, _ in escapeHudVisibleSnapshot do
+			guiObject.Visible = false
+		end
+		if redScreen ~= nil then
+			redScreen.Visible = false
+			redScreen.ImageTransparency = 1
+		end
+	else
+		if not escapeHudModeActive then
+			return
+		end
+		escapeHudModeActive = false
+		for guiObject, wasVisible in escapeHudVisibleSnapshot do
+			if guiObject.Parent ~= nil then
+				guiObject.Visible = wasVisible
+			end
+		end
+		table.clear(escapeHudVisibleSnapshot)
+	end
+end
+
+local function ResolveEscapeRedScreenDistanceStuds(): number
+	local distance = ChaserClientManager.GetHorizontalDistanceToLocalPlayer()
+	if distance == nil or distance ~= distance then
+		return cfg.ESCAPE_RED_SCREEN_FAR_DISTANCE_STUDS
+	end
+	return distance
+end
+
+local function ComputeEscapeRedScreenDistanceT(distanceStuds: number): number
+	local nearDist = cfg.ESCAPE_RED_SCREEN_NEAR_DISTANCE_STUDS
+	local farDist = cfg.ESCAPE_RED_SCREEN_FAR_DISTANCE_STUDS
+	if typeof(nearDist) ~= "number" or nearDist ~= nearDist then
+		nearDist = 50
+	end
+	if typeof(farDist) ~= "number" or farDist ~= farDist or farDist <= nearDist then
+		farDist = nearDist + 1
+	end
+	return math.clamp((distanceStuds - nearDist) / (farDist - nearDist), 0, 1)
+end
+
+local function ResolveEscapeRedScreenNumber(value: any, fallback: number): number
+	if typeof(value) ~= "number" or value ~= value then
+		return fallback
+	end
+	return value
+end
+
+-- 近档：周期 PERIOD_NEAR，透明度在 [MIN_NEAR, MAX_NEAR] 间振荡；远档：周期 PERIOD_FAR，[MIN_FAR, MAX_FAR]
+local function ComputeEscapeRedScreenTargets(distanceStuds: number): (number, number, number)
+	local t = ComputeEscapeRedScreenDistanceT(distanceStuds)
+
+	local periodNear = ResolveEscapeRedScreenNumber(cfg.ESCAPE_RED_SCREEN_PULSE_PERIOD_NEAR_SEC, 1)
+	local periodFar = ResolveEscapeRedScreenNumber(cfg.ESCAPE_RED_SCREEN_PULSE_PERIOD_FAR_SEC, 2)
+	if periodNear <= 0 then
+		periodNear = 1
+	end
+	if periodFar <= 0 then
+		periodFar = 2
+	end
+	local period = periodNear + (periodFar - periodNear) * t
+
+	local transMinNear = ResolveEscapeRedScreenNumber(cfg.ESCAPE_RED_SCREEN_PULSE_TRANSPARENCY_MIN_NEAR, 0)
+	local transMaxNear = ResolveEscapeRedScreenNumber(cfg.ESCAPE_RED_SCREEN_PULSE_TRANSPARENCY_MAX_NEAR, 0.6)
+	local transMinFar = ResolveEscapeRedScreenNumber(cfg.ESCAPE_RED_SCREEN_PULSE_TRANSPARENCY_MIN_FAR, 0.6)
+	local transMaxFar = ResolveEscapeRedScreenNumber(cfg.ESCAPE_RED_SCREEN_PULSE_TRANSPARENCY_MAX_FAR, 1)
+
+	local transMin = transMinNear + (transMinFar - transMinNear) * t
+	local transMax = transMaxNear + (transMaxFar - transMaxNear) * t
+	if transMin > transMax then
+		transMin, transMax = transMax, transMin
+	end
+
+	return period, math.clamp(transMin, 0, 1), math.clamp(transMax, 0, 1)
+end
+
+local function ResetEscapeRedScreenPulseState(distanceStuds: number)
+	local period, transMin, transMax = ComputeEscapeRedScreenTargets(distanceStuds)
+	escapePulsePhase = 0
+	escapeSmoothedPeriod = period
+	escapeSmoothedTransMin = transMin
+	escapeSmoothedTransMax = transMax
+end
+
+local function UpdateEscapeRedScreenTransparency(distanceStuds: number, dt: number): number
+	local targetPeriod, targetTransMin, targetTransMax = ComputeEscapeRedScreenTargets(distanceStuds)
+	local smoothAlpha = 1 - math.exp(-math.max(0, dt) * EscapeRedScreenParamSmoothSpeed)
+	escapeSmoothedPeriod += (targetPeriod - escapeSmoothedPeriod) * smoothAlpha
+	escapeSmoothedTransMin += (targetTransMin - escapeSmoothedTransMin) * smoothAlpha
+	escapeSmoothedTransMax += (targetTransMax - escapeSmoothedTransMax) * smoothAlpha
+
+	local period = math.max(escapeSmoothedPeriod, 0.05)
+	escapePulsePhase += dt * (math.pi * 2 / period)
+	local wave = (math.sin(escapePulsePhase) + 1) * 0.5
+	local span = escapeSmoothedTransMax - escapeSmoothedTransMin
+	return math.clamp(escapeSmoothedTransMin + span * wave, 0, 1)
+end
+
+local function DisconnectEscapeRedScreen()
+	escapeRedScreenToken += 1
+	if escapeRedScreenConn then
+		escapeRedScreenConn:Disconnect()
+		escapeRedScreenConn = nil
+	end
+end
+
+local function StopEscapeRedScreen()
+	DisconnectEscapeRedScreen()
+	if redScreen ~= nil then
+		redScreen.Visible = false
+		redScreen.ImageTransparency = 1
+	end
+	SetEscapeHudMode(false)
+end
+
+local function StartEscapeRedScreen()
+	if redScreen == nil then
+		return
+	end
+	if cfg.ESCAPE_RED_SCREEN_ENABLED ~= true then
+		return
+	end
+	if not ClientGameInfo.IsInJumpRunwayEscapePhase() then
+		return
+	end
+	DisconnectEscapeRedScreen()
+	local myToken = escapeRedScreenToken
+	local startDistance = ResolveEscapeRedScreenDistanceStuds()
+	ResetEscapeRedScreenPulseState(startDistance)
+	redScreen.Visible = true
+	escapeRedScreenConn = runService.RenderStepped:Connect(function(dt: number)
+		if myToken ~= escapeRedScreenToken then
+			return
+		end
+		if not ClientGameInfo.IsInJumpRunwayEscapePhase() then
+			StopEscapeRedScreen()
+			return
+		end
+		local distanceStuds = ResolveEscapeRedScreenDistanceStuds()
+		redScreen.ImageTransparency = UpdateEscapeRedScreenTransparency(distanceStuds, dt)
+	end)
+end
 
 local function ResolveFuelSizeBar()
 	local bg = thisFrame:FindFirstChild("FuelSizeBarBg")
@@ -391,6 +575,7 @@ local function OnCloseWindow(closeWindowId: string)
 	if closeWindowId ~= windowId then
 		return
 	end
+	StopEscapeRedScreen()
 	CancelRatingPresentationOnly()
 	CancelTipPresentationOnly()
 	if activeRatingText then
@@ -404,11 +589,17 @@ end
 ResolveFuelSizeBar()
 ResolveDistanceValue()
 ResolveTipText()
+ResolveRedScreen()
 
 ClientMsg.ConnectJumpRunWayRefreshStats(RefreshRunwayStats)
 ClientMsg.ConnectJumpRunWayShowRatingTier(ShowRatingTier)
 ClientMsg.ConnectJumpRunWayShowMiss(ShowMiss)
 ClientMsg.ConnectJumpRunWayShowNewRecordTip(ShowNewRecordTip)
+ClientMsg.ConnectJumpRunWayEnterEscapeHudMode(function()
+	SetEscapeHudMode(true)
+end)
+ClientMsg.ConnectJumpRunWayStartEscapeRedScreen(StartEscapeRedScreen)
+ClientMsg.ConnectJumpRunWayStopEscapeRedScreen(StopEscapeRedScreen)
 ClientMsg.ConnectCloseWindow(OnCloseWindow)
 
 UIAdapter.AddAdaptiveFrame(thisFrame, UIAdapter.AdaptiveType.FullScreen)

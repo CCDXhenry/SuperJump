@@ -153,12 +153,24 @@ local function PlayReleaseTransition(
 	restoreCameraType: Enum.CameraType?,
 	restoreSubject: Instance?,
 	restoreFov: number?,
-	getCharacterParts: () -> (Model?, Humanoid?, BasePart?)
+	getCharacterParts: () -> (Model?, Humanoid?, BasePart?),
+	onComplete: (() -> ())?
 )
 	if not PlayCameraTransition(camera, transitionToken, releaseDuration, startCFrame, targetCFrame, startFov, targetFov) then
 		return
 	end
 	RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+	if onComplete ~= nil then
+		onComplete()
+	end
+end
+
+local function InvokeOnCompleteOnce(onComplete: (() -> ())?, invoked: { boolean })
+	if onComplete == nil or invoked[1] then
+		return
+	end
+	invoked[1] = true
+	onComplete()
 end
 
 function RunwayCameraController.CalculateTargets(hrp: BasePart, runwayForward: Vector3, cfg: any, normalizeForward: (Vector3) -> Vector3): (Vector3, Vector3)
@@ -247,7 +259,8 @@ function RunwayCameraController.Disable(
 	getCharacterParts: () -> (Model?, Humanoid?, BasePart?),
 	releaseForward: Vector3?,
 	cfg: any?,
-	normalizeForward: ((Vector3) -> Vector3)?
+	normalizeForward: ((Vector3) -> Vector3)?,
+	onFocusSequenceComplete: (() -> ())?
 )
 	state.smoothedCameraPosition = nil
 	state.smoothedCameraLookAt = nil
@@ -263,6 +276,7 @@ function RunwayCameraController.Disable(
 		local restoreSubject = state.cameraSubjectBeforeRunway
 		local restoreFov = state.cameraFovBeforeRunway
 		local releaseDuration = ResolveReleaseTransitionDuration(cfg)
+		local completeInvoked = { false }
 		if releaseForward ~= nil and cfg ~= nil and normalizeForward ~= nil then
 			local _character, _humanoid, hrp = getCharacterParts()
 			if hrp ~= nil and releaseDuration > 0 then
@@ -272,29 +286,36 @@ function RunwayCameraController.Disable(
 				local startFov = camera.FieldOfView
 				local targetFov = restoreFov or startFov
 				camera.CameraType = Enum.CameraType.Scriptable
-				task.spawn(
-					PlayReleaseTransition,
-					camera,
-					transitionToken,
-					releaseDuration,
-					startCFrame,
-					targetCFrame,
-					startFov,
-					targetFov,
-					restoreCameraType,
-					restoreSubject,
-					restoreFov,
-					getCharacterParts
-				)
+				task.spawn(function()
+					PlayReleaseTransition(
+						camera,
+						transitionToken,
+						releaseDuration,
+						startCFrame,
+						targetCFrame,
+						startFov,
+						targetFov,
+						restoreCameraType,
+						restoreSubject,
+						restoreFov,
+						getCharacterParts,
+						function()
+							InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
+						end
+					)
+				end)
 			elseif hrp ~= nil then
 				local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(hrp, releaseForward, cfg, normalizeForward)
 				camera.CFrame = CFrame.lookAt(targetPosition, targetLookAt, Vector3.yAxis)
 				RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+				InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
 			else
 				RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+				InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
 			end
 		else
 			RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+			InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
 		end
 	end
 	state.cameraTypeBeforeRunway = nil
@@ -308,10 +329,18 @@ function RunwayCameraController.FocusChaserThenDisable(
 	chaser: Model?,
 	releaseForward: Vector3,
 	cfg: any,
-	normalizeForward: (Vector3) -> Vector3
+	normalizeForward: (Vector3) -> Vector3,
+	onFocusSequenceComplete: (() -> ())?
 )
 	if chaser == nil or chaser.Parent == nil then
-		RunwayCameraController.Disable(workspaceRef, getCharacterParts, releaseForward, cfg, normalizeForward)
+		RunwayCameraController.Disable(
+			workspaceRef,
+			getCharacterParts,
+			releaseForward,
+			cfg,
+			normalizeForward,
+			onFocusSequenceComplete
+		)
 		return
 	end
 	state.smoothedCameraPosition = nil
@@ -337,6 +366,7 @@ function RunwayCameraController.FocusChaserThenDisable(
 	local startCFrame = camera.CFrame
 	local startFov = camera.FieldOfView
 	camera.CameraType = Enum.CameraType.Scriptable
+	local completeInvoked = { false }
 	task.spawn(function()
 		if focusDuration > 0 then
 			if not PlayCameraTransition(camera, transitionToken, focusDuration, startCFrame, focusCFrame, startFov, cfg.RUNWAY_CAMERA_FOV) then
@@ -371,15 +401,20 @@ function RunwayCameraController.FocusChaserThenDisable(
 					restoreCameraType,
 					restoreSubject,
 					restoreFov,
-					getCharacterParts
+					getCharacterParts,
+					function()
+						InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
+					end
 				)
 			else
 				camera.CFrame = targetCFrame
 				camera.FieldOfView = targetFov
 				RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+				InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
 			end
 		else
 			RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+			InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
 		end
 	end)
 	state.cameraTypeBeforeRunway = nil

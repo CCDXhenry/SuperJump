@@ -281,6 +281,7 @@ local function RefreshUpgradeValues()
 	local jetpackData = GameConfig.JetpackDataMap[tonumber(jetpackCurrentId)]
 	local maxFuelValue = if jetpackData then jetpackData.fuel else 0
 	local isRunwayMode = UIManager.IsWindowShowing(UIManager.WindowId.JumpRunWayFrame)
+		and not ClientGameInfo.IsInJumpRunwayEscapePhase()
 	if isRunwayMode then
 		local currentFuel = RunwaySession.GetCurrentFuel()
 		maxFuelText.Text = string.format("%.1fs/%.0fs", currentFuel, maxFuelValue)

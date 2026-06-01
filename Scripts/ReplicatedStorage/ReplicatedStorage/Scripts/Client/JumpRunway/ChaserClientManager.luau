@@ -535,6 +535,26 @@ function ChaserClientManager.StopAndFadeChaser()
 	end
 end
 
+function ChaserClientManager.GetHorizontalDistanceToLocalPlayer(): number?
+	if activeChaser == nil or activeChaser.Parent == nil then
+		return nil
+	end
+	local chaserHrp = activeChaser:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if chaserHrp == nil then
+		return nil
+	end
+	local character = localPlayer.Character
+	if character == nil then
+		return nil
+	end
+	local playerHrp = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if playerHrp == nil then
+		return nil
+	end
+	local delta = chaserHrp.Position - playerHrp.Position
+	return (delta * Vector3.new(1, 0, 1)).Magnitude
+end
+
 function ChaserClientManager.CleanupChaser()
 	-- 如果正在淡出中（stopped 但未 faded），不打断淡出，由 tween 回调自行销毁
 	if stopped and not faded then
