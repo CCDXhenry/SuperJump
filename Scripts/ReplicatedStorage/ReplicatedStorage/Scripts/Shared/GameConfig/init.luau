@@ -791,6 +791,8 @@ GameConfig.JumpRunwayDesigner = {
 	JUMP_POWER_EXERCISE_INTERVAL = 1,
 	-- 跑步机锻炼固定跑步动画速度（等效 WalkSpeed，用于 AdjustSpeed 计算）
 	EXERCISE_RUN_WALK_SPEED = 20,
+	-- JumpRunway 分阶段真实位移日志；用于公式校准，发布默认关闭
+	RUNWAY_DISTANCE_LOG_ENABLED = false,
 	-- 首跳前线前 AutoRun 沿轴速；↑ 起跳前冲更快
 	FIRST_TAKEOFF_AUTORUN_SPEED = 20,
 	-- max 到 min 的降速比例（相对本次起跳前最终减速完的速度）；↑ 段内减速幅度更大
@@ -947,7 +949,9 @@ GameConfig.ExerciseRunWalkSpeed = jumpRunwayDesigner.EXERCISE_RUN_WALK_SPEED -- 
 GameConfig.JumpRunway = {
 	-- —— 会话与诊断 ——
 	-- 开发诊断：为 true 时客户端显示调试 HUD、服务端节流打印状态；发布务必保持 false（零额外 GUI/打印开销）
-	DEBUG = true,
+	DEBUG = false,
+	-- 分阶段真实位移日志：独立于 DEBUG，用于公式校准
+	RUNWAY_DISTANCE_LOG_ENABLED = jumpRunwayDesigner.RUNWAY_DISTANCE_LOG_ENABLED,
 	N_TOTAL_JUMPS = jumpRunwayDesigner.N_TOTAL_JUMPS,
 	RUN_START_COOLDOWN = 0.45,
 

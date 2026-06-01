@@ -57,6 +57,18 @@ type ChestBounceMotion = {
 	totalDistance: number,
 	lastDistance: number,
 }
+type RunwayDistanceLogSegment = {
+	stageName: string,
+	startAlong: number,
+	endAlong: number,
+	deltaAlong: number,
+	startClock: number,
+	endClock: number,
+	duration: number,
+	takeoffCount: number,
+	ratingTier: number?,
+	extra: string?,
+}
 
 local localPlayer = players.LocalPlayer
 local cfg = GameConfig.JumpRunway
@@ -209,6 +221,14 @@ local Refs: {
 	slideEndFallbackWarnNextClock: number,
 	slideMotion: ScriptedSlideMotion?,
 	movementInputSinkBound: boolean,
+	distanceLogRunId: number,
+	distanceLogStageName: string?,
+	distanceLogStageStartAlong: number?,
+	distanceLogStageStartClock: number,
+	distanceLogStageStartTakeoffCount: number,
+	distanceLogStageStartRatingTier: number?,
+	distanceLogSegments: { RunwayDistanceLogSegment },
+	distanceLogSummaryPrinted: boolean,
 } = {
 	finalTakeoffForceFreefallUntilClock = 0,
 	initDone = false,
@@ -272,6 +292,14 @@ local Refs: {
 	slideEndFallbackWarnNextClock = 0,
 	slideMotion = nil,
 	movementInputSinkBound = false,
+	distanceLogRunId = 0,
+	distanceLogStageName = nil,
+	distanceLogStageStartAlong = nil,
+	distanceLogStageStartClock = 0,
+	distanceLogStageStartTakeoffCount = 0,
+	distanceLogStageStartRatingTier = nil,
+	distanceLogSegments = {},
+	distanceLogSummaryPrinted = false,
 }
 
 local localState: RunwayLocalState = RunwayStateStore.CreateDefault(Ph, SlideKindStandard)
@@ -393,6 +421,171 @@ local ComputeRunwayHorizontalAlongSpeed = RunwayPhysicsController.ComputeRunwayH
 
 function RunwaySession.CurrentAlongProgress(hrp: BasePart): number
 	return RunwayPhysicsController.CurrentAlongProgress(hrp, localState.runwayOrigin, localState.runwayForward, localState.alongBaseline)
+end
+
+function RunwaySession.IsDistanceLogEnabled(): boolean
+	return cfg.RUNWAY_DISTANCE_LOG_ENABLED == true
+end
+
+function RunwaySession.ResetDistanceLog()
+	Refs.distanceLogStageName = nil
+	Refs.distanceLogStageStartAlong = nil
+	Refs.distanceLogStageStartClock = 0
+	Refs.distanceLogStageStartTakeoffCount = 0
+	Refs.distanceLogStageStartRatingTier = nil
+	table.clear(Refs.distanceLogSegments)
+	Refs.distanceLogSummaryPrinted = false
+	if not RunwaySession.IsDistanceLogEnabled() then
+		return
+	end
+	Refs.distanceLogRunId += 1
+end
+
+function RunwaySession.ResolveDistanceLogAlong(hrpOpt: BasePart?): number?
+	local hrp = hrpOpt
+	if hrp == nil then
+		local _, _, hrpNow = RunwaySession.GetCharacterParts()
+		hrp = hrpNow
+	end
+	if hrp == nil then
+		return nil
+	end
+	return RunwaySession.CurrentAlongProgress(hrp)
+end
+
+function RunwaySession.StartDistanceLogStage(stageName: string, along: number, nowClock: number)
+	if not RunwaySession.IsDistanceLogEnabled() then
+		return
+	end
+	Refs.distanceLogStageName = stageName
+	Refs.distanceLogStageStartAlong = along
+	Refs.distanceLogStageStartClock = nowClock
+	Refs.distanceLogStageStartTakeoffCount = localState.takeoffCount
+	Refs.distanceLogStageStartRatingTier = localState.ratingTier
+	print(
+		string.format(
+			"[JumpRunwayDistance] run=%d stage_start stage=%s along=%.2f takeoff=%d jumpPower=%.2f",
+			Refs.distanceLogRunId,
+			stageName,
+			along,
+			localState.takeoffCount,
+			GetJumpPowerBaseSpeed()
+		)
+	)
+end
+
+function RunwaySession.CloseDistanceLogStage(reason: string, alongOpt: number?, nowClock: number, extra: string?)
+	if not RunwaySession.IsDistanceLogEnabled() then
+		return
+	end
+	local stageName = Refs.distanceLogStageName
+	local startAlong = Refs.distanceLogStageStartAlong
+	if stageName == nil or startAlong == nil then
+		return
+	end
+	local endAlong = alongOpt or startAlong
+	local startClock = Refs.distanceLogStageStartClock
+	local duration = math.max(0, nowClock - startClock)
+	local deltaAlong = endAlong - startAlong
+	local segment: RunwayDistanceLogSegment = {
+		stageName = stageName,
+		startAlong = startAlong,
+		endAlong = endAlong,
+		deltaAlong = deltaAlong,
+		startClock = startClock,
+		endClock = nowClock,
+		duration = duration,
+		takeoffCount = Refs.distanceLogStageStartTakeoffCount,
+		ratingTier = Refs.distanceLogStageStartRatingTier,
+		extra = extra,
+	}
+	table.insert(Refs.distanceLogSegments, segment)
+	print(
+		string.format(
+			"[JumpRunwayDistance] run=%d stage_end reason=%s stage=%s start=%.2f end=%.2f delta=%.2f duration=%.2f takeoff=%d rating=%s extra=%s",
+			Refs.distanceLogRunId,
+			reason,
+			stageName,
+			startAlong,
+			endAlong,
+			deltaAlong,
+			duration,
+			segment.takeoffCount,
+			tostring(segment.ratingTier),
+			extra or ""
+		)
+	)
+end
+
+function RunwaySession.TransitionDistanceLogStage(stageName: string, reason: string, hrpOpt: BasePart?, extra: string?)
+	if not RunwaySession.IsDistanceLogEnabled() then
+		return
+	end
+	local nowClock = os.clock()
+	local along = RunwaySession.ResolveDistanceLogAlong(hrpOpt)
+	if along == nil then
+		return
+	end
+	if Refs.distanceLogStageName ~= nil then
+		RunwaySession.CloseDistanceLogStage(reason, along, nowClock, extra)
+	end
+	RunwaySession.StartDistanceLogStage(stageName, along, nowClock)
+end
+
+function RunwaySession.PrintDistanceLogSummary(reason: string, hrpOpt: BasePart?)
+	if not RunwaySession.IsDistanceLogEnabled() then
+		return
+	end
+	if Refs.distanceLogSummaryPrinted then
+		return
+	end
+	if Refs.distanceLogStageName == nil and #Refs.distanceLogSegments == 0 then
+		return
+	end
+	local nowClock = os.clock()
+	local finalAlong = RunwaySession.ResolveDistanceLogAlong(hrpOpt)
+	if Refs.distanceLogStageName ~= nil then
+		RunwaySession.CloseDistanceLogStage(reason, finalAlong, nowClock, "summary")
+		Refs.distanceLogStageName = nil
+		Refs.distanceLogStageStartAlong = nil
+		Refs.distanceLogStageStartRatingTier = nil
+	end
+	Refs.distanceLogSummaryPrinted = true
+	local positiveTotal = 0
+	local signedTotal = 0
+	for _, segment in Refs.distanceLogSegments do
+		signedTotal += segment.deltaAlong
+		positiveTotal += math.max(0, segment.deltaAlong)
+	end
+	print(
+		string.format(
+			"[JumpRunwayDistance] run=%d summary reason=%s jumpPower=%.2f finalAlong=%s signedTotal=%.2f positiveTotal=%.2f segmentCount=%d",
+			Refs.distanceLogRunId,
+			reason,
+			GetJumpPowerBaseSpeed(),
+			if finalAlong ~= nil then string.format("%.2f", finalAlong) else "nil",
+			signedTotal,
+			positiveTotal,
+			#Refs.distanceLogSegments
+		)
+	)
+	for index, segment in Refs.distanceLogSegments do
+		print(
+			string.format(
+				"[JumpRunwayDistance] run=%d summary_segment index=%d stage=%s start=%.2f end=%.2f delta=%.2f duration=%.2f takeoff=%d rating=%s extra=%s",
+				Refs.distanceLogRunId,
+				index,
+				segment.stageName,
+				segment.startAlong,
+				segment.endAlong,
+				segment.deltaAlong,
+				segment.duration,
+				segment.takeoffCount,
+				tostring(segment.ratingTier),
+				segment.extra or ""
+			)
+		)
+	end
 end
 
 function RunwaySession.ResolveBeginLineAlongFromOrigin(forward: Vector3, origin: Vector3): number?
@@ -1789,6 +1982,12 @@ function RunwaySession.StartFinalLandPronePhase(nowClock: number, hrp: BasePart?
 		end
 		local alongSpdEnter = RunwaySession.ResolveFinalLandAlongSpeedForPhaseB()
 		localState.finalLandProneSlideAlongSpeedStart = alongSpdEnter
+		RunwaySession.TransitionDistanceLogStage(
+			"FinalLandB_ProneSlide",
+			"enter_final_land_phase_b",
+			hrp,
+			string.format("alongSpeedStart=%.2f popCount=%d", alongSpdEnter, localState.finalLandPhaseAPopCount)
+		)
 		local landingVyForSlide = localState.finalLandCachedLandingVy
 		if typeof(landingVyForSlide) ~= "number" or landingVyForSlide ~= landingVyForSlide then
 			landingVyForSlide = hrp.AssemblyLinearVelocity.Y
@@ -2053,6 +2252,13 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 	localState.slideStartClock = nowClock
 	RunwaySession.ClearScriptedSlideMotion()
 	RunwaySession.ClearChestBounceMotion()
+	if slideKind == SlideKindFinalLanding then
+		RunwaySession.TransitionDistanceLogStage("FinalLandA_Tumble", "enter_final_landing_slide", nil, "phaseBefore=" .. tostring(phaseBefore))
+	elseif slideKind == SlideKindMiss then
+		RunwaySession.TransitionDistanceLogStage("MissProneSlide", "enter_miss_slide", nil, "phaseBefore=" .. tostring(phaseBefore))
+	else
+		RunwaySession.TransitionDistanceLogStage("StandardSlide", "enter_standard_slide", nil, "phaseBefore=" .. tostring(phaseBefore))
+	end
 	-- 进入终局 Slide 时清除冲刺状态，避免 Physics 状态下的残留干扰
 	localState.dashHeld = false
 	if slideKind == SlideKindFinalLanding then
@@ -3958,6 +4164,7 @@ function RunwaySession.ResetLocalRunToIdle()
 	ClientMsg.FireJumpRunWayStopEscapeRedScreen()
 	local _, humanoid, hrp = RunwaySession.GetCharacterParts()
 	ClientGameInfo.SetInJumpRunway(false)
+	RunwaySession.PrintDistanceLogSummary("reset_to_idle", hrp)
 	-- 先同步清理资源和状态（避免异步延迟导致新一局启动后资源混乱）
 	RunwaySession.StopJumpWindowWalkAnimation()
 	RunwaySession.DestroyJumpRunwayRocketBackpack()
@@ -5309,6 +5516,7 @@ function RunwaySession.TryForceReportFinalAfterChestExit()
 		clientPhase = Ph.RunEnded,
 	})
 	localState.finalSent = true
+	RunwaySession.PrintDistanceLogSummary("force_final_report", hrpFinal)
 end
 
 function RunwaySession.ApplyDeferredTerminalServerPayloadAfterChest()
@@ -5360,6 +5568,7 @@ function RunwaySession.FinishLittleElfChestRunwayExit()
 		RunwaySession.ApplyExpectedWalkSpeedAfterRunway(hDelay)
 		RunwaySession.SlideTraceScheduleDestroyAfterRunwayEnd()
 	end
+	RunwaySession.PrintDistanceLogSummary("chest_exit", hrpDelay)
 	localState.phase = Ph.RunEnded
 	localState.groundedStableTime = 0
 	if localState.controlsDisabled then
@@ -5402,6 +5611,12 @@ function RunwaySession.ProcessLittleElfChestHit(chestModel: Model, fwdH: Vector3
 	if not RunwaySession.IsPlayerNearLittleElfChest(hrpT, chestModel, fwdH) then
 		return
 	end
+	RunwaySession.TransitionDistanceLogStage(
+		"ChestBounce",
+		"little_elf_chest_hit",
+		hrpT,
+		string.format("chestConfigId=%d", chestConfigId)
+	)
 
 	local slideFwdForOpen = Refs.chestSlideFwdH or fwdH
 	if slideFwdForOpen.Magnitude < 1e-4 then
@@ -6049,6 +6264,20 @@ function RunwaySession.JumpApplyTakeoff(
 	-- 竖直速度 = 水平速度基准对应比例 + bonus 对应比例
 	local bonusPart = forwardSpd - horizontalBaseSpeed
 	vy += bonusPart * cfg.JUMP_VERTICAL_RATIO
+	local stageName = if impulseSeg >= cfg.N_TOTAL_JUMPS then "Jump" .. tostring(impulseSeg) .. "_FinalAir" else "Jump" .. tostring(impulseSeg) .. "_Air"
+	RunwaySession.TransitionDistanceLogStage(
+		stageName,
+		"takeoff",
+		hrp,
+		string.format(
+			"jumpIndex=%d rating=%s forwardSpd=%.2f vy=%.2f bonusPart=%.2f",
+			impulseSeg,
+			tostring(localState.ratingTier),
+			forwardSpd,
+			vy,
+			bonusPart
+		)
+	)
 	RunwaySession.CacheFinalLandLandingAlongValue(forwardSpd)
 	localState.jumpBoostVy = vy
 	localState.jumpBoostUntilClock = nowClock + cfg.RUNWAY_JUMP_BOOST_HOLD_SEC
@@ -6348,6 +6577,8 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	Refs.finalPitchSmoothedExtraDeg = 0
 	localState.lastSampleSendClock = 0
 	localState.lastSampleAlong = scoreBaselineAlong
+	RunwaySession.ResetDistanceLog()
+	RunwaySession.StartDistanceLogStage("AutoRun", RunwaySession.CurrentAlongProgress(hrp), nowClock)
 	RunwayNetBridge.FireStartSession(NetMsg, Kind, forward, origin, scoreBaselineAlong)
 	localState.lastReportedDashHeld = localState.dashHeld
 	RunwaySession.ApplyRunwayHumanoidJumpState(humanoid, true)
