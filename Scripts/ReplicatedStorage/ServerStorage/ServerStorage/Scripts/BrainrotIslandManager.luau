@@ -951,6 +951,10 @@ function BrainrotIslandManager.StartCarryingBrainrot(player: Player, brainrot: I
 	StartCarryingBrainrot(player, brainrot)
 end
 
+function BrainrotIslandManager.TryConvertCarryingToQueue(player: Player)
+	ConvertCarryingToQueue(player)
+end
+
 BrainrotIslandManager.SetupBrainrotInteraction = SetupBrainrotInteraction
 
 -- 注入引用给携带管理器，避免携带管理器在运行时再 require 引发循环依赖

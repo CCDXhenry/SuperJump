@@ -43,6 +43,8 @@ local requestSetBGMVolumeEvent: RemoteEvent = remoteEventsFolder:FindFirstChild(
 local requestSetSoundEffectVolumeEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestSetSoundEffectVolume") :: RemoteEvent
 local requestSetVibrationsOnOffStateEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestSetVibrationsOnOffState") :: RemoteEvent
 local requestSetDecelerationOnEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestSetDecelerationOn") :: RemoteEvent
+local requestTeleportToHomeEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestTeleportToHome") :: RemoteEvent
+local requestTeleportToShopEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestTeleportToShop") :: RemoteEvent
 local notifyPlayerInfoInitEvent = remoteEventsFolder:FindFirstChild("NotifyPlayerInfoInit") :: RemoteEvent
 local notifyPlayersOtherPlayerInfoInitEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("NotifyPlayersOtherPlayerInfoInit") :: RemoteEvent
 local notifyPlayerAcquiredGamePassEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("NotifyPlayerAcquiredGamePass") :: RemoteEvent
@@ -169,6 +171,24 @@ end
 
 function NetMsg.ConnectRequestSetDecelerationOn(callback: (player: Player, decelerationOn: boolean) -> ())
 	requestSetDecelerationOnEvent.OnServerEvent:Connect(callback)
+end
+
+-- 客户端请求传送到 Home TeleportPoint
+function NetMsg.FireRequestTeleportToHome()
+	requestTeleportToHomeEvent:FireServer()
+end
+
+function NetMsg.ConnectRequestTeleportToHome(callback: (player: Player) -> ())
+	requestTeleportToHomeEvent.OnServerEvent:Connect(callback)
+end
+
+-- 客户端请求传送到 Shop TeleportPoint
+function NetMsg.FireRequestTeleportToShop()
+	requestTeleportToShopEvent:FireServer()
+end
+
+function NetMsg.ConnectRequestTeleportToShop(callback: (player: Player) -> ())
+	requestTeleportToShopEvent.OnServerEvent:Connect(callback)
 end
 
 --通知客户端玩家信息初始化完成

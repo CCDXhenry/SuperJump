@@ -15,6 +15,7 @@ local GameConfig = require(SharedScripts:WaitForChild("GameConfig"))
 local GameTexts = require(SharedScripts:WaitForChild("GameTexts"))
 
 local ShopClientManager = {}
+local SHOP_MODEL_FOLDER_NAME = "ShopModel"
 local SHOP_MODEL_NAMES = {"SellShop", "UpgradeShop" , "JetpackShop" , "ExEquipShop"}
 local SHOP_WAIT_TIMEOUT = 10
 local PROMPT_BOUND_ATTR = "ShopPromptWindowBound"
@@ -207,9 +208,15 @@ local function BindPromptByWindowId(shopModel: Model)
 end
 
 local function InitShopModel(modelName: string)
-	local shopModelObj = Workspace:WaitForChild(modelName, SHOP_WAIT_TIMEOUT)
+	local shopModelFolder = Workspace:WaitForChild(SHOP_MODEL_FOLDER_NAME, SHOP_WAIT_TIMEOUT)
+	if not shopModelFolder or not shopModelFolder:IsA("Folder") then
+		warn(`[ShopClientManager] Workspace.{SHOP_MODEL_FOLDER_NAME} not found or not a Folder`)
+		return
+	end
+
+	local shopModelObj = shopModelFolder:WaitForChild(modelName, SHOP_WAIT_TIMEOUT)
 	if not shopModelObj or not shopModelObj:IsA("Model") then
-		warn(`[ShopClientManager] Workspace.{modelName} not found or not a Model`)
+		warn(`[ShopClientManager] Workspace.{SHOP_MODEL_FOLDER_NAME}.{modelName} not found or not a Model`)
 		return
 	end
 	local shopModel = shopModelObj :: Model

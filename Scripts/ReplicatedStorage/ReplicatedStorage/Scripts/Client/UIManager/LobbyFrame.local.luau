@@ -47,6 +47,8 @@ local rebirthButton: GuiButton? = if rebirthFrame then (rebirthFrame:FindFirstCh
 local rebirthNumberText: TextLabel? = if rebirthFrame then (rebirthFrame:FindFirstChild("NumberText") :: TextLabel?) else nil
 local storeBundleEntryFrame: Frame? = (lobbyFrame:FindFirstChild("StoreBundleFrame") or (if bottomButtonsFrame then bottomButtonsFrame:FindFirstChild("StoreBundleFrame") else nil)) :: Frame?
 local storeBundleButton: GuiButton? = if storeBundleEntryFrame then (storeBundleEntryFrame:FindFirstChild("Button") :: any) else nil
+local teleHomeButton: ImageButton? = lobbyFrame:FindFirstChild("TeleHomeButton") :: ImageButton?
+local teleShopButton: ImageButton? = lobbyFrame:FindFirstChild("TeleShopButton") :: ImageButton?
 
 local walkSpeedAddButton: GuiButton? = walkSpeedFrame:FindFirstChild("AddButton") :: any
 local maxFuelAddButton: GuiButton? = maxFuelFrame:FindFirstChild("AddButton") :: any
@@ -73,6 +75,20 @@ if rebirthRedPoint == nil and rebirthFrame then
 end
 if rebirthRedPoint == nil and rebirthFrame then
 	rebirthRedPoint = rebirthFrame:FindFirstChild("RedPointCircle") :: GuiObject?
+end
+
+local function IsInJumpRunwaySession(): boolean
+	return ClientGameInfo.IsInJumpRunway() or ClientGameInfo.IsInJumpRunwayEscapePhase()
+end
+
+local function RefreshTeleportButtonsVisible()
+	local visible = not IsInJumpRunwaySession()
+	if teleHomeButton then
+		teleHomeButton.Visible = visible
+	end
+	if teleShopButton then
+		teleShopButton.Visible = visible
+	end
 end
 
 local function IsRebirthRedPointConditionMet(): boolean
@@ -189,6 +205,24 @@ end
 if jetpackButton then
 	jetpackButton.Activated:Connect(function()
 		UIManager.OpenWindow(UIManager.WindowId.JetpackShop)
+	end)
+end
+
+if teleHomeButton then
+	teleHomeButton.Activated:Connect(function()
+		if IsInJumpRunwaySession() then
+			return
+		end
+		NetMsg.FireRequestTeleportToHome()
+	end)
+end
+
+if teleShopButton then
+	teleShopButton.Activated:Connect(function()
+		if IsInJumpRunwaySession() then
+			return
+		end
+		NetMsg.FireRequestTeleportToShop()
 	end)
 end
 
@@ -424,6 +458,9 @@ end)
 ClientMsg.ConnectLocalPlayerJetpackInventoryUpdate(function()
 	RefreshUpgradeValues()
 end)
+
+ClientMsg.ConnectCurrentGuideTypeChanged(RefreshTeleportButtonsVisible)
+RefreshTeleportButtonsVisible()
 
 -- 跑道模式中轮询实时燃料显示
 local runService: RunService = game:GetService("RunService")

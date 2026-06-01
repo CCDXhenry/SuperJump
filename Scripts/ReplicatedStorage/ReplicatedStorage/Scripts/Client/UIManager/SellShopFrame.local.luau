@@ -65,7 +65,8 @@ local LINE_TEXTS = {
 local player = game.Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
-local sellShopModel = Workspace:FindFirstChild("SellShop") :: Model?
+local sellShopModelFolder = Workspace:FindFirstChild("ShopModel")
+local sellShopModel = if sellShopModelFolder then sellShopModelFolder:FindFirstChild("SellShop") :: Model? else nil
 local rootPart = nil
 
 if sellShopModel then
