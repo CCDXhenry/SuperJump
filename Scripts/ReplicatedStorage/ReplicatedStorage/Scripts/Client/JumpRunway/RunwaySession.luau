@@ -4108,6 +4108,27 @@ local function MapWorldPosToBestDistanceWallSurfaceNorms(
 	return xNorm, yNorm
 end
 
+local function ShouldTickBestDistanceWall(): boolean
+	if Refs.bestDistanceWallModel == nil or Refs.bestDistanceWallPassed then
+		return false
+	end
+	return ClientGameInfo.IsInJumpRunway() or ClientGameInfo.IsInJumpRunwayEscapePhase()
+end
+
+function RunwaySession.TickBestDistanceWallIfNeeded()
+	if not ShouldTickBestDistanceWall() then
+		return
+	end
+	local _, _, hrp = RunwaySession.GetCharacterParts()
+	if hrp == nil then
+		return
+	end
+	RunwaySession.UpdateBestDistanceWallText(hrp)
+	if not ClientGameInfo.IsInJumpRunwayEscapePhase() then
+		RunwaySession.UpdateBestDistanceWall(hrp)
+	end
+end
+
 function RunwaySession.UpdateBestDistanceWallText(hrp: BasePart)
 	if Refs.bestDistanceWallPassed then
 		return
@@ -5659,7 +5680,6 @@ function RunwaySession.ProcessLittleElfChestHit(chestModel: Model, fwdH: Vector3
 	end)
 
 	local chestHitDistance = RunwaySession.CurrentAlongProgress(hrpT)
-	RunwaySession.DestroyBestDistanceWall()
 	ClientGameInfo.UpdateJumpRunwayBestDistance(chestHitDistance)
 	NetMsg.FireRequestJumpRunwayBestDistance(chestHitDistance)
 	NetMsg.FireRequestJumpRunwayLittleElfChestReward(chestConfigId)
@@ -5846,6 +5866,7 @@ end
 function RunwaySession.UpdateTick(dt: number)
 	local nowClock = os.clock()
 	RunwaySession.ProcessJumpWindowTimeout(nowClock)
+	RunwaySession.TickBestDistanceWallIfNeeded()
 	if not RunwaySession.IsRunwayActivePhase(localState.phase) then
 		if localState.controlsDisabled then
 			RunwaySession.SetControlsEnabled(true)
@@ -5868,8 +5889,6 @@ function RunwaySession.UpdateTick(dt: number)
 	RunwaySession.PollBeginLineOverlapForJumpWindow()
 	RunwaySession.UpdateRunwayRingTransform(humanoid, hrp, dt)
 	RunwaySession.UpdateDistanceRecorder(humanoid, hrp)
-	RunwaySession.UpdateBestDistanceWallText(hrp)
-	RunwaySession.UpdateBestDistanceWall(hrp)
 	local phaseBeforeForwardBlocked = localState.phase
 	RunwaySession.ProcessRunwayForwardBlocked(character, humanoid, hrp, nowClock)
 	if phaseBeforeForwardBlocked ~= Ph.Slide and localState.phase == Ph.Slide then
