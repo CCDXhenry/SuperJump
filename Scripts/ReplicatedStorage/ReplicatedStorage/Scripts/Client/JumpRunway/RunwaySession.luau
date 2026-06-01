@@ -894,6 +894,12 @@ function RunwaySession.HudRefresh()
 		RunwaySession.HudDestroy()
 		return
 	end
+	if cfg.DEBUG ~= true then
+		RunwaySession.HudDestroy()
+		local _, _, hrp = RunwaySession.GetCharacterParts()
+		RunwaySession.RefreshJumpRunWayFrameStats(hrp)
+		return
+	end
 	RunwaySession.HudEnsure()
 	local _c, humanoid, hrp = RunwaySession.GetCharacterParts()
 	local dist = 0
