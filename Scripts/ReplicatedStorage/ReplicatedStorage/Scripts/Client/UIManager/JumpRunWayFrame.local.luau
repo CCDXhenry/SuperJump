@@ -39,6 +39,8 @@ local fuelMaskBaseSizeY: UDim? = nil
 local distanceLabel: TextLabel? = nil
 local distanceValue: TextLabel? = nil
 local tipText: TextLabel? = nil
+local tipTextBasePosition: UDim2? = nil
+local tipTextBaseRotation: number? = nil
 
 local presentationToken = 0
 local tipPresentationToken = 0
@@ -88,7 +90,30 @@ local function ResolveTipText()
 		return
 	end
 	tipText = tip :: TextLabel
+	tipTextBasePosition = tipText.Position
+	tipTextBaseRotation = tipText.Rotation
 	tipText.Visible = false
+end
+
+local function ResetTipTextPresentation()
+	if tipText == nil then
+		return
+	end
+	if tipTextBasePosition ~= nil then
+		tipText.Position = tipTextBasePosition
+	end
+	if tipTextBaseRotation ~= nil then
+		tipText.Rotation = tipTextBaseRotation
+	end
+	tipText.TextTransparency = 1
+	local stroke = tipText:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Transparency = 1
+	end
+	local scale = tipText:FindFirstChildOfClass("UIScale")
+	if scale then
+		scale.Scale = 1
+	end
 end
 
 local function DisconnectColorConn()
@@ -117,6 +142,7 @@ local function CancelTipPresentationOnly()
 		tween:Cancel()
 	end
 	table.clear(activeTipTweenList)
+	ResetTipTextPresentation()
 end
 
 local function ApplyRatingText(label: TextLabel, entry: RatingTextEntry)
@@ -180,8 +206,8 @@ local function ShowNewRecordTip()
 	CancelTipPresentationOnly()
 	local myToken = tipPresentationToken
 	local label = tipText :: TextLabel
-	local basePosition = label.Position
-	local baseRotation = label.Rotation
+	local basePosition = tipTextBasePosition or label.Position
+	local baseRotation = tipTextBaseRotation or label.Rotation
 	label.Visible = true
 	label.Position = basePosition + TipTextPopOffset
 	label.Rotation = baseRotation - 7
