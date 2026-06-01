@@ -5,6 +5,7 @@
 local RunwaySession = {}
 
 local players = game:GetService("Players")
+local contextActionService = game:GetService("ContextActionService")
 local userInputService = game:GetService("UserInputService")
 local runService = game:GetService("RunService")
 local workspace = game:GetService("Workspace")
@@ -99,6 +100,8 @@ local JumpWindowStumbleMinSpeedScale = 0.72
 local JumpWindowR15WalkAnimationId = "rbxassetid://507777826"
 local JumpWindowR6WalkAnimationId = "rbxassetid://180426354"
 local FinalLandPhaseALeftGroundMinVy = 1.5
+local RunwayMovementInputSinkActionName = "JumpRunwayMovementInputSink"
+local RunwayMovementInputSinkPriority = 10000
 
 local function ResolveConfigNumber(rawValue: any, fallbackValue: number): number
 	return if typeof(rawValue) == "number" and rawValue == rawValue then rawValue else fallbackValue
@@ -205,6 +208,7 @@ local Refs: {
 	finalLandPhaseADebugNextClock: number,
 	slideEndFallbackWarnNextClock: number,
 	slideMotion: ScriptedSlideMotion?,
+	movementInputSinkBound: boolean,
 } = {
 	finalTakeoffForceFreefallUntilClock = 0,
 	initDone = false,
@@ -267,6 +271,7 @@ local Refs: {
 	finalLandPhaseADebugNextClock = 0,
 	slideEndFallbackWarnNextClock = 0,
 	slideMotion = nil,
+	movementInputSinkBound = false,
 }
 
 local localState: RunwayLocalState = RunwayStateStore.CreateDefault(Ph, SlideKindStandard)
@@ -316,23 +321,63 @@ function RunwaySession.GetPlayerControls(): any
 	return controls
 end
 
-function RunwaySession.SetControlsEnabled(enabled: boolean)
-	local controls = RunwaySession.GetPlayerControls()
-	if controls == nil then
+function RunwaySession.OnRunwayMovementInputSink(
+	_actionName: string,
+	_inputState: Enum.UserInputState,
+	_inputObject: InputObject
+): Enum.ContextActionResult
+	if RunwaySession.IsRunwayActivePhase(localState.phase) then
+		return Enum.ContextActionResult.Sink
+	end
+	return Enum.ContextActionResult.Pass
+end
+
+function RunwaySession.SetMovementInputSinkEnabled(enabled: boolean)
+	if enabled == Refs.movementInputSinkBound then
 		return
 	end
+	if enabled then
+		contextActionService:BindActionAtPriority(
+			RunwayMovementInputSinkActionName,
+			RunwaySession.OnRunwayMovementInputSink,
+			false,
+			RunwayMovementInputSinkPriority,
+			Enum.KeyCode.W,
+			Enum.KeyCode.A,
+			Enum.KeyCode.S,
+			Enum.KeyCode.D,
+			Enum.KeyCode.Up,
+			Enum.KeyCode.Down,
+			Enum.KeyCode.Left,
+			Enum.KeyCode.Right,
+			Enum.KeyCode.Thumbstick1
+		)
+		Refs.movementInputSinkBound = true
+	else
+		contextActionService:UnbindAction(RunwayMovementInputSinkActionName)
+		Refs.movementInputSinkBound = false
+	end
+end
+
+function RunwaySession.SetControlsEnabled(enabled: boolean)
+	RunwaySession.SetMovementInputSinkEnabled(not enabled)
+	local controls = RunwaySession.GetPlayerControls()
 	if enabled == not localState.controlsDisabled then
 		return
 	end
 	if enabled then
-		pcall(function()
-			controls:Enable()
-		end)
+		if controls ~= nil then
+			pcall(function()
+				controls:Enable()
+			end)
+		end
 		localState.controlsDisabled = false
 	else
-		pcall(function()
-			controls:Disable()
-		end)
+		if controls ~= nil then
+			pcall(function()
+				controls:Disable()
+			end)
+		end
 		localState.controlsDisabled = true
 	end
 end
@@ -1097,11 +1142,7 @@ end
 function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt: number, humanoid: Humanoid)
 	local v = hrp.AssemblyLinearVelocity
 	local vy = RunwaySession.GetBoostedVerticalY(v.Y)
-	local horiz = HorizontalVelocity(v)
 	local fwdH = forward
-	local alongH = horiz:Dot(fwdH)
-	local perpH = horiz - fwdH * alongH
-	local perpDamp = math.clamp(1 - 14 * dt, 0, 1)
 	local nowClock = os.clock()
 	local segForDefault = math.max(1, localState.takeoffCount)
 	local _, defaultMinAlong = GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(
@@ -1138,7 +1179,7 @@ function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt
 			forwardSpeed = RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, localState.takeoffCount, vy)
 		end
 	end
-	hrp.AssemblyLinearVelocity = fwdH * forwardSpeed + Vector3.new(0, vy, 0) + perpH * perpDamp
+	hrp.AssemblyLinearVelocity = fwdH * forwardSpeed + Vector3.new(0, vy, 0)
 end
 
 function RunwaySession.ApplyJumpWindowWalkPhysics(humanoid: Humanoid, hrp: BasePart, forward: Vector3)
@@ -1150,16 +1191,13 @@ function RunwaySession.ApplyJumpWindowWalkPhysics(humanoid: Humanoid, hrp: BaseP
 		return
 	end
 	fwdH = fwdH.Unit
-	local horiz = HorizontalVelocity(v)
-	local along = horiz:Dot(fwdH)
-	local perpH = horiz - fwdH * along
 	local stumbleWave = math.abs(math.sin(os.clock() * math.pi * 2 * JumpWindowStumblePulseFrequencyHz))
 	local speedScale = math.max(JumpWindowStumbleMinSpeedScale, 1 - stumbleWave * JumpWindowStumblePulseStrength)
 	RunwaySession.EnsureHumanoidWalkingState(humanoid)
 	RunwaySession.EnsureJumpWindowWalkAnimation(humanoid, speedScale)
 	humanoid:Move(fwdH, false)
 	local walkSpeed = cfg.JUMP_WINDOW_WALK_SPEED * speedScale
-	hrp.AssemblyLinearVelocity = fwdH * walkSpeed + Vector3.new(0, vy, 0) + perpH
+	hrp.AssemblyLinearVelocity = fwdH * walkSpeed + Vector3.new(0, vy, 0)
 end
 
 function RunwaySession.UpdateSlideVelocity(hrp: BasePart, forward: Vector3, nowClock: number)
@@ -2301,9 +2339,7 @@ function RunwaySession.MaybeCorrectGroundedAlongVelocity(hrp: BasePart, forward:
 		return
 	end
 	fwdH = fwdH.Unit
-	local horiz = HorizontalVelocity(v)
-	local perpH = horiz - fwdH * along
-	hrp.AssemblyLinearVelocity = fwdH * targetAlong + Vector3.new(0, v.Y, 0) + perpH
+	hrp.AssemblyLinearVelocity = fwdH * targetAlong + Vector3.new(0, v.Y, 0)
 end
 
 function RunwaySession.ApplyRunwayLocomotionAnimation(humanoid: Humanoid, forward: Vector3, nowClock: number, hrp: BasePart?)
@@ -5889,11 +5925,8 @@ function RunwaySession.JumpComputeSessionVy(): (number, number, number)
 	return jumpPower, vy, gGrav
 end
 
-function RunwaySession.JumpPerpImpulseTerm(hrp: BasePart, forward: Vector3): Vector3
-	local horiz = HorizontalVelocity(hrp.AssemblyLinearVelocity)
-	local alongH = horiz:Dot(forward)
-	local perpH = horiz - forward * alongH
-	return perpH * 0.35
+function RunwaySession.JumpPerpImpulseTerm(_hrp: BasePart, _forward: Vector3): Vector3
+	return Vector3.zero
 end
 
 function RunwaySession.JumpGrantDashFuelIfOnFinalSegment()
