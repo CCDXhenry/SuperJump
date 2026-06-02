@@ -120,7 +120,7 @@ local function FindLobbyBrainrotSlotButton(): GuiButton?
 	return nil
 end
 
-local function FindUpgradeShopFuelButton(): GuiButton?
+local function FindUpgradeShopWalkSpeedButton(): GuiButton?
 	if localPlayer == nil then
 		return nil
 	end
@@ -140,7 +140,7 @@ local function FindUpgradeShopFuelButton(): GuiButton?
 	if scroll == nil then
 		return nil
 	end
-	local row = scroll:FindFirstChild("UpgradeMaxFuelFrame1") :: Frame?
+	local row = scroll:FindFirstChild("UpgradeWalkSpeedFrame1") :: Frame?
 	if row == nil then
 		return nil
 	end
@@ -149,6 +149,118 @@ local function FindUpgradeShopFuelButton(): GuiButton?
 		return imgBtn
 	end
 	return nil
+end
+
+local function FindGameScreenGui(): ScreenGui?
+	if localPlayer == nil then
+		return nil
+	end
+	local playerGui = localPlayer:FindFirstChild("PlayerGui") :: PlayerGui?
+	if playerGui == nil then
+		return nil
+	end
+	return playerGui:FindFirstChild("GameScreenGui") :: ScreenGui?
+end
+
+local function FindShopFrame(windowFrameName: string): Frame?
+	local screenGui = FindGameScreenGui()
+	if screenGui == nil then
+		return nil
+	end
+	local frame = screenGui:FindFirstChild(windowFrameName, true)
+	if frame ~= nil and frame:IsA("Frame") then
+		return frame
+	end
+	return nil
+end
+
+local function FindFirstShopItemButton(windowFrameName: string): GuiButton?
+	local shopFrame = FindShopFrame(windowFrameName)
+	if shopFrame == nil then
+		return nil
+	end
+	local scrollingFrame = shopFrame:FindFirstChild("ScrollingFrame")
+	if scrollingFrame == nil or not scrollingFrame:IsA("ScrollingFrame") then
+		return nil
+	end
+	local bestButton: GuiButton? = nil
+	local bestOrder = math.huge
+	for _, child in scrollingFrame:GetChildren() do
+		if child:IsA("GuiButton") and child.Visible then
+			local order = child.LayoutOrder
+			if order < bestOrder then
+				bestButton = child
+				bestOrder = order
+			end
+		end
+	end
+	return bestButton
+end
+
+local function FindShopBuyButton(windowFrameName: string): GuiButton?
+	local shopFrame = FindShopFrame(windowFrameName)
+	if shopFrame == nil then
+		return nil
+	end
+	local infoFrame = shopFrame:FindFirstChild("InfoFrame")
+	if infoFrame == nil or not infoFrame:IsA("Frame") then
+		return nil
+	end
+	local coinOrRbBuyBtn = infoFrame:FindFirstChild("BuyBtn3-1")
+	if coinOrRbBuyBtn ~= nil and coinOrRbBuyBtn:IsA("GuiButton") and coinOrRbBuyBtn.Visible then
+		return coinOrRbBuyBtn
+	end
+	local buyBtn = infoFrame:FindFirstChild("BuyBtn")
+	if buyBtn ~= nil and buyBtn:IsA("GuiButton") and buyBtn.Visible then
+		return buyBtn
+	end
+	return nil
+end
+
+local function FindExEquipBackpackSlotButton(): GuiButton?
+	local screenGui = FindGameScreenGui()
+	if screenGui == nil then
+		return nil
+	end
+	local lobby = screenGui:FindFirstChild("LobbyFrame") :: Frame?
+	if lobby == nil then
+		return nil
+	end
+	local bottom = lobby:FindFirstChild("BottomButtonsFrame") :: Frame?
+	if bottom == nil then
+		return nil
+	end
+	for _, child in bottom:GetChildren() do
+		if child:IsA("GuiButton") and child:GetAttribute("slotType") == "ExEquip" then
+			return child
+		end
+	end
+	return nil
+end
+
+local function FindJetpackGuideButton(): GuiButton?
+	return FindShopBuyButton("JetpackShopFrame") or FindFirstShopItemButton("JetpackShopFrame")
+end
+
+local function FindExEquipGuideButton(): GuiButton?
+	return FindShopBuyButton("ExEquipShopFrame") or FindFirstShopItemButton("ExEquipShopFrame")
+end
+
+local function IsOutsideRunwaySessionGuideType(guideType: number): boolean
+	return guideType == GameConfig.GuideType.TutorialBrainrotCollect
+		or guideType == GameConfig.GuideType.TutorialBrainrotUpgrade
+		or guideType == GameConfig.GuideType.TutorialBrainrotIslandTeleport
+		or guideType == GameConfig.GuideType.TutorialJetpackBuy
+		or guideType == GameConfig.GuideType.TutorialExEquipBuy
+		or guideType == GameConfig.GuideType.TutorialExEquipUse
+		or guideType == GameConfig.GuideType.TutorialWalkSpeedUpgrade
+end
+
+local function ShouldSuppressOutsideRunwaySessionGuide(guideType: number): boolean
+	if not IsOutsideRunwaySessionGuideType(guideType) then
+		return false
+	end
+	return ClientGameInfo.IsInJumpRunway() or ClientGameInfo.IsInJumpRunwayEscapePhase()
 end
 
 local function RefreshGuideFrame()
@@ -170,7 +282,7 @@ local function RefreshGuideFrame()
 	end
 
 	local guideType = ClientGameInfo.GetCurrentGuideType()
-	if guideType == GameConfig.GuideType.None then
+	if guideType == GameConfig.GuideType.None or ShouldSuppressOutsideRunwaySessionGuide(guideType) then
 		guideFrame.Visible = false
 		StopGuideAni()
 		return
@@ -208,6 +320,54 @@ local function RefreshGuideFrame()
 		return
 	end
 
+	if guideType == GameConfig.GuideType.TutorialJetpackBuy then
+		local guideBtn = FindJetpackGuideButton()
+		if guideBtn == nil or not IsGuiVisibleChain(guideBtn) then
+			guideFrame.Visible = false
+			StopGuideAni()
+			return
+		end
+		MountFingerCloneUnder(guideBtn)
+		guideFrame.Visible = false
+		return
+	end
+
+	if guideType == GameConfig.GuideType.TutorialExEquipBuy then
+		local guideBtn = FindExEquipGuideButton()
+		if guideBtn == nil or not IsGuiVisibleChain(guideBtn) then
+			guideFrame.Visible = false
+			StopGuideAni()
+			return
+		end
+		MountFingerCloneUnder(guideBtn)
+		guideFrame.Visible = false
+		return
+	end
+
+	if guideType == GameConfig.GuideType.TutorialExEquipUse then
+		local slotBtn = FindExEquipBackpackSlotButton()
+		if slotBtn == nil or not IsGuiVisibleChain(slotBtn) then
+			guideFrame.Visible = false
+			StopGuideAni()
+			return
+		end
+		MountFingerCloneUnder(slotBtn)
+		guideFrame.Visible = false
+		return
+	end
+
+	if guideType == GameConfig.GuideType.TutorialWalkSpeedUpgrade then
+		local guideBtn = FindUpgradeShopWalkSpeedButton()
+		if guideBtn == nil or not IsGuiVisibleChain(guideBtn) then
+			guideFrame.Visible = false
+			StopGuideAni()
+			return
+		end
+		MountFingerCloneUnder(guideBtn)
+		guideFrame.Visible = false
+		return
+	end
+
 	guideFrame.Visible = false
 	StopGuideAni()
 end
@@ -215,7 +375,12 @@ end
 guideFrame:GetPropertyChangedSignal("Visible"):Connect(function()
 	if not guideFrame.Visible then
 		local t = ClientGameInfo.GetCurrentGuideType()
-		if t == GameConfig.GuideType.TutorialBrainrotPlaceSlot then
+		if t == GameConfig.GuideType.TutorialBrainrotPlaceSlot
+			or t == GameConfig.GuideType.TutorialJetpackBuy
+			or t == GameConfig.GuideType.TutorialExEquipBuy
+			or t == GameConfig.GuideType.TutorialExEquipUse
+			or t == GameConfig.GuideType.TutorialWalkSpeedUpgrade
+		then
 			return
 		end
 		StopGuideAni()
@@ -249,8 +414,20 @@ runService.RenderStepped:Connect(function()
 		return
 	end
 	local t = ClientGameInfo.GetCurrentGuideType()
+	if ShouldSuppressOutsideRunwaySessionGuide(t) then
+		StopGuideAni()
+		return
+	end
 	if t == GameConfig.GuideType.TutorialBrainrotPlaceSlot then
 		UpdateFingerOnTrackedButton(FindLobbyBrainrotSlotButton)
+	elseif t == GameConfig.GuideType.TutorialJetpackBuy then
+		UpdateFingerOnTrackedButton(FindJetpackGuideButton)
+	elseif t == GameConfig.GuideType.TutorialExEquipBuy then
+		UpdateFingerOnTrackedButton(FindExEquipGuideButton)
+	elseif t == GameConfig.GuideType.TutorialExEquipUse then
+		UpdateFingerOnTrackedButton(FindExEquipBackpackSlotButton)
+	elseif t == GameConfig.GuideType.TutorialWalkSpeedUpgrade then
+		UpdateFingerOnTrackedButton(FindUpgradeShopWalkSpeedButton)
 	end
 end)
 

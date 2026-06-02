@@ -14,11 +14,31 @@ local otherPlayerInfoMap: { [number]: GameConfig.ClientOtherPlayerInfo } = {}
 local isInJumpRunway = false
 local isInJumpRunwayEscapePhase = false
 local isExercising = false
+local DebugModelYieldLogEnabled = true
 
 -- 用于“新增 uid 才显示获得奖励提示”的增量判定
 -- 避免玩家重新进游戏时把旧队列也触发提示。
 local seenQueueUidSet: { [string]: boolean } = {}
 local triggeredGrantTipKeySet: { [string]: boolean } = {}
+
+local function DebugModelYieldLog(eventName: string, playerIdStr: string, pointIndexStr: string, data: { [string]: any }?)
+	if not DebugModelYieldLogEnabled then
+		return
+	end
+	local detailText = ""
+	if data then
+		for key, value in pairs(data) do
+			detailText ..= " " .. tostring(key) .. "=" .. tostring(value)
+		end
+	end
+	print(
+		"[ModelYieldDebug][ClientGameInfo]",
+		eventName,
+		"userId=" .. playerIdStr,
+		"point=" .. pointIndexStr,
+		detailText
+	)
+end
 
 --初始化玩家信息
 function ClientGameInfo.InitPlayerInfo(
@@ -51,12 +71,12 @@ function ClientGameInfo.InitPlayerInfo(
 		brainrotsInfo = localPlayerSaveInfo.brainrotsInfo,
 		brainrotQueue = localPlayerSaveInfo.brainrotQueue or {},
 		exEquipInventory = localPlayerSaveInfo.exEquipInventory or {
-			currentId = "1",
-			ownedList = { ["1"] = true },
+			currentId = "",
+			ownedList = {},
 		},
-        jetpackInventory = localPlayerSaveInfo.jetpackInventory or {
-            currentId = "",
-            ownedList = {},
+		jetpackInventory = localPlayerSaveInfo.jetpackInventory or {
+			currentId = "",
+			ownedList = {},
 		},
 		homeSlot = localPlayerSaveInfo.homeSlot,
 		guideProgressInfo = guideProgressInfo,
@@ -196,7 +216,15 @@ local function buildAllPlayersModelYieldsSnapshot(): { [string]: { [string]: num
 end
 
 local function fireYieldUiFromSnapshot()
-	ClientMsg.FireAllPlayersModelYieldsUpdate(buildAllPlayersModelYieldsSnapshot())
+	local snapshot = buildAllPlayersModelYieldsSnapshot()
+	for playerIdStr, yields in pairs(snapshot) do
+		for pointIndexStr, amount in pairs(yields) do
+			DebugModelYieldLog("FireUiSnapshot", playerIdStr, pointIndexStr, {
+				amount = amount,
+			})
+		end
+	end
+	ClientMsg.FireAllPlayersModelYieldsUpdate(snapshot)
 	lastYieldUiFireClock = os.clock()
 end
 
@@ -212,6 +240,9 @@ function ClientGameInfo.UpdateAllPlayersModelYields(allYields: { [string]: { [st
 
 		if pInfo and pInfo.homeInfo and pInfo.homeInfo.placedModels then
 			for pointIndexStr, amount in pairs(yields) do
+				DebugModelYieldLog("RemoteYieldPacket", playerIdStr, pointIndexStr, {
+					amount = amount,
+				})
 				local model = pInfo.homeInfo.placedModels[pointIndexStr]
 				if model then
 					model.unclaimedYield = amount

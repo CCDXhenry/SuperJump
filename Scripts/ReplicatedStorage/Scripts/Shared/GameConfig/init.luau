@@ -46,11 +46,38 @@ GameConfig.GuideType = {
 	TutorialBrainrotPlace = 2,
 	TutorialBrainrotPlaceSlot = 5,
 	TutorialBrainrotIslandTeleport = 6,
+	TutorialBrainrotCollect = 7,
+	TutorialBrainrotUpgrade = 8,
+	TutorialWalkSpeedUpgrade = 9,
+	TutorialStartTrigger = 10,
+	TutorialBeginLineJump = 11,
+	TutorialLandingJump = 12,
+	TutorialJetpackBuy = 13,
+	TutorialFinalDash = 14,
+	TutorialExEquipBuy = 15,
+	TutorialExEquipUse = 16,
+	TutorialJetpackRunwayRetry = 17,
+	TutorialJumpPowerRunwayRetry = 18,
 }
 
 GameConfig.GuideStepKey = {
 	BrainrotPlaceFinished = "BrainrotPlaceFinished",
+	BrainrotCollectFinished = "BrainrotCollectFinished",
+	BrainrotUpgradeFinished = "BrainrotUpgradeFinished",
+	WalkSpeedUpgradeFinished = "WalkSpeedUpgradeFinished",
+	StartTriggerFinished = "StartTriggerFinished",
+	BeginLineJumpFinished = "BeginLineJumpFinished",
+	LandingJumpFinished = "LandingJumpFinished",
+	JetpackBuyFinished = "JetpackBuyFinished",
+	JetpackRunwayRetryFinished = "JetpackRunwayRetryFinished",
+	FinalDashFinished = "FinalDashFinished",
+	ExEquipBuyFinished = "ExEquipBuyFinished",
+	ExEquipUseFinished = "ExEquipUseFinished",
+	JumpPowerRunwayRetryFinished = "JumpPowerRunwayRetryFinished",
 }
+
+GameConfig.GuideTargetJetpackId = 1
+GameConfig.GuideTargetExEquipId = 1
 
 -- 工厂玩法停用
 -- GameConfig.GuideWorldAnchorName = {
@@ -62,6 +89,18 @@ GameConfig.GuideTextKeyMap = {
 	[GameConfig.GuideType.TutorialBrainrotPlace] = "GuideTutorialBrainrotPlace",
 	[GameConfig.GuideType.TutorialBrainrotPlaceSlot] = "GuideTutorialBrainrotPlaceSlot",
 	[GameConfig.GuideType.TutorialBrainrotIslandTeleport] = "GuideTutorialBrainrotIslandTeleport",
+	[GameConfig.GuideType.TutorialBrainrotCollect] = "GuideTutorialBrainrotCollect",
+	[GameConfig.GuideType.TutorialBrainrotUpgrade] = "GuideTutorialBrainrotUpgrade",
+	[GameConfig.GuideType.TutorialWalkSpeedUpgrade] = "GuideTutorialWalkSpeedUpgrade",
+	[GameConfig.GuideType.TutorialStartTrigger] = "GuideTutorialStartTrigger",
+	[GameConfig.GuideType.TutorialBeginLineJump] = "GuideTutorialBeginLineJump",
+	[GameConfig.GuideType.TutorialLandingJump] = "GuideTutorialLandingJump",
+	[GameConfig.GuideType.TutorialJetpackBuy] = "GuideTutorialJetpackBuy",
+	[GameConfig.GuideType.TutorialFinalDash] = "GuideTutorialFinalDash",
+	[GameConfig.GuideType.TutorialExEquipBuy] = "GuideTutorialExEquipBuy",
+	[GameConfig.GuideType.TutorialExEquipUse] = "GuideTutorialExEquipUse",
+	[GameConfig.GuideType.TutorialJetpackRunwayRetry] = "GuideTutorialJetpackRunwayRetry",
+	[GameConfig.GuideType.TutorialJumpPowerRunwayRetry] = "GuideTutorialJumpPowerRunwayRetry",
 }
 
 GameConfig.GuideAssetName = {
@@ -74,6 +113,7 @@ GameConfig.GuidePlacementBoothPath = {
 	BoothFolderName = "Booth",
 	BoothModelName = "BoothModel",
 	CollectPartName = "CollectPart",
+	UpgradePartName = "UpgradePart",
 }
 
 GameConfig.SixcubeGroupId = 33977495
@@ -1605,12 +1645,12 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 		},
 		brainrotQueue = {},
 		exEquipInventory = {
-			currentId = "1",
-			ownedList = { ["1"] = true },
+			currentId = "",
+			ownedList = {},
 		},
-        jetpackInventory = {
-            currentId = "",
-            ownedList = {},
+		jetpackInventory = {
+			currentId = "",
+			ownedList = {},
 		},
 		guideProgressInfo = {
 			guideStepDoneMap = {},

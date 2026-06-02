@@ -110,7 +110,10 @@ local function GetCurrentExEquipData(): GameConfig.ExEquipData?
 	if localPlayerInfo == nil then
 		return nil
 	end
-	local equipId = tonumber(localPlayerInfo.exEquipInventory.currentId) or 1
+	local equipId = tonumber(localPlayerInfo.exEquipInventory.currentId)
+	if equipId == nil then
+		return nil
+	end
 	return GameConfig.ExEquipDataMap[equipId]
 end
 

@@ -990,7 +990,7 @@ function ExEquipManager.Init()
 	NetMsg.ConnectNotifyPlayerExEquipInventoryUpdate(function(inventory: GameConfig.ExEquipInventory)
 		ClientGameInfo.UpdateExEquipInventory(inventory)
 		if isExercising then
-			local currentId = tonumber(inventory.currentId) or 1
+			local currentId = tonumber(inventory.currentId)
 			if exerciseEquipId ~= currentId then
 				StopExerciseWithServerRequest()
 			end
@@ -1007,9 +1007,14 @@ function ExEquipManager.Init()
 
 	-- 监听 JumpPower 更新
 	NetMsg.ConnectNotifyPlayerJumpPowerUpdate(function(jumpPowerInfo: GameConfig.JumpPowerInfo, addExp: number)
+		local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+		local previousLv = if localPlayerInfo ~= nil then localPlayerInfo.jumpPower.lv else jumpPowerInfo.lv
 		ClientGameInfo.UpdateJumpPower(jumpPowerInfo, addExp)
 		UpdateExerciseInfoView()
 		ShowExerciseJumpPowerPopup(addExp)
+		if jumpPowerInfo.lv > previousLv then
+			NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.ExEquipUseFinished)
+		end
 	end)
 
 	ClientMsg.ConnectCurrentGuideTypeChanged(function()

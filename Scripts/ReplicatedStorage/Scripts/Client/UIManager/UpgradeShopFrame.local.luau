@@ -179,6 +179,9 @@ local function bindButton(frame: Frame, skillType: number, levelAdd: number)
 			if currentCoin >= totalCost then
 				GameSoundManager.PlayUpgradeAbilitySound()
 				NetMsg.SendRequestUpgradeSkill(skillType, levelAdd)
+				if skillType == GameConfig.SkillType.WalkSpeed then
+					NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.WalkSpeedUpgradeFinished)
+				end
 			else
 				ClientMsg.FireShowGameTip(GameTexts.InsufficientCoin.source, GameConfig.GameTipTweenType.FlyUp, GameTexts.InsufficientCoin.key)
 			end

@@ -84,6 +84,8 @@ local requestOpenChestEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("Re
 local notifyChestOpenResultEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("NotifyChestOpenResult") :: RemoteEvent
 local notifyGuideProgressInfoEvent: RemoteEvent? =
 	remoteEventsFolder:FindFirstChild("NotifyGuideProgressInfo") :: RemoteEvent?
+local requestCompleteGuideStepEvent: RemoteEvent? =
+	remoteEventsFolder:FindFirstChild("RequestCompleteGuideStep") :: RemoteEvent?
 
 -- Rebirth
 local requestRebirthEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestRebirth") :: RemoteEvent
@@ -616,6 +618,25 @@ function NetMsg.ConnectNotifyGuideProgressInfo(callback: (guideProgressInfo: Gam
 		return
 	end
 	notifyGuideProgressInfoEvent.OnClientEvent:Connect(callback)
+end
+
+function NetMsg.FireRequestCompleteGuideStep(stepKey: string)
+	if requestCompleteGuideStepEvent == nil then
+		return
+	end
+	requestCompleteGuideStepEvent:FireServer(stepKey)
+end
+
+function NetMsg.ConnectRequestCompleteGuideStep(callback: (player: Player, stepKey: string) -> ())
+	if requestCompleteGuideStepEvent == nil then
+		return
+	end
+	requestCompleteGuideStepEvent.OnServerEvent:Connect(function(player: Player, payload: any)
+		if type(payload) ~= "string" then
+			return
+		end
+		callback(player, payload)
+	end)
 end
 
 function NetMsg.GetRequestWorkbenchManualEvent(): RemoteEvent?

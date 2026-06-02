@@ -132,7 +132,10 @@ local function ToggleCurrentExEquip()
 		NetMsg.FireRequestStopExercise()
 		return
 	end
-	local equipId = tonumber(localPlayerInfo.exEquipInventory.currentId) or 1
+	local equipId = tonumber(localPlayerInfo.exEquipInventory.currentId)
+	if equipId == nil then
+		return
+	end
 	NetMsg.FireRequestStartExercise(equipId)
 end
 

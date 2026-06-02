@@ -20,6 +20,9 @@ local requireAnyForDeferredModules = require :: any
 
 local playerInfoMap: { [number]: GameConfig.PlayerInfo } = {}
 local lastBroadcastModelYieldMap: { [number]: { [string]: number } } = {}
+local DebugModelYieldLogEnabled = true
+local ModelYieldAccrueDebugIntervalSec = 10
+local lastModelYieldAccrueDebugUnixByKey: { [string]: number } = {}
 
 -- 存档或历史 bug 可能导致等级 > maxLevel；夹紧并写回，避免 abilityList 取空后回退到 1 级
 type ShopLevelsClampTarget = GameConfig.ShopInfo
@@ -47,6 +50,24 @@ local function ClampShopAndHomeLevelsFromConfig(shopInfo: ShopLevelsClampTarget,
 		end
 	end
 	return changed
+end
+
+local function DebugModelYieldLog(eventName: string, playerId: number, pointIndexStr: string, data: { [string]: any }?)
+	if not DebugModelYieldLogEnabled then
+		return
+	end
+	local details = data or {}
+	local detailText = ""
+	for key, value in pairs(details) do
+		detailText ..= " " .. tostring(key) .. "=" .. tostring(value)
+	end
+	print(
+		"[ModelYieldDebug][Server]",
+		eventName,
+		"userId=" .. tostring(playerId),
+		"point=" .. pointIndexStr,
+		detailText
+	)
 end
 
 -- 付费 Brainrot 升级的挂起记录：按玩家缓存一次性升级信息，由收据回调消费
@@ -155,12 +176,12 @@ function ServerGameInfo.InitPlayerInfo(
 		brainrotsInfo = playerSaveInfo.brainrotsInfo,
 		brainrotQueue = playerSaveInfo.brainrotQueue or {},
 		exEquipInventory = playerSaveInfo.exEquipInventory or {
-			currentId = "1",
-			ownedList = { ["1"] = true },
+			currentId = "",
+			ownedList = {},
 		},
-        jetpackInventory = playerSaveInfo.jetpackInventory or {
-            currentId = "",
-            ownedList = {},
+		jetpackInventory = playerSaveInfo.jetpackInventory or {
+			currentId = "",
+			ownedList = {},
 		},
 		guideProgressInfo = playerSaveInfo.guideProgressInfo
 			or {
@@ -666,6 +687,20 @@ function ServerGameInfo.UpdateModelUnclaimedYield(player: Player, pointIndex: nu
 			end
 		end
 	end
+	local pointIndexStr = tostring(pointIndex)
+	local debugKey = tostring(player.UserId) .. ":" .. pointIndexStr
+	local nowUnix = DateTime.now().UnixTimestamp
+	local lastDebugUnix = lastModelYieldAccrueDebugUnixByKey[debugKey] or 0
+	if nowUnix - lastDebugUnix >= ModelYieldAccrueDebugIntervalSec then
+		lastModelYieldAccrueDebugUnixByKey[debugKey] = nowUnix
+		DebugModelYieldLog("Accrue", player.UserId, pointIndexStr, {
+			add = amount,
+			isSet = isSet == true,
+			total = model.unclaimedYield or 0,
+			configId = model.configId,
+			level = model.level,
+		})
+	end
 	playerInfo.playerInfoChanged = true
 end
 
@@ -685,6 +720,12 @@ function ServerGameInfo.BroadcastAllPlayersModelYields()
 				if oldSnapshot[pointIndexStr] ~= amount then
 					playerYields[pointIndexStr] = amount
 					hasDelta = true
+					DebugModelYieldLog("BroadcastDelta", userId, pointIndexStr, {
+						old = oldSnapshot[pointIndexStr] or 0,
+						new = amount,
+						configId = model.configId,
+						level = model.level,
+					})
 				end
 			end
 		end
@@ -693,6 +734,9 @@ function ServerGameInfo.BroadcastAllPlayersModelYields()
 			if newSnapshot[pointIndexStr] == nil and oldAmount > 0 then
 				playerYields[pointIndexStr] = 0
 				hasDelta = true
+				DebugModelYieldLog("BroadcastZero", userId, pointIndexStr, {
+					old = oldAmount,
+				})
 			end
 		end
 
@@ -750,6 +794,13 @@ function ServerGameInfo.ClaimModelYield(player: Player, targetPlayerId: number, 
 	local amount = model.unclaimedYield
 	local configId = model.configId
 	local level = model.level
+	DebugModelYieldLog("ClaimBeforeClear", targetPlayerId, tostring(pointIndex), {
+		collectorUserId = player.UserId,
+		amount = amount,
+		durationSec = durationSec,
+		configId = configId,
+		level = level,
+	})
 	model.unclaimedYield = 0
 	modelAny.yieldAccrueStartUnix = nowUnix
 	modelAny.yieldAccruedSeconds = nil

@@ -28,9 +28,12 @@ local cachedArrowGuideType = GameConfig.GuideType.None
 local cachedArrowTarget: Vector3? = nil
 local pickupCandidatesInitialized = false
 local pickupCandidatePartMap: { [BasePart]: boolean } = {}
+local pendingCompleteGuideStepMap: { [string]: boolean } = {}
+local observedPlacedModelClockMap: { [string]: number } = {}
 
 local GUIDE_TYPE_REFRESH_INTERVAL = 0.2
 local GUIDE_TARGET_REFRESH_INTERVAL = 0.2
+local GUIDE_COLLECT_MIN_ELAPSED_SEC = 1
 local InitPickupCandidates: () -> ()
 
 -- 与 ServerGameInfo.IsPlayerOnWorkspaceGround / PavingClientManager 安全区射线对齐
@@ -114,6 +117,143 @@ end
 
 local function IsBrainrotPlaceFinished(info: GameConfig.ClientLocalPlayerInfo): boolean
 	return info.guideProgressInfo.guideStepDoneMap[GameConfig.GuideStepKey.BrainrotPlaceFinished] == true
+end
+
+local function IsGuideStepDone(info: GameConfig.ClientLocalPlayerInfo, stepKey: string): boolean
+	return info.guideProgressInfo.guideStepDoneMap[stepKey] == true
+end
+
+local function CompleteGuideStep(stepKey: string)
+	local info = ClientGameInfo.GetLocalPlayerInfo()
+	if info ~= nil and info.guideProgressInfo.guideStepDoneMap[stepKey] == true then
+		return
+	end
+	if pendingCompleteGuideStepMap[stepKey] == true then
+		return
+	end
+	pendingCompleteGuideStepMap[stepKey] = true
+	NetMsg.FireRequestCompleteGuideStep(stepKey)
+end
+
+local function GetCoinCount(info: GameConfig.ClientLocalPlayerInfo): number
+	return info.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
+end
+
+local function GetCollectMultipleForRebirth(rebirthLevel: number?): number
+	local level = rebirthLevel or 0
+	local rebirthConfig = GameConfig.RebirthMap[level]
+	return if rebirthConfig ~= nil then rebirthConfig.collectMultiple else 1
+end
+
+local function GetBrainrotYieldPerSecond(placed: GameConfig.ModelInfo, rebirthLevel: number?): number
+	local brainrotData = GameConfig.BrainrotIdMap[placed.configId]
+	if brainrotData == nil then
+		return 0
+	end
+	local baseYield = GameConfig.GetBrainrotAbilityWithVariant(brainrotData.baseAbility, placed.level or 1, placed.variantId)
+	return math.ceil(baseYield * GetCollectMultipleForRebirth(rebirthLevel))
+end
+
+local function GetEstimatedCollectableYield(pointIndexStr: string, placed: GameConfig.ModelInfo, rebirthLevel: number?): number
+	local staticYield = placed.unclaimedYield or 0
+	if staticYield > 0 then
+		return staticYield
+	end
+	local perSecond = GetBrainrotYieldPerSecond(placed, rebirthLevel)
+	if perSecond <= 0 then
+		return 0
+	end
+	local placedAny = placed :: any
+	local startUnix = placedAny.yieldAccrueStartUnix
+	if typeof(startUnix) == "number" then
+		local elapsed = math.max(0, DateTime.now().UnixTimestamp - math.floor(startUnix))
+		return if elapsed >= GUIDE_COLLECT_MIN_ELAPSED_SEC then perSecond * elapsed else 0
+	end
+	local observedClock = observedPlacedModelClockMap[pointIndexStr]
+	if observedClock == nil then
+		observedClock = os.clock()
+		observedPlacedModelClockMap[pointIndexStr] = observedClock
+	end
+	local elapsed = math.floor(os.clock() - observedClock)
+	return if elapsed >= GUIDE_COLLECT_MIN_ELAPSED_SEC then perSecond * elapsed else 0
+end
+
+local function IsTargetJetpackOwned(info: GameConfig.ClientLocalPlayerInfo): boolean
+	return info.jetpackInventory.ownedList[tostring(GameConfig.GuideTargetJetpackId)] == true
+end
+
+local function IsTargetExEquipOwned(info: GameConfig.ClientLocalPlayerInfo): boolean
+	return info.exEquipInventory.ownedList[tostring(GameConfig.GuideTargetExEquipId)] == true
+end
+
+local function IsTargetJetpackAffordable(info: GameConfig.ClientLocalPlayerInfo): boolean
+	local jetpackData = GameConfig.JetpackDataMap[GameConfig.GuideTargetJetpackId]
+	return jetpackData ~= nil and GetCoinCount(info) >= jetpackData.costCoin
+end
+
+local function IsTargetExEquipAffordable(info: GameConfig.ClientLocalPlayerInfo): boolean
+	local equipData = GameConfig.ExEquipDataMap[GameConfig.GuideTargetExEquipId]
+	return equipData ~= nil and GetCoinCount(info) >= equipData.costCoin
+end
+
+local function TryCompleteOwnedPurchaseGuideSteps()
+	local info = ClientGameInfo.GetLocalPlayerInfo()
+	if info == nil then
+		return
+	end
+	if IsTargetJetpackOwned(info) and not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished) then
+		CompleteGuideStep(GameConfig.GuideStepKey.JetpackBuyFinished)
+	end
+	if IsTargetExEquipOwned(info) and not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
+		CompleteGuideStep(GameConfig.GuideStepKey.ExEquipBuyFinished)
+	end
+end
+
+local function HasCollectableBrainrotYield(info: GameConfig.ClientLocalPlayerInfo): boolean
+	for pointIndexStr, placed in pairs(info.homeInfo.placedModels) do
+		if GetEstimatedCollectableYield(pointIndexStr, placed, info.shopInfo.rebirthLevel) > 0 then
+			return true
+		end
+	end
+	return false
+end
+
+local function HasUpgradedBrainrot(info: GameConfig.ClientLocalPlayerInfo): boolean
+	for _, placed in pairs(info.homeInfo.placedModels) do
+		if placed.level > 1 then
+			return true
+		end
+	end
+	return false
+end
+
+local function HasAffordableUpgradeableBrainrot(info: GameConfig.ClientLocalPlayerInfo): boolean
+	local coinCount = GetCoinCount(info)
+	for _, placed in pairs(info.homeInfo.placedModels) do
+		local brainrotData = GameConfig.BrainrotIdMap[placed.configId]
+		if brainrotData ~= nil then
+			local upgradeCost = GameConfig.GetBrainrotUpgradeCost(brainrotData.baseAbility, placed.level)
+			if coinCount >= upgradeCost then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+local function HasWalkSpeedUpgraded(info: GameConfig.ClientLocalPlayerInfo): boolean
+	return (info.shopInfo.walkSpeedLevel or 1) > 1
+end
+
+local function HasJumpPowerUpgraded(info: GameConfig.ClientLocalPlayerInfo): boolean
+	return info.jumpPower.lv > 1
+end
+
+local function IsWalkSpeedUpgradeAffordable(info: GameConfig.ClientLocalPlayerInfo): boolean
+	local walkSpeedConfig = GameConfig.Shop.WalkSpeed
+	local currentLevel = info.shopInfo.walkSpeedLevel or 1
+	local upgradeCost = walkSpeedConfig.upgradeCostList[currentLevel]
+	return upgradeCost ~= nil and GetCoinCount(info) >= upgradeCost
 end
 
 local function ResolveNearestEmptyPlotPosition(info: GameConfig.ClientLocalPlayerInfo): Vector3?
@@ -299,7 +439,7 @@ local function ResolveCollectPartWorldPosition(info: GameConfig.ClientLocalPlaye
 						continue
 					end
 					local modelInfo = info.homeInfo.placedModels[tostring(pointIndex)]
-					local yieldAmt = if modelInfo then (modelInfo.unclaimedYield or 0) else 0
+					local yieldAmt = if modelInfo then GetEstimatedCollectableYield(tostring(pointIndex), modelInfo, info.shopInfo.rebirthLevel) else 0
 					local dist = (pos - origin).Magnitude
 					if yieldAmt > 0 then
 						if dist < bestWithYieldDist then
@@ -320,6 +460,76 @@ local function ResolveCollectPartWorldPosition(info: GameConfig.ClientLocalPlaye
 		return bestWithYieldPos
 	end
 	return fallbackPos
+end
+
+local function ResolveUpgradeableBrainrotWorldPosition(info: GameConfig.ClientLocalPlayerInfo): Vector3?
+	if info.homeSlot == nil or info.homeSlot == "" then
+		return nil
+	end
+	local homesFolder = workspace:FindFirstChild("PlayersHome")
+	if homesFolder == nil then
+		return nil
+	end
+	local slotModel = homesFolder:FindFirstChild(info.homeSlot)
+	if slotModel == nil then
+		return nil
+	end
+	if localPlayer == nil then
+		return nil
+	end
+	local character = localPlayer.Character
+	local hrp = if character then character:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
+	local origin = if hrp then hrp.Position else nil
+	local path = GameConfig.GuidePlacementBoothPath
+	local coinCount = GetCoinCount(info)
+
+	local bestPos: Vector3? = nil
+	local bestDist = math.huge
+	local fallbackPos: Vector3? = nil
+
+	for _, floor in ipairs(slotModel:GetChildren()) do
+		if string.match(floor.Name, "^Lv%d+$") then
+			for _, plot in ipairs(floor:GetChildren()) do
+				local idxStr = string.match(plot.Name, "^PlaceModel(%d+)$")
+				if idxStr == nil or not plot:IsA("Model") then
+					continue
+				end
+				local pointIndex = tonumber(idxStr)
+				if pointIndex == nil then
+					continue
+				end
+				local modelInfo = info.homeInfo.placedModels[tostring(pointIndex)]
+				if modelInfo == nil then
+					continue
+				end
+				local brainrotData = GameConfig.BrainrotIdMap[modelInfo.configId]
+				if brainrotData == nil then
+					continue
+				end
+				local upgradeCost = GameConfig.GetBrainrotUpgradeCost(brainrotData.baseAbility, modelInfo.level)
+				if coinCount < upgradeCost then
+					continue
+				end
+				local boothFolder = plot:FindFirstChild(path.BoothFolderName)
+				local upgradePart = if boothFolder then boothFolder:FindFirstChild(path.UpgradePartName) else nil
+				local pos = if upgradePart ~= nil and upgradePart:IsA("BasePart") then upgradePart.Position else GetWorldPositionFromInstance(plot)
+				if pos == nil then
+					continue
+				end
+				if fallbackPos == nil then
+					fallbackPos = pos
+				end
+				if origin ~= nil then
+					local dist = (pos - origin).Magnitude
+					if dist < bestDist then
+						bestDist = dist
+						bestPos = pos
+					end
+				end
+			end
+		end
+	end
+	return if bestPos ~= nil then bestPos else fallbackPos
 end
 
 local function ResolvePickupBrainrotTarget(): Vector3?
@@ -361,20 +571,46 @@ local function ResolvePickupBrainrotTarget(): Vector3?
 end
 
 local function ResolveUpgradeShopWorldPosition(): Vector3?
-	local anchorTable = GameConfig.GuideWorldAnchorName
-	if anchorTable == nil then
+	local shopModelFolder = workspace:FindFirstChild("ShopModel")
+	local shopModel = if shopModelFolder then shopModelFolder:FindFirstChild("UpgradeShop") else nil
+	if shopModel == nil then
 		return nil
 	end
-	local name = anchorTable.UpgradeShop
-	local inst = workspace:FindFirstChild(name)
-	if inst == nil then
+	local guidePart = shopModel:FindFirstChild("GuidePart", true)
+	if guidePart ~= nil and guidePart:IsA("BasePart") then
+		return guidePart.Position
+	end
+	if shopModel:IsA("Model") then
+		return shopModel:GetPivot().Position
+	end
+	if shopModel:IsA("BasePart") then
+		return shopModel.Position
+	end
+	return nil
+end
+
+local function ResolveStartTriggerWorldPosition(): Vector3?
+	local startPoint = workspace:FindFirstChild("StartPoint")
+	local startModel = if startPoint then startPoint:FindFirstChild("StartPointModel") else nil
+	local startTrigger = if startModel then startModel:FindFirstChild("StartTrigger") else nil
+	if startTrigger ~= nil and startTrigger:IsA("BasePart") then
+		return startTrigger.Position
+	end
+	return nil
+end
+
+local function ResolveShopGuidePartWorldPosition(shopModelName: string): Vector3?
+	local shopModelFolder = workspace:FindFirstChild("ShopModel")
+	local shopModel = if shopModelFolder then shopModelFolder:FindFirstChild(shopModelName) else nil
+	if shopModel == nil then
 		return nil
 	end
-	if inst:IsA("Model") then
-		return inst:GetPivot().Position
+	local guidePart = shopModel:FindFirstChild("GuidePart", true)
+	if guidePart ~= nil and guidePart:IsA("BasePart") then
+		return guidePart.Position
 	end
-	if inst:IsA("BasePart") then
-		return inst.Position
+	if shopModel:IsA("Model") then
+		return shopModel:GetPivot().Position
 	end
 	return nil
 end
@@ -480,10 +716,61 @@ local function ResolveWorldTargetForGuide(guideType: number): Vector3?
 			return nil
 		end
 		return ResolvePlacementBoothWorldPosition(info)
+	elseif guideType == GameConfig.GuideType.TutorialBrainrotCollect then
+		local info = ClientGameInfo.GetLocalPlayerInfo()
+		if info == nil then
+			return nil
+		end
+		return ResolveCollectPartWorldPosition(info)
+	elseif guideType == GameConfig.GuideType.TutorialBrainrotUpgrade then
+		local info = ClientGameInfo.GetLocalPlayerInfo()
+		if info == nil then
+			return nil
+		end
+		return ResolveUpgradeableBrainrotWorldPosition(info)
+	elseif guideType == GameConfig.GuideType.TutorialWalkSpeedUpgrade then
+		return ResolveUpgradeShopWorldPosition()
 	elseif guideType == GameConfig.GuideType.TutorialBrainrotPickup then
 		return ResolvePickupBrainrotTarget()
+	elseif guideType == GameConfig.GuideType.TutorialStartTrigger then
+		return ResolveStartTriggerWorldPosition()
+	elseif guideType == GameConfig.GuideType.TutorialJetpackRunwayRetry then
+		return ResolveStartTriggerWorldPosition()
+	elseif guideType == GameConfig.GuideType.TutorialJumpPowerRunwayRetry then
+		return ResolveStartTriggerWorldPosition()
+	elseif guideType == GameConfig.GuideType.TutorialJetpackBuy then
+		return ResolveShopGuidePartWorldPosition("JetpackShop")
+	elseif guideType == GameConfig.GuideType.TutorialExEquipBuy then
+		return ResolveShopGuidePartWorldPosition("ExEquipShop")
 	end
 	return nil
+end
+
+local function IsRunwayGuideType(guideType: number): boolean
+	return guideType == GameConfig.GuideType.TutorialBeginLineJump
+		or guideType == GameConfig.GuideType.TutorialLandingJump
+		or guideType == GameConfig.GuideType.TutorialFinalDash
+end
+
+local function IsOutsideRunwaySessionGuideType(guideType: number): boolean
+	return guideType == GameConfig.GuideType.TutorialBrainrotCollect
+		or guideType == GameConfig.GuideType.TutorialBrainrotUpgrade
+		or guideType == GameConfig.GuideType.TutorialBrainrotIslandTeleport
+		or guideType == GameConfig.GuideType.TutorialJetpackBuy
+		or guideType == GameConfig.GuideType.TutorialExEquipBuy
+		or guideType == GameConfig.GuideType.TutorialExEquipUse
+		or guideType == GameConfig.GuideType.TutorialWalkSpeedUpgrade
+end
+
+local function IsInJumpRunwaySession(): boolean
+	return ClientGameInfo.IsInJumpRunway() or ClientGameInfo.IsInJumpRunwayEscapePhase()
+end
+
+local function FilterOutsideRunwaySessionGuide(guideType: number): number
+	if IsOutsideRunwaySessionGuideType(guideType) and IsInJumpRunwaySession() then
+		return GameConfig.GuideType.None
+	end
+	return guideType
 end
 
 local function UpdateAttachmentsRotation()
@@ -507,10 +794,22 @@ local function UpdateGuideArrow()
 		return
 	end
 	local guideType = ClientGameInfo.GetCurrentGuideType()
+	if IsOutsideRunwaySessionGuideType(guideType) and IsInJumpRunwaySession() then
+		guideArrowModel.Parent = nil
+		return
+	end
 	local needsWorldArrow = guideType == GameConfig.GuideType.TutorialBrainrotPickup
 		or guideType == GameConfig.GuideType.TutorialBrainrotPlace
 		or guideType == GameConfig.GuideType.TutorialBrainrotPlaceSlot
 		or guideType == GameConfig.GuideType.TutorialBrainrotIslandTeleport
+		or guideType == GameConfig.GuideType.TutorialBrainrotCollect
+		or guideType == GameConfig.GuideType.TutorialBrainrotUpgrade
+		or guideType == GameConfig.GuideType.TutorialWalkSpeedUpgrade
+		or guideType == GameConfig.GuideType.TutorialStartTrigger
+		or guideType == GameConfig.GuideType.TutorialJetpackRunwayRetry
+		or guideType == GameConfig.GuideType.TutorialJumpPowerRunwayRetry
+		or guideType == GameConfig.GuideType.TutorialJetpackBuy
+		or guideType == GameConfig.GuideType.TutorialExEquipBuy
 	if not needsWorldArrow then
 		guideArrowModel.Parent = nil
 		return
@@ -540,9 +839,10 @@ local function UpdateGuideArrow()
 end
 
 local function ResolveGuideType(): number
-	-- JumpRunway 跑道阶段隐藏非跑道引导
+	-- JumpRunway 主跑道阶段：仅保留跑道内引导
 	if ClientGameInfo.IsInJumpRunway() and not ClientGameInfo.IsInJumpRunwayEscapePhase() then
-		return GameConfig.GuideType.None
+		local currentGuideType = ClientGameInfo.GetCurrentGuideType()
+		return if IsRunwayGuideType(currentGuideType) then currentGuideType else GameConfig.GuideType.None
 	end
 	-- 锻炼模式隐藏非锻炼引导
 	if ClientGameInfo.IsExercising() then
@@ -566,7 +866,68 @@ local function ResolveGuideType(): number
 		if IsLocalPlayerCarryingBrainrot() then
 			return GameConfig.GuideType.TutorialBrainrotPlace
 		end
-		return GameConfig.GuideType.None
+	end
+
+	if not IsGuideStepDone(info, GameConfig.GuideStepKey.BrainrotCollectFinished) and HasCollectableBrainrotYield(info) then
+		return FilterOutsideRunwaySessionGuide(
+			MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotCollect)
+		)
+	end
+
+	if IsGuideStepDone(info, GameConfig.GuideStepKey.BrainrotCollectFinished)
+		and not IsGuideStepDone(info, GameConfig.GuideStepKey.BrainrotUpgradeFinished)
+	then
+		if HasUpgradedBrainrot(info) then
+			CompleteGuideStep(GameConfig.GuideStepKey.BrainrotUpgradeFinished)
+		elseif HasAffordableUpgradeableBrainrot(info) then
+			return FilterOutsideRunwaySessionGuide(
+				MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotUpgrade)
+			)
+		end
+	end
+
+	if IsTargetJetpackOwned(info) then
+		if not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished) then
+			CompleteGuideStep(GameConfig.GuideStepKey.JetpackBuyFinished)
+		end
+		if IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished)
+			and not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackRunwayRetryFinished)
+		then
+			return GameConfig.GuideType.TutorialJetpackRunwayRetry
+		end
+	elseif not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished) and IsTargetJetpackAffordable(info) then
+		return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialJetpackBuy)
+	end
+
+	if IsTargetExEquipOwned(info) then
+		if not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
+			CompleteGuideStep(GameConfig.GuideStepKey.ExEquipBuyFinished)
+		end
+		if not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipUseFinished) then
+			return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipUse)
+		end
+		if IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipUseFinished)
+			and HasJumpPowerUpgraded(info)
+			and not IsGuideStepDone(info, GameConfig.GuideStepKey.JumpPowerRunwayRetryFinished)
+		then
+			return GameConfig.GuideType.TutorialJumpPowerRunwayRetry
+		end
+	elseif not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) and IsTargetExEquipAffordable(info) then
+		return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipBuy)
+	end
+
+	if not IsGuideStepDone(info, GameConfig.GuideStepKey.WalkSpeedUpgradeFinished) then
+		if HasWalkSpeedUpgraded(info) then
+			CompleteGuideStep(GameConfig.GuideStepKey.WalkSpeedUpgradeFinished)
+		elseif IsWalkSpeedUpgradeAffordable(info) then
+			return FilterOutsideRunwaySessionGuide(
+				MaybeIslandTeleportOr(GameConfig.GuideType.TutorialWalkSpeedUpgrade)
+			)
+		end
+	end
+
+	if not IsGuideStepDone(info, GameConfig.GuideStepKey.StartTriggerFinished) then
+		return GameConfig.GuideType.TutorialStartTrigger
 	end
 
 	return GameConfig.GuideType.None
@@ -710,7 +1071,26 @@ function GuideManager.Init()
 	end)
 
 	NetMsg.ConnectNotifyGuideProgressInfo(function(guideProgressInfo: GameConfig.GuideProgressSaveInfo)
+		for stepKey, isDone in pairs(guideProgressInfo.guideStepDoneMap) do
+			if isDone == true then
+				pendingCompleteGuideStepMap[stepKey] = nil
+			end
+		end
 		ClientGameInfo.UpdateGuideProgressInfo(guideProgressInfo)
+	end)
+
+	ClientMsg.ConnectLocalPlayerJetpackInventoryUpdate(function()
+		TryCompleteOwnedPurchaseGuideSteps()
+		ForceRefreshGuideType()
+	end)
+
+	ClientMsg.ConnectLocalPlayerExEquipInventoryUpdate(function()
+		TryCompleteOwnedPurchaseGuideSteps()
+		ForceRefreshGuideType()
+	end)
+
+	ClientMsg.ConnectJumpRunWayEnterEscapeHudMode(function()
+		ForceRefreshGuideType()
 	end)
 
 	runService.RenderStepped:Connect(function()

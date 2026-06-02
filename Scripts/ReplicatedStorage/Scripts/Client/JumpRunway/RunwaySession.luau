@@ -115,6 +115,13 @@ local JumpWindowR6WalkAnimationId = "rbxassetid://180426354"
 local FinalLandPhaseALeftGroundMinVy = 1.5
 local RunwayMovementInputSinkActionName = "JumpRunwayMovementInputSink"
 local RunwayMovementInputSinkPriority = 10000
+local GuideSlowMotionSpeedScale = 0.15
+local GuideSlowMotionAnimRenderStepName = "JumpRunwayGuideSlowMotionAnim"
+local GuideSlowMotionAnimPriorities: { [Enum.AnimationPriority]: boolean } = {
+	[Enum.AnimationPriority.Movement] = true,
+	[Enum.AnimationPriority.Core] = true,
+}
+local guideSlowMotionAnimBaseSpeedMap: { [AnimationTrack]: number } = setmetatable({}, { __mode = "k" })
 
 local function ResolveConfigNumber(rawValue: any, fallbackValue: number): number
 	return if typeof(rawValue) == "number" and rawValue == rawValue then rawValue else fallbackValue
@@ -230,6 +237,13 @@ local Refs: {
 	distanceLogStageStartRatingTier: number?,
 	distanceLogSegments: { RunwayDistanceLogSegment },
 	distanceLogSummaryPrinted: boolean,
+	guideSlowMotionActive: boolean,
+	guideSlowMotionStepKey: string?,
+	guideSlowMotionGuideType: number,
+	guideSlowMotionLocallyCompletedStepKeys: { [string]: boolean },
+	finalJumpGuideSlowMotionApexReady: boolean,
+	finalJumpGuideSlowMotionAscentSeen: boolean,
+	finalJumpGuideSlowMotionPrevRawVy: number?,
 } = {
 	finalTakeoffForceFreefallUntilClock = 0,
 	initDone = false,
@@ -301,6 +315,13 @@ local Refs: {
 	distanceLogStageStartRatingTier = nil,
 	distanceLogSegments = {},
 	distanceLogSummaryPrinted = false,
+	guideSlowMotionActive = false,
+	guideSlowMotionStepKey = nil,
+	guideSlowMotionGuideType = GameConfig.GuideType.None,
+	guideSlowMotionLocallyCompletedStepKeys = {},
+	finalJumpGuideSlowMotionApexReady = false,
+	finalJumpGuideSlowMotionAscentSeen = false,
+	finalJumpGuideSlowMotionPrevRawVy = nil,
 }
 
 local localState: RunwayLocalState = RunwayStateStore.CreateDefault(Ph, SlideKindStandard)
@@ -1285,7 +1306,9 @@ function RunwaySession.EnsureJumpWindowWalkAnimation(humanoid: Humanoid, speedSc
 	if not track.IsPlaying then
 		track:Play(0.08, 1, 0.9)
 	end
-	track:AdjustSpeed(math.clamp(0.85 + (1 - speedScale) * 1.4, 0.75, 1.25))
+	local guideAnimScale = RunwaySession.GetGuideSlowMotionScale()
+	local stumbleAnimSpeed = math.clamp(0.85 + (1 - speedScale) * 1.4, 0.75, 1.25)
+	track:AdjustSpeed(math.max(stumbleAnimSpeed * guideAnimScale, 0.05))
 end
 
 function RunwaySession.ClearJumpBoostIfNeeded(phase: number)
@@ -1342,6 +1365,10 @@ function RunwaySession.GetJumpHorizontalForwardSpeed(nowClock: number, segmentIn
 	return maxSpd + (minSpd - maxSpd) * eased
 end
 
+function RunwaySession.GetGuideSlowMotionScale(): number
+	return if Refs.guideSlowMotionActive then GuideSlowMotionSpeedScale else 1
+end
+
 function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt: number, humanoid: Humanoid)
 	local v = hrp.AssemblyLinearVelocity
 	local vy = RunwaySession.GetBoostedVerticalY(v.Y)
@@ -1382,6 +1409,9 @@ function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt
 			forwardSpeed = RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, localState.takeoffCount, vy)
 		end
 	end
+	local guideSlowMotionScale = RunwaySession.GetGuideSlowMotionScale()
+	forwardSpeed *= guideSlowMotionScale
+	vy *= guideSlowMotionScale
 	hrp.AssemblyLinearVelocity = fwdH * forwardSpeed + Vector3.new(0, vy, 0)
 end
 
@@ -1396,11 +1426,12 @@ function RunwaySession.ApplyJumpWindowWalkPhysics(humanoid: Humanoid, hrp: BaseP
 	fwdH = fwdH.Unit
 	local stumbleWave = math.abs(math.sin(os.clock() * math.pi * 2 * JumpWindowStumblePulseFrequencyHz))
 	local speedScale = math.max(JumpWindowStumbleMinSpeedScale, 1 - stumbleWave * JumpWindowStumblePulseStrength)
+	local guideSlowMotionScale = RunwaySession.GetGuideSlowMotionScale()
 	RunwaySession.EnsureHumanoidWalkingState(humanoid)
 	RunwaySession.EnsureJumpWindowWalkAnimation(humanoid, speedScale)
 	humanoid:Move(fwdH, false)
-	local walkSpeed = cfg.JUMP_WINDOW_WALK_SPEED * speedScale
-	hrp.AssemblyLinearVelocity = fwdH * walkSpeed + Vector3.new(0, vy, 0)
+	local walkSpeed = cfg.JUMP_WINDOW_WALK_SPEED * speedScale * guideSlowMotionScale
+	hrp.AssemblyLinearVelocity = fwdH * walkSpeed + Vector3.new(0, vy * guideSlowMotionScale, 0)
 end
 
 function RunwaySession.UpdateSlideVelocity(hrp: BasePart, forward: Vector3, nowClock: number)
@@ -4187,6 +4218,8 @@ function RunwaySession.ResetLocalRunToIdle()
 	ClientMsg.FireJumpRunWayStopEscapeRedScreen()
 	local _, humanoid, hrp = RunwaySession.GetCharacterParts()
 	ClientGameInfo.SetInJumpRunway(false)
+	RunwaySession.ClearRunwayGuideSlowMotion()
+	RunwaySession.ResetFinalJumpGuideSlowMotionApexGate()
 	RunwaySession.PrintDistanceLogSummary("reset_to_idle", hrp)
 	-- 先同步清理资源和状态（避免异步延迟导致新一局启动后资源混乱）
 	RunwaySession.StopJumpWindowWalkAnimation()
@@ -4442,14 +4475,14 @@ function RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid: Humanoid, nowClock:
 	if localState.phase == Ph.Airborne then
 		local locMode = RunwaySession.ResolveRunwayLocomotionMode(humanoid, nowClock)
 		if locMode == RUNWAY_LOCOMOTION_WALK then
-			local wWalk = cfg.JUMP_WINDOW_WALK_SPEED
+			local wWalk = cfg.JUMP_WINDOW_WALK_SPEED * RunwaySession.GetGuideSlowMotionScale()
 			if humanoid.WalkSpeed ~= wWalk then
 				humanoid.WalkSpeed = wWalk
 			end
 			return
 		end
 		if locMode == RUNWAY_LOCOMOTION_RUN then
-			local wRun = RunwaySession.GetRunwayTargetGroundAlongSpeed(humanoid, nowClock)
+			local wRun = RunwaySession.GetRunwayTargetGroundAlongSpeed(humanoid, nowClock) * RunwaySession.GetGuideSlowMotionScale()
 			if humanoid.WalkSpeed ~= wRun then
 				humanoid.WalkSpeed = wRun
 			end
@@ -4461,7 +4494,7 @@ function RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid: Humanoid, nowClock:
 		return
 	end
 	if localState.phase == Ph.JumpWindow and RunwaySession.WindowDriftPhysicsActive(humanoid, nowClock) then
-		local wDrift = cfg.JUMP_WINDOW_WALK_SPEED
+		local wDrift = cfg.JUMP_WINDOW_WALK_SPEED * RunwaySession.GetGuideSlowMotionScale()
 		if humanoid.WalkSpeed ~= wDrift then
 			humanoid.WalkSpeed = wDrift
 		end
@@ -4478,8 +4511,188 @@ function RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid: Humanoid, nowClock:
 		)
 		w = minSpd
 	end
+	w *= RunwaySession.GetGuideSlowMotionScale()
 	if humanoid.WalkSpeed ~= w then
 		humanoid.WalkSpeed = w
+	end
+end
+
+function RunwaySession.IsGuideStepDone(stepKey: string): boolean
+	if Refs.guideSlowMotionLocallyCompletedStepKeys[stepKey] == true then
+		return true
+	end
+	local info = ClientGameInfo.GetLocalPlayerInfo()
+	if info == nil then
+		return false
+	end
+	return info.guideProgressInfo.guideStepDoneMap[stepKey] == true
+end
+
+function RunwaySession.RestoreGuideSlowMotionAnimatorTracks()
+	for track, baseSpeed in guideSlowMotionAnimBaseSpeedMap do
+		if track.Parent ~= nil then
+			pcall(function()
+				track:AdjustSpeed(baseSpeed)
+			end)
+		end
+	end
+	table.clear(guideSlowMotionAnimBaseSpeedMap)
+end
+
+function RunwaySession.ApplyGuideSlowMotionAnimatorScale(humanoid: Humanoid)
+	if not Refs.guideSlowMotionActive or not RunwaySession.IsRunwayActivePhase(localState.phase) then
+		return
+	end
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if animator == nil then
+		return
+	end
+	local customWalkTrack = Refs.jumpWindowWalkAnimTrack
+	for _, track in animator:GetPlayingAnimationTracks() do
+		if track == customWalkTrack then
+			continue
+		end
+		if not GuideSlowMotionAnimPriorities[track.Priority] then
+			continue
+		end
+		local baseSpeed = guideSlowMotionAnimBaseSpeedMap[track]
+		if baseSpeed == nil then
+			baseSpeed = track.Speed
+			guideSlowMotionAnimBaseSpeedMap[track] = baseSpeed
+		end
+		local targetSpeed = math.max(baseSpeed * GuideSlowMotionSpeedScale, 0.05)
+		if math.abs(track.Speed - targetSpeed) > 1e-4 then
+			track:AdjustSpeed(targetSpeed)
+		end
+	end
+end
+
+function RunwaySession.OnGuideSlowMotionAnimRenderStep(_dt: number)
+	if not Refs.guideSlowMotionActive or not RunwaySession.IsRunwayActivePhase(localState.phase) then
+		return
+	end
+	local _character, humanoid, _hrp = RunwaySession.GetCharacterParts()
+	if humanoid == nil then
+		return
+	end
+	RunwaySession.ApplyGuideSlowMotionAnimatorScale(humanoid)
+end
+
+function RunwaySession.ResetFinalJumpGuideSlowMotionApexGate()
+	Refs.finalJumpGuideSlowMotionApexReady = false
+	Refs.finalJumpGuideSlowMotionAscentSeen = false
+	Refs.finalJumpGuideSlowMotionPrevRawVy = nil
+end
+
+function RunwaySession.UpdateFinalJumpGuideSlowMotionApexGate(hrp: BasePart)
+	if localState.phase ~= Ph.Airborne or localState.takeoffCount < cfg.N_TOTAL_JUMPS then
+		RunwaySession.ResetFinalJumpGuideSlowMotionApexGate()
+		return
+	end
+	if Refs.finalJumpGuideSlowMotionApexReady then
+		return
+	end
+	if RunwaySession.IsGuideStepDone(GameConfig.GuideStepKey.FinalDashFinished) then
+		Refs.finalJumpGuideSlowMotionApexReady = true
+		return
+	end
+	local rawVy = hrp.AssemblyLinearVelocity.Y
+	if rawVy > 0 then
+		Refs.finalJumpGuideSlowMotionAscentSeen = true
+	end
+	local prevVy = Refs.finalJumpGuideSlowMotionPrevRawVy
+	Refs.finalJumpGuideSlowMotionPrevRawVy = rawVy
+	if Refs.finalJumpGuideSlowMotionAscentSeen and prevVy ~= nil and prevVy > 0 and rawVy <= 0 then
+		Refs.finalJumpGuideSlowMotionApexReady = true
+	end
+end
+
+function RunwaySession.IsFinalJumpGuideSlowMotionApexReady(): boolean
+	return Refs.finalJumpGuideSlowMotionApexReady
+end
+
+function RunwaySession.SetRunwayGuideSlowMotion(guideType: number, stepKey: string)
+	if RunwaySession.IsGuideStepDone(stepKey) then
+		return
+	end
+	if Refs.guideSlowMotionActive and Refs.guideSlowMotionStepKey == stepKey then
+		return
+	end
+	Refs.guideSlowMotionActive = true
+	Refs.guideSlowMotionStepKey = stepKey
+	Refs.guideSlowMotionGuideType = guideType
+	ClientGameInfo.SetCurrentGuideType(guideType)
+	local _character, _humanoid, hrp = RunwaySession.GetCharacterParts()
+	if hrp ~= nil then
+		hrp.AssemblyLinearVelocity *= GuideSlowMotionSpeedScale
+		hrp.AssemblyAngularVelocity *= GuideSlowMotionSpeedScale
+	end
+end
+
+function RunwaySession.ClearRunwayGuideSlowMotion()
+	Refs.guideSlowMotionActive = false
+	Refs.guideSlowMotionStepKey = nil
+	Refs.guideSlowMotionGuideType = GameConfig.GuideType.None
+	RunwaySession.RestoreGuideSlowMotionAnimatorTracks()
+	if ClientGameInfo.GetCurrentGuideType() == GameConfig.GuideType.TutorialBeginLineJump
+		or ClientGameInfo.GetCurrentGuideType() == GameConfig.GuideType.TutorialLandingJump
+		or ClientGameInfo.GetCurrentGuideType() == GameConfig.GuideType.TutorialFinalDash
+	then
+		ClientGameInfo.SetCurrentGuideType(GameConfig.GuideType.None)
+	end
+end
+
+function RunwaySession.CompleteActiveRunwayGuideSlowMotion()
+	local stepKey = Refs.guideSlowMotionStepKey
+	if stepKey ~= nil then
+		Refs.guideSlowMotionLocallyCompletedStepKeys[stepKey] = true
+		NetMsg.FireRequestCompleteGuideStep(stepKey)
+	end
+	RunwaySession.ClearRunwayGuideSlowMotion()
+end
+
+function RunwaySession.RefreshRunwayGuideSlowMotionState()
+	if not RunwaySession.IsRunwayActivePhase(localState.phase) then
+		RunwaySession.ClearRunwayGuideSlowMotion()
+		return
+	end
+	if localState.phase == Ph.JumpWindow
+		and not RunwaySession.IsGuideStepDone(GameConfig.GuideStepKey.BeginLineJumpFinished)
+	then
+		RunwaySession.SetRunwayGuideSlowMotion(
+			GameConfig.GuideType.TutorialBeginLineJump,
+			GameConfig.GuideStepKey.BeginLineJumpFinished
+		)
+	elseif localState.phase == Ph.Airborne
+		and localState.takeoffCount >= 1
+		and localState.takeoffCount < cfg.N_TOTAL_JUMPS
+		and localState.predictJumpWindowUntil ~= nil
+		and not RunwaySession.IsGuideStepDone(GameConfig.GuideStepKey.LandingJumpFinished)
+	then
+		RunwaySession.SetRunwayGuideSlowMotion(
+			GameConfig.GuideType.TutorialLandingJump,
+			GameConfig.GuideStepKey.LandingJumpFinished
+		)
+	elseif localState.phase == Ph.Airborne
+		and localState.takeoffCount >= cfg.N_TOTAL_JUMPS
+		and localState.fuel > 0
+		and RunwaySession.GetExpectedPlayerMaxFuel() > 0
+		and not RunwaySession.IsGuideStepDone(GameConfig.GuideStepKey.FinalDashFinished)
+		and RunwaySession.IsFinalJumpGuideSlowMotionApexReady()
+	then
+		RunwaySession.SetRunwayGuideSlowMotion(
+			GameConfig.GuideType.TutorialFinalDash,
+			GameConfig.GuideStepKey.FinalDashFinished
+		)
+	end
+
+	if Refs.guideSlowMotionActive then
+		local nowClock = os.clock()
+		if Refs.guideSlowMotionStepKey == GameConfig.GuideStepKey.BeginLineJumpFinished then
+			localState.lineJumpWindowExpireAt = nowClock + cfg.T_WINDOW
+		elseif Refs.guideSlowMotionStepKey == GameConfig.GuideStepKey.LandingJumpFinished then
+			localState.predictJumpWindowUntil = nowClock + cfg.T_WINDOW
+		end
 	end
 end
 
@@ -4494,6 +4707,11 @@ function RunwaySession.ApplyLocalPhysics(dt: number)
 	local forward = NormalizeRunwayForward(localState.runwayForward)
 	local nowClock = os.clock()
 	RunwaySession.UpdateLocalJumpWindowPrediction(humanoid, nowClock)
+	RunwaySession.UpdateFinalJumpGuideSlowMotionApexGate(hrp)
+	RunwaySession.RefreshRunwayGuideSlowMotionState()
+	if Refs.guideSlowMotionActive then
+		dt *= GuideSlowMotionSpeedScale
+	end
 	local eff = RunwaySession.GetEffectivePhysicsPhase(humanoid, nowClock)
 	if eff == Ph.AutoRun then
 		RunwaySession.UpdateAutoRunVelocity(hrp, forward, dt, humanoid)
@@ -5896,6 +6114,11 @@ function RunwaySession.UpdateTick(dt: number)
 	RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid, nowClock)
 	RunwaySession.ApplyRunwayHumanoidJumpState(humanoid, true)
 	RunwaySession.PollBeginLineOverlapForJumpWindow()
+	RunwaySession.UpdateFinalJumpGuideSlowMotionApexGate(hrp)
+	RunwaySession.RefreshRunwayGuideSlowMotionState()
+	if Refs.guideSlowMotionActive then
+		dt *= GuideSlowMotionSpeedScale
+	end
 	RunwaySession.UpdateRunwayRingTransform(humanoid, hrp, dt)
 	RunwaySession.UpdateDistanceRecorder(humanoid, hrp)
 	local phaseBeforeForwardBlocked = localState.phase
@@ -6334,6 +6557,7 @@ function RunwaySession.JumpApplyTakeoff(
 	end)
 	if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
 		Refs.finalTakeoffForceFreefallUntilClock = nowClock + math.max(0.12, cfg.RUNWAY_JUMP_BOOST_HOLD_SEC)
+		RunwaySession.ResetFinalJumpGuideSlowMotionApexGate()
 		RunwaySession.DestroyRunwayRing()
 		RunwaySession.EnsureDistanceRecorderFromTemplate(humanoid, hrp)
 	end
@@ -6414,6 +6638,9 @@ function RunwaySession.OnInputBegan(input: InputObject, processed: boolean)
 		return
 	end
 	if IsRunwayPrimaryActionInput(input) then
+		if Refs.guideSlowMotionActive then
+			RunwaySession.CompleteActiveRunwayGuideSlowMotion()
+		end
 		if RunwaySession.IsRunwayActivePhase(localState.phase) then
 			if RunwaySession.JumpTry() then
 				RunwaySession.NetReportJump()
@@ -6534,6 +6761,13 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	end
 	-- 进入跑道时收起所有手持 Tool
 	humanoid:UnequipTools()
+	NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.StartTriggerFinished)
+	local currentGuideType = ClientGameInfo.GetCurrentGuideType()
+	if currentGuideType == GameConfig.GuideType.TutorialJetpackRunwayRetry then
+		NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.JetpackRunwayRetryFinished)
+	elseif currentGuideType == GameConfig.GuideType.TutorialJumpPowerRunwayRetry then
+		NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.JumpPowerRunwayRetryFinished)
+	end
 	ClientGameInfo.SetInJumpRunway(true)
 	Refs.startTriggerStartArmed = false
 	RunwaySession.DestroyDistanceRecorder()
@@ -6621,6 +6855,7 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	localState.prevPreLand = RunwaySession.IsRunwayPreLanding(humanoid)
 	localState.prevJumpWindowRayBand = RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid)
 	Refs.finalTakeoffForceFreefallUntilClock = 0
+	RunwaySession.ResetFinalJumpGuideSlowMotionApexGate()
 	Refs.prevGroundedHeartbeat = localState.prevLocalGroundedForLand
 	RunwayCameraController.Enable(workspace, cfg, hrp, localState.runwayForward, NormalizeRunwayForward)
 	RunwaySession.EnsureJumpRunwayRocketBackpack(character)
@@ -6761,6 +6996,11 @@ function RunwaySession.Init()
 		RunwayFinalTiltRenderStepName,
 		Enum.RenderPriority.Last.Value,
 		RunwaySession.OnJumpRunwayFinalTiltRenderStep
+	)
+	runService:BindToRenderStep(
+		GuideSlowMotionAnimRenderStepName,
+		Enum.RenderPriority.Last.Value,
+		RunwaySession.OnGuideSlowMotionAnimRenderStep
 	)
 end
 

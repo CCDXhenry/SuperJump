@@ -31,6 +31,7 @@ local homesFolder = workspace:WaitForChild("PlayersHome")
 local slotStateCache: { [string]: { active: boolean, homeInfo: any?, isLocalPlayer: boolean?, rebirthLevel: number?, ownerUserId: number? } } = {}
 -- 服务端同步时的权威 unclaimedYield；展示数字 = 该值 + 每秒增量 * floor(服务器时间 - anchorTime)
 local yieldAnchorServerTime: { [number]: { [string]: number } } = {}
+local yieldAnchorModelInstanceId: { [number]: { [string]: string } } = {}
 local floorModelsCache: { [string]: { [number]: Model } } = {}
 local upgradeUITemplateBackup: SurfaceGui? = nil
 local FLOOR_HEIGHT = 32.6
@@ -80,6 +81,28 @@ local LOCAL_SLOT_RECOVERY_MAX_ATTEMPTS = 24
 -- 调试：设为 true 时在 ApplySlotVisuals 节流打印，用于排查高频全量刷新（默认关闭）
 local DEBUG_HOME_SLOT_REFRESH = false
 local lastDebugHomeApplyClock = 0.0
+local DEBUG_COLLECT_YIELD_LOG = true
+local COLLECT_YIELD_ZERO_LOG_INTERVAL = 1
+local lastCollectYieldZeroLogAtByKey: { [string]: number } = {}
+
+local function DebugCollectYieldLog(eventName: string, ownerUserId: number?, pointIndexStr: string?, data: { [string]: any }?)
+	if not DEBUG_COLLECT_YIELD_LOG then
+		return
+	end
+	local detailText = ""
+	if data then
+		for key, value in pairs(data) do
+			detailText ..= " " .. tostring(key) .. "=" .. tostring(value)
+		end
+	end
+	print(
+		"[ModelYieldDebug][Client]",
+		eventName,
+		"userId=" .. tostring(ownerUserId),
+		"point=" .. tostring(pointIndexStr),
+		detailText
+	)
+end
 
 local function setProximityPromptEnabledIfChanged(prompt: ProximityPrompt, enabled: boolean)
 	if prompt.Enabled ~= enabled then
@@ -131,8 +154,71 @@ local function resetYieldAnchor(ownerUserId: number, pointIndexStr: string)
 	byPoint[pointIndexStr] = workspace:GetServerTimeNow()
 end
 
+local function setCollectYieldText(
+	collectText: TextLabel,
+	text: string,
+	source: string?,
+	ownerUserId: number?,
+	pointIndexStr: string?,
+	displayAmount: number?
+)
+	TranslationTool.RemoveCustomAutoLocalizeGui(collectText)
+	if text == "0" and collectText.Text ~= "0" then
+		local debugKey = tostring(ownerUserId) .. ":" .. tostring(pointIndexStr) .. ":" .. tostring(source)
+		local now = os.clock()
+		local lastLogAt = lastCollectYieldZeroLogAtByKey[debugKey] or 0
+		if now - lastLogAt >= COLLECT_YIELD_ZERO_LOG_INTERVAL then
+			lastCollectYieldZeroLogAtByKey[debugKey] = now
+			DebugCollectYieldLog("TextSetZero", ownerUserId, pointIndexStr, {
+				source = source or "",
+				oldText = collectText.Text,
+				newText = text,
+				displayAmount = displayAmount or 0,
+			})
+		end
+	end
+	if collectText.Text ~= text then
+		collectText.Text = text
+	end
+end
+
 local function clearYieldAnchorsForOwner(ownerUserId: number)
 	yieldAnchorServerTime[ownerUserId] = nil
+	yieldAnchorModelInstanceId[ownerUserId] = nil
+end
+
+local function preserveCurrentYieldForSameModels(slotName: string, incomingHomeInfo: any?)
+	if not incomingHomeInfo or not incomingHomeInfo.placedModels then
+		return
+	end
+	local currentState = slotStateCache[slotName]
+	if not currentState or not currentState.homeInfo or not currentState.homeInfo.placedModels then
+		return
+	end
+	for pointIndexStr, incomingPlacedData in pairs(incomingHomeInfo.placedModels) do
+		local currentPlacedData = currentState.homeInfo.placedModels[pointIndexStr]
+		if currentPlacedData == nil then
+			continue
+		end
+		local incomingAny = incomingPlacedData :: any
+		local currentAny = currentPlacedData :: any
+		local incomingInstanceId = tostring(incomingAny.instanceId or "")
+		local currentInstanceId = tostring(currentAny.instanceId or "")
+		if incomingInstanceId ~= currentInstanceId then
+			continue
+		end
+		local incomingYield = if type(incomingAny.unclaimedYield) == "number" then incomingAny.unclaimedYield else 0
+		local currentYield = if type(currentAny.unclaimedYield) == "number" then currentAny.unclaimedYield else 0
+		if currentYield > incomingYield then
+			DebugCollectYieldLog("HomeInfoPreserveYield", nil, pointIndexStr, {
+				homeSlot = slotName,
+				instanceId = incomingInstanceId,
+				incomingYield = incomingYield,
+				currentYield = currentYield,
+			})
+			incomingAny.unclaimedYield = currentYield
+		end
+	end
 end
 
 local function syncAllYieldAnchorsForOwner(ownerUserId: number, homeInfo: any?)
@@ -140,12 +226,40 @@ local function syncAllYieldAnchorsForOwner(ownerUserId: number, homeInfo: any?)
 		clearYieldAnchorsForOwner(ownerUserId)
 		return
 	end
-	local byPoint: { [string]: number } = {}
 	local now = workspace:GetServerTimeNow()
-	for pointIndexStr in pairs(homeInfo.placedModels) do
-		byPoint[pointIndexStr] = now
+	local byPoint = yieldAnchorServerTime[ownerUserId]
+	if not byPoint then
+		byPoint = {}
+		yieldAnchorServerTime[ownerUserId] = byPoint
 	end
-	yieldAnchorServerTime[ownerUserId] = byPoint
+	local byModelId = yieldAnchorModelInstanceId[ownerUserId]
+	if not byModelId then
+		byModelId = {}
+		yieldAnchorModelInstanceId[ownerUserId] = byModelId
+	end
+	for pointIndexStr, placedData in pairs(homeInfo.placedModels) do
+		local instanceId = tostring((placedData :: any).instanceId or "")
+		if byPoint[pointIndexStr] == nil or byModelId[pointIndexStr] ~= instanceId then
+			DebugCollectYieldLog("HomeAnchorReset", ownerUserId, pointIndexStr, {
+				oldAnchor = byPoint[pointIndexStr] or 0,
+				oldInstanceId = byModelId[pointIndexStr] or "",
+				newInstanceId = instanceId,
+				baseYield = ((placedData :: any).unclaimedYield or 0),
+			})
+			byPoint[pointIndexStr] = now
+			byModelId[pointIndexStr] = instanceId
+		end
+	end
+	for pointIndexStr in pairs(byPoint) do
+		if homeInfo.placedModels[pointIndexStr] == nil then
+			DebugCollectYieldLog("HomeAnchorClear", ownerUserId, pointIndexStr, {
+				oldAnchor = byPoint[pointIndexStr] or 0,
+				oldInstanceId = byModelId[pointIndexStr] or "",
+			})
+			byPoint[pointIndexStr] = nil
+			byModelId[pointIndexStr] = nil
+		end
+	end
 end
 
 local function getExtrapolatedUnclaimedDisplay(ownerUserId: number, pointIndexStr: string, placedData: any, rebirthLevel: number): number
@@ -219,7 +333,15 @@ local function refreshCollectYieldTextsForActiveHomes()
 			if not collectText then
 				continue
 			end
-			collectText.Text = formatCollectYieldDisplay(ownerUserId, pointIndexStr, placedData, rebirthLevel)
+			local displayAmount = getExtrapolatedUnclaimedDisplay(ownerUserId, pointIndexStr, placedData, rebirthLevel)
+			setCollectYieldText(
+				collectText,
+				NumberExtension.FormatBigNumberAA(displayAmount),
+				"HeartbeatRefresh",
+				ownerUserId,
+				pointIndexStr,
+				displayAmount
+			)
 		end
 	end
 end
@@ -995,6 +1117,23 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 						end
 
 						if pIdx and targetId ~= 0 then
+							local modelInfo = state.homeInfo.placedModels[tostring(pIdx)]
+							local rebirthForYield = if state.rebirthLevel ~= nil then state.rebirthLevel else 0
+							local estimatedYield = if modelInfo ~= nil
+								then getExtrapolatedUnclaimedDisplay(targetId, tostring(pIdx), modelInfo, rebirthForYield)
+								else 0
+							if targetId == players.LocalPlayer.UserId and modelInfo ~= nil and estimatedYield > 0 then
+								NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.BrainrotCollectFinished)
+							end
+							if targetId == players.LocalPlayer.UserId and modelInfo ~= nil then
+								local modelInfoAny = modelInfo :: any
+								DebugCollectYieldLog("ClaimTouchLocalClear", targetId, tostring(pIdx), {
+									beforeBase = modelInfoAny.unclaimedYield or 0,
+									estimatedYield = estimatedYield,
+								})
+								modelInfoAny.unclaimedYield = 0
+								resetYieldAnchor(targetId, tostring(pIdx))
+							end
 							NetMsg.FireRequestClaimYield(targetId, pIdx)
 						end
 					end
@@ -1059,8 +1198,12 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 					elseif isLocalPlayer then players.LocalPlayer.UserId
 					else nil
 				local rebirthForYield = if state and state.rebirthLevel ~= nil then state.rebirthLevel else 0
-				local yieldStr = formatCollectYieldDisplay(ownerUserId, tostring(pointIndex), placedData, rebirthForYield)
-				TranslationTool.CustomAutoLocalizeTextLabel(collectText, yieldStr) -- Plain text, no key
+				local pointIndexStr = tostring(pointIndex)
+				local displayAmount = if ownerUserId ~= nil
+					then getExtrapolatedUnclaimedDisplay(ownerUserId, pointIndexStr, placedData, rebirthForYield)
+					else ((placedData :: any).unclaimedYield or 0)
+				local yieldStr = NumberExtension.FormatBigNumberAA(displayAmount)
+				setCollectYieldText(collectText, yieldStr, "UpdatePlot", ownerUserId, pointIndexStr, displayAmount)
 			end
 		end
 		if coinImg then
@@ -1154,6 +1297,7 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 												end
 												GameSoundManager.PlayUpgradeAbilitySound()
 												NetMsg.FireRequestUpgradeModel(pIdx)
+												NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.BrainrotUpgradeFinished)
 											end
 										end
 									end
@@ -2000,6 +2144,7 @@ local function OnPromptTriggered(prompt: ProximityPrompt, player: Player)
 
 			GameSoundManager.PlayUpgradeAbilitySound()
 			NetMsg.FireRequestUpgradeModel(pointIndex)
+			NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.BrainrotUpgradeFinished)
 		else
 			-- 3. 出售请求
 			GameSoundManager.PlaySellSound()
@@ -2147,6 +2292,17 @@ function HomeClientManager.Init()
 				resolvedRebirthLevel = currentState and currentState.rebirthLevel
 			end
 		end
+		if homeInfo and homeInfo.placedModels then
+			for pointIndexStr, placedData in pairs(homeInfo.placedModels) do
+				DebugCollectYieldLog("HomeInfoUpdateModel", playerId, pointIndexStr, {
+					homeSlot = homeSlot,
+					isLocal = isLocal,
+					baseYield = ((placedData :: any).unclaimedYield or 0),
+					instanceId = tostring((placedData :: any).instanceId or ""),
+				})
+			end
+		end
+		preserveCurrentYieldForSameModels(homeSlot, homeInfo)
 		slotStateCache[homeSlot] = {
 			active = true,
 			homeInfo = homeInfo,
@@ -2223,8 +2379,26 @@ function HomeClientManager.Init()
 						if playerInfo.homeInfo and playerInfo.homeInfo.placedModels then
 							pData = playerInfo.homeInfo.placedModels[pointIndexStr]
 							if pData then
+								local oldAmount = (pData :: any).unclaimedYield or 0
+								DebugCollectYieldLog("YieldNetUpdate", playerId, pointIndexStr, {
+									oldBase = oldAmount,
+									newBase = amount,
+									homeSlot = homeSlot,
+								})
 								pData.unclaimedYield = amount
 								resetYieldAnchor(playerId, pointIndexStr)
+								local slotState = slotStateCache[homeSlot]
+								local slotPlacedModels = if slotState and slotState.homeInfo then slotState.homeInfo.placedModels else nil
+								local slotPData = slotPlacedModels and slotPlacedModels[pointIndexStr]
+								if slotPData and slotPData ~= pData then
+									local slotAny = slotPData :: any
+									DebugCollectYieldLog("YieldNetUpdateSlotCache", playerId, pointIndexStr, {
+										oldBase = slotAny.unclaimedYield or 0,
+										newBase = amount,
+										homeSlot = homeSlot,
+									})
+									slotAny.unclaimedYield = amount
+								end
 							end
 						end
 
@@ -2248,10 +2422,9 @@ function HomeClientManager.Init()
 								if isOccupied and pData then
 									local slotState = slotStateCache[homeSlot]
 									local rlv = if slotState and slotState.rebirthLevel ~= nil then slotState.rebirthLevel else 0
-									local newYieldText = formatCollectYieldDisplay(playerId, pointIndexStr, pData, rlv)
-									if collectText.Text ~= newYieldText then
-										collectText.Text = newYieldText
-									end
+									local displayAmount = getExtrapolatedUnclaimedDisplay(playerId, pointIndexStr, pData, rlv)
+									local newYieldText = NumberExtension.FormatBigNumberAA(displayAmount)
+									setCollectYieldText(collectText, newYieldText, "YieldNetUpdate", playerId, pointIndexStr, displayAmount)
 								end
 							end
 							if coinImg and coinImg.Visible ~= isOccupied then
