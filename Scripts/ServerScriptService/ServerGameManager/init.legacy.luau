@@ -29,6 +29,7 @@ local DateTimeExtension = require(coreSharedScripts:FindFirstChild("DateTimeExte
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
+local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
 local dataStoreService: DataStoreService = game:GetService("DataStoreService")
 local playerInfoDataStore: DataStore = dataStoreService:GetDataStore("PlayerInfo")
 local players: Players = game:GetService("Players")
@@ -234,6 +235,17 @@ BrainrotHomeManager.Init()
 JumpRunwayServerManager.Init()
 ExEquipManager.Init()
 JetpackManager.Init()
+
+NetMsg.ConnectRequestSetDecelerationOn(function(player: Player, decelerationOn: boolean)
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return
+	end
+	if playerInfo.settingInfo.decelerationOn ~= decelerationOn then
+		ServerGameInfo.UpdateDecelerationOn(player, decelerationOn)
+	end
+	ServerGameInfo.ApplyWalkSpeed(player)
+end)
 
 players.PlayerAdded:Connect(OnPlayerAdded)
 players.PlayerRemoving:Connect(OnPlayerRemoving)

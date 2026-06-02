@@ -149,15 +149,52 @@ local function RefreshDecelerationButtonVisible(levelSpeed: number)
 	decelerationButton.Visible = levelSpeed > DecelerationButtonShowSpeed
 end
 
+local RefreshUpgradeValues: () -> ()
+
+local function ResolveLocalBaseWalkSpeed(): number
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if localPlayerInfo == nil then
+		return 16
+	end
+	local isDecelerationOn = localPlayerInfo.settingInfo.decelerationOn == true
+	local walkSpeedLevel = localPlayerInfo.shopInfo.walkSpeedLevel or 1
+	local targetLevel = if isDecelerationOn then 1 else walkSpeedLevel
+	local walkSpeedConfig = GameConfig.Shop.WalkSpeed
+	if walkSpeedConfig == nil then
+		return 16
+	end
+	return walkSpeedConfig.abilityList[targetLevel]
+		or walkSpeedConfig.abilityList[walkSpeedConfig.maxLevel]
+		or walkSpeedConfig.abilityList[1]
+		or 16
+end
+
+local function ApplyLocalWalkSpeedFromSettings()
+	if IsInJumpRunwaySession() or ClientGameInfo.IsExercising() then
+		return
+	end
+	local char = localPlayer.Character
+	if char == nil then
+		return
+	end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if hum == nil then
+		return
+	end
+	hum.WalkSpeed = ResolveLocalBaseWalkSpeed()
+end
+
 local function ToggleDecelerationOn()
 	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
 	if localPlayerInfo == nil then
 		return
 	end
 	local newDecelerationOn = not (localPlayerInfo.settingInfo.decelerationOn == true)
-	localPlayerInfo.settingInfo.decelerationOn = newDecelerationOn
-	RefreshDecelerationButtonView()
 	NetMsg.FireRequestSetDecelerationOn(newDecelerationOn)
+	localPlayerInfo.settingInfo.decelerationOn = newDecelerationOn
+	ApplyLocalWalkSpeedFromSettings()
+	RefreshDecelerationButtonView()
+	RefreshUpgradeValues()
 end
 
 if walkSpeedAddButton then
@@ -265,7 +302,7 @@ local function RefreshCoinCountText()
 end
 
 --刷新升级数值
-local function RefreshUpgradeValues()
+function RefreshUpgradeValues()
 	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
 	if not localPlayerInfo then
 		return
@@ -301,7 +338,10 @@ local function RefreshUpgradeValues()
 		end
 	end
 
-	if isBuffed then
+	if isDecelerationOn then
+		walkSpeedText.Text = NumberExtension.FormatBigNumberAA(baseSpeed)
+		walkSpeedText.TextColor3 = Color3.fromRGB(255, 60, 60)
+	elseif isBuffed then
 		walkSpeedText.Text = NumberExtension.FormatBigNumberAA(currentSpeed)
 		walkSpeedText.TextColor3 = Color3.new(0, 1, 0) -- Green
 	else

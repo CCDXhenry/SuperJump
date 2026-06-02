@@ -324,6 +324,8 @@ local function GetMoneyCount(playerInfo: GameConfig.PlayerInfo): number
 	return playerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
 end
 
+-- 埋点用：始终返回 walkSpeedLevel 对应速度，忽略减速按钮（decelerationOn）
+-- 埋点用：始终返回 walkSpeedLevel 对应速度，忽略减速按钮（decelerationOn）
 function ServerGameInfo.GetResolvedWalkSpeedValue(player: Player): number
 	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
@@ -881,16 +883,31 @@ function ServerGameInfo.GetResolvedShopWalkSpeed(player: Player): number?
 	return config.abilityList[targetLevel] or config.abilityList[config.maxLevel] or config.abilityList[1]
 end
 
---应用行走速度比例到角色
+--应用行走速度到角色
 function ServerGameInfo.ApplyWalkSpeed(player: Player)
 	if ServerGameInfo.GetPlayerInfo(player) == nil then
 		return
 	end
 	local character = player.Character
-	if character then
-		local CoilManager = require(serverScripts:FindFirstChild("CoilManager") :: ModuleScript)
-		CoilManager.SyncHumanoidCoilLocomotion(player)
+	if character == nil then
+		return
 	end
+	if player:GetAttribute("JumpRunwayActive") == true then
+		return
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid == nil then
+		return
+	end
+	if player:GetAttribute("Exercising") == true then
+		humanoid.WalkSpeed = GameConfig.ExerciseRunWalkSpeed
+		return
+	end
+	local resolved = ServerGameInfo.GetResolvedShopWalkSpeed(player)
+	if resolved == nil then
+		return
+	end
+	humanoid.WalkSpeed = resolved
 end
 
 --设置减速状态

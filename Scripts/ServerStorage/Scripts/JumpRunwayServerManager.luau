@@ -276,6 +276,7 @@ local function GetPlayerPowerLevel(player: Player): number
 end
 
 local function LogJumpStart(player: Player)
+	-- player_speed 埋点忽略减速，使用 walkSpeedLevel 对应速度
 	AnalyticsTool.LogJumpStart(
 		player,
 		GetPlayerPowerLevel(player),
@@ -290,6 +291,7 @@ local function LogJumpEnd(player: Player, st: RunState, isDead: number)
 	end
 	st.analyticsEndLogged = true
 	local distance = math.min(maxAlongByUserId[player.UserId] or 0, cfg.ANTI_CHEAT_DISTANCE_HARD_CAP)
+	-- player_speed 埋点忽略减速，使用 walkSpeedLevel 对应速度
 	AnalyticsTool.LogJumpEnd(
 		player,
 		GetPlayerPowerLevel(player),

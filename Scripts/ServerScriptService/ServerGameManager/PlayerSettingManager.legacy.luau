@@ -34,10 +34,12 @@ end
 
 local function OnPlayerRequestSetDecelerationOn(player: Player, decelerationOn: boolean)
 	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
-	if playerInfo == nil or playerInfo.settingInfo.decelerationOn == decelerationOn then
+	if playerInfo == nil then
 		return
 	end
-	ServerGameInfo.UpdateDecelerationOn(player, decelerationOn)
+	if playerInfo.settingInfo.decelerationOn ~= decelerationOn then
+		ServerGameInfo.UpdateDecelerationOn(player, decelerationOn)
+	end
 	ServerGameInfo.ApplyWalkSpeed(player)
 end
 
