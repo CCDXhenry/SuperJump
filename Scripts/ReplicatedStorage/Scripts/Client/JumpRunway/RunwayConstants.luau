@@ -24,6 +24,7 @@ RunwayConstants.Kind = {
 RunwayConstants.SlideKindStandard = "standard"
 RunwayConstants.SlideKindFinalLanding = "finalLanding"
 RunwayConstants.SlideKindMiss = "miss"
+RunwayConstants.SlideKindObstacleBounce = "obstacleBounce"
 RunwayConstants.RunwaySlideTraceDestroyAfterEndSec = 5
 RunwayConstants.RunwayCameraRenderStepName = "JumpRunwayCamera"
 RunwayConstants.RunwayFinalTiltRenderStepName = "JumpRunwayFinalBodyTilt"

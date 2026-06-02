@@ -430,7 +430,8 @@ function RunwayCameraController.Update(
 	isRunwayActivePhase: (number) -> boolean,
 	getCharacterParts: () -> (Model?, Humanoid?, BasePart?),
 	runwayForward: Vector3,
-	normalizeForward: (Vector3) -> Vector3
+	normalizeForward: (Vector3) -> Vector3,
+	smoothSpeedOverride: number?
 )
 	if not state.active then
 		return
@@ -451,7 +452,10 @@ function RunwayCameraController.Update(
 	local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(hrp, runwayForward, cfg, normalizeForward)
 	local currentPosition: Vector3 = state.smoothedCameraPosition or targetPosition
 	local currentLookAt: Vector3 = state.smoothedCameraLookAt or targetLookAt
-	local smoothSpeed = math.max(0, cfg.RUNWAY_CAMERA_SMOOTH_SPEED)
+	local smoothSpeed = smoothSpeedOverride
+	if typeof(smoothSpeed) ~= "number" or smoothSpeed ~= smoothSpeed or smoothSpeed <= 0 then
+		smoothSpeed = math.max(0, cfg.RUNWAY_CAMERA_SMOOTH_SPEED)
+	end
 	local alpha = 1 - math.exp(-math.max(0, dt) * smoothSpeed)
 	local nextPosition = currentPosition:Lerp(targetPosition, alpha)
 	local nextLookAt = currentLookAt:Lerp(targetLookAt, alpha)

@@ -95,7 +95,8 @@ function RunwayNetBridge.MaybeReportFinal(
 		if localState.groundedStableTime >= cfg.K_STABLE_FRAMES * (1 / 30) then
 			if netMsg.JumpRunwayRemotesExist() then
 				local origin = localState.runwayOrigin
-				local finalAlong = if origin ~= nil then (hrp.Position - origin):Dot(forward) else 0
+				local baseline = localState.alongBaseline or 0
+				local finalAlong = if origin ~= nil then (hrp.Position - origin):Dot(forward) - baseline else 0
 				netMsg.FireRequestJumpRunwayInput({
 					kind = kind.Final,
 					finalAlong = finalAlong,

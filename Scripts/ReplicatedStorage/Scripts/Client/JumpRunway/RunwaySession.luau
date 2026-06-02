@@ -84,6 +84,7 @@ local Kind = RunwayConstants.Kind
 local SlideKindStandard = RunwayConstants.SlideKindStandard
 local SlideKindFinalLanding = RunwayConstants.SlideKindFinalLanding
 local SlideKindMiss = RunwayConstants.SlideKindMiss
+local SlideKindObstacleBounce = RunwayConstants.SlideKindObstacleBounce
 local RunwayCameraRenderStepName = RunwayConstants.RunwayCameraRenderStepName
 local RunwayFinalTiltRenderStepName = RunwayConstants.RunwayFinalTiltRenderStepName
 local RunwayRingTemplateName = RunwayConstants.RunwayRingTemplateName
@@ -107,6 +108,7 @@ local BestDistanceWallTextXMinNorm = 0.05
 local BestDistanceWallTextXMaxNorm = 0.95
 local BestDistanceWallTextYMinNorm = 0.05
 local BestDistanceWallTextYMaxNorm = 0.95
+local ObstacleBounceProneSlideBlockMarginStuds = 0.6
 local JumpWindowStumblePulseFrequencyHz = 2.4
 local JumpWindowStumblePulseStrength = 0.18
 local JumpWindowStumbleMinSpeedScale = 0.72
@@ -224,6 +226,10 @@ local Refs: {
 	deferredTerminalServerPayload: NetMsg.JumpRunwayStatePayload?,
 	forwardBlockedStartClock: number?,
 	forwardBlockedStartAlong: number?,
+	treeHitLastProcessClock: number,
+	treeHitBlockedStartClock: number?,
+	treeHitBlockedStartAlong: number?,
+	obstacleBounceForward: Vector3?,
 	lastRunwayTakeoffClock: number?,
 	finalLandPhaseADebugNextClock: number,
 	slideEndFallbackWarnNextClock: number,
@@ -302,6 +308,10 @@ local Refs: {
 	missAbortSentForThisRun = nil,
 	forwardBlockedStartClock = nil,
 	forwardBlockedStartAlong = nil,
+	treeHitLastProcessClock = -math.huge,
+	treeHitBlockedStartClock = nil,
+	treeHitBlockedStartAlong = nil,
+	obstacleBounceForward = nil,
 	lastRunwayTakeoffClock = nil,
 	finalLandPhaseADebugNextClock = 0,
 	slideEndFallbackWarnNextClock = 0,
@@ -624,6 +634,16 @@ function RunwaySession.ComputeRunwayDisplayDistanceStuds(hrp: BasePart): number
 	return RunwaySession.CurrentAlongProgress(hrp)
 end
 
+function RunwaySession.AppendRunwayGroundWallExcludeList(excludeList: { Instance })
+	local groundFolder = workspace:FindFirstChild("Ground")
+	if groundFolder ~= nil then
+		local wallFolder = groundFolder:FindFirstChild("Wall")
+		if wallFolder ~= nil then
+			table.insert(excludeList, wallFolder)
+		end
+	end
+end
+
 function RunwaySession.BuildRunwayObstacleRaycastExcludeList(character: Model): { Instance }
 	local excludeList: { Instance } = { character }
 	local localFx = workspace:FindFirstChild("JumpRunwayLocalFx")
@@ -703,6 +723,7 @@ function RunwaySession.BuildRunwayGroundRaycastParams(humanoid: Humanoid): Rayca
 	if Refs.bestDistanceWallModel ~= nil then
 		table.insert(excludeList, Refs.bestDistanceWallModel :: Model)
 	end
+	RunwaySession.AppendRunwayGroundWallExcludeList(excludeList)
 	rp.FilterDescendantsInstances = excludeList
 	return rp
 end
@@ -1000,7 +1021,11 @@ function RunwaySession.RefreshJumpRunWayFrameStats(hrp: BasePart?)
 		and maxFuel > 0
 	local isFinalSlideSecondStage = localState.phase == Ph.Slide
 		and localState.finalLandSubPhase == 2
-		and (localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss)
+		and (
+			localState.runwaySlideKind == SlideKindFinalLanding
+			or localState.runwaySlideKind == SlideKindMiss
+			or localState.runwaySlideKind == SlideKindObstacleBounce
+		)
 	local distanceVisible = not isFinalSlideSecondStage and distanceStuds > 0
 	ClientMsg.FireJumpRunWayRefreshStats(distanceStuds, localState.fuel, maxFuel, fuelVisible, distanceVisible)
 end
@@ -1051,6 +1076,8 @@ function RunwaySession.SyncRunwayFinalSegmentLocomotionPrePhysics(humanoid: Huma
 		RunwaySession.EnsureHumanoidFreefallState(humanoid)
 	end
 	if RunwaySession.IsRunwayFinalLandingSlidePhase() then
+		RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoid)
+	elseif RunwaySession.IsRunwayObstacleBounceSlidePhase() and Refs.chestRewardWaitPose ~= true then
 		RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoid)
 	end
 end
@@ -1577,6 +1604,7 @@ function RunwaySession.GetRunwayGroundYAtWorldPosition(pos: Vector3, character: 
 	if Refs.chestSpawnedModel ~= nil then
 		table.insert(excludeList, Refs.chestSpawnedModel :: Model)
 	end
+	RunwaySession.AppendRunwayGroundWallExcludeList(excludeList)
 	rayParams.FilterDescendantsInstances = excludeList
 	local raycastHeight = ResolveConfigNumber(cfg.RUNWAY_CHEST_GROUND_RAYCAST_HEIGHT_STUDS, 256)
 	local raycastDistance = ResolveConfigNumber(cfg.RUNWAY_CHEST_GROUND_RAYCAST_DISTANCE_STUDS, 512)
@@ -1779,6 +1807,245 @@ function RunwaySession.ClearScriptedSlideMotion()
 	Refs.slideMotion = nil
 end
 
+function RunwaySession.ResolveTreeHitNumber(rawValue: any, fallbackValue: number, minValue: number?, maxValue: number?): number
+	local value = if typeof(rawValue) == "number" and rawValue == rawValue then rawValue else fallbackValue
+	if minValue ~= nil then
+		value = math.max(minValue :: number, value)
+	end
+	if maxValue ~= nil then
+		value = math.min(maxValue :: number, value)
+	end
+	return value
+end
+
+function RunwaySession.ResetTreeHitBlockedState()
+	Refs.treeHitBlockedStartClock = nil
+	Refs.treeHitBlockedStartAlong = nil
+end
+
+function RunwaySession.IsFinalLandingSlideTreeHitEligible(): boolean
+	if Refs.chestRunwayAwaitingExit == true or Refs.chestRewardPresentationStarted == true then
+		return false
+	end
+	if localState.finalLandSubPhase ~= 1 and localState.finalLandSubPhase ~= 2 then
+		return false
+	end
+	return localState.runwaySlideKind == SlideKindFinalLanding
+		or localState.runwaySlideKind == SlideKindObstacleBounce
+end
+
+function RunwaySession.IsTreeHitCheckActive(): boolean
+	if cfg.RUNWAY_TREE_HIT_ENABLED ~= true then
+		return false
+	end
+	if localState.phase == Ph.Airborne then
+		return localState.takeoffCount >= 1
+	end
+	if localState.phase == Ph.Slide and RunwaySession.IsFinalLandingSlideTreeHitEligible() then
+		return true
+	end
+	return false
+end
+
+function RunwaySession.ResolveTreeHitMoveDirection(hrp: BasePart): Vector3
+	if localState.phase == Ph.Slide and localState.finalLandSubPhase == 2 then
+		local motion = Refs.slideMotion
+		if motion ~= nil and motion.forward.Magnitude > 1e-4 then
+			return RunwaySession.NormalizeHorizontalForward(motion.forward)
+		end
+	end
+	local velocityH = HorizontalVelocity(hrp.AssemblyLinearVelocity)
+	if velocityH.Magnitude > 1e-3 then
+		return velocityH.Unit
+	end
+	return NormalizeRunwayForward(localState.runwayForward)
+end
+
+function RunwaySession.RaycastJumpRunwayTreeHit(hrp: BasePart, moveDir: Vector3): RaycastResult?
+	local treeFolder = workspace:FindFirstChild("tree")
+	if treeFolder == nil then
+		return nil
+	end
+	local dirH = RunwaySession.NormalizeHorizontalForward(moveDir)
+	local rayDistance = RunwaySession.ResolveTreeHitNumber(cfg.RUNWAY_TREE_HIT_CHECK_DISTANCE_STUDS, 5, 0.1, 32)
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Include
+	rayParams.FilterDescendantsInstances = { treeFolder }
+	local origin = hrp.Position + Vector3.new(0, 0.35, 0)
+	local hit = workspace:Raycast(origin, dirH * rayDistance, rayParams)
+	if hit == nil or not hit.Instance:IsA("BasePart") then
+		return nil
+	end
+	return hit
+end
+
+function RunwaySession.ComputeTreeHitImpactDot(hit: RaycastResult, moveDir: Vector3): (number, Vector3)
+	local normalH = Vector3.new(hit.Normal.X, 0, hit.Normal.Z)
+	local moveH = RunwaySession.NormalizeHorizontalForward(moveDir)
+	if normalH.Magnitude < 1e-4 then
+		normalH = -moveH
+	else
+		normalH = normalH.Unit
+	end
+	return math.clamp(moveH:Dot(-normalH), -1, 1), normalH
+end
+
+function RunwaySession.ApplyAirborneTreeSlow(hrp: BasePart, slowScale: number)
+	local v = hrp.AssemblyLinearVelocity
+	local horiz = HorizontalVelocity(v)
+	if horiz.Magnitude < 1e-3 then
+		return
+	end
+	local nextHoriz = horiz * slowScale
+	hrp.AssemblyLinearVelocity = nextHoriz + Vector3.new(0, v.Y, 0)
+	local baseSpeed = GetJumpPowerBaseSpeed()
+	local nextSpeed = nextHoriz.Magnitude
+	localState.jumpSpeedCumulativeRatingBonus = math.max(0, nextSpeed - baseSpeed)
+	localState.jumpSpeedCurrentReductionDelta = 0
+	localState.finalDashAlongExtra = 0
+	localState.jumpHorizLerpStartClock = nil
+	localState.jumpHorizLerpDuration = 0
+	localState.jumpHorizLerpInitialVy = nil
+end
+
+function RunwaySession.ApplyFinalLandPhaseATreeSlow(hrp: BasePart, slowScale: number)
+	localState.finalLandLockedTumbleAlong = math.max(0, localState.finalLandLockedTumbleAlong * slowScale)
+	local v = hrp.AssemblyLinearVelocity
+	local horiz = HorizontalVelocity(v)
+	if horiz.Magnitude < 1e-3 then
+		return
+	end
+	local nextHoriz = horiz * slowScale
+	hrp.AssemblyLinearVelocity = nextHoriz + Vector3.new(0, v.Y, 0)
+end
+
+function RunwaySession.ApplyProneSlideTreeSlow(hrp: BasePart, nowClock: number, slowScale: number)
+	local motion = Refs.slideMotion
+	if motion == nil then
+		return
+	end
+	local elapsed = math.clamp(nowClock - motion.startClock, 0, motion.duration)
+	local currentSpeed = math.max(motion.endSpeed, motion.startSpeed - motion.deceleration * elapsed)
+	local slowedSpeed = math.max(0, currentSpeed * slowScale)
+	local nextEndSpeed = math.min(motion.endSpeed, math.max(0, slowedSpeed * 0.5))
+	local character = hrp:FindFirstAncestorOfClass("Model")
+	local startPos = RunwaySession.ComputeGroundedPronePosition(hrp.Position, character)
+	Refs.slideMotion = RunwaySession.CreateScriptedSlideMotion(
+		nowClock,
+		startPos,
+		motion.forward,
+		slowedSpeed,
+		nextEndSpeed,
+		motion.deceleration
+	)
+	RunwaySession.ApplyScriptedProneSlideMotion(hrp, nowClock)
+end
+
+function RunwaySession.ComputeTreeBounceDirection(velocityH: Vector3, normalH: Vector3): Vector3
+	local source = velocityH
+	if source.Magnitude < 1e-3 then
+		source = NormalizeRunwayForward(localState.runwayForward)
+	end
+	local reflect = source - normalH * (2 * source:Dot(normalH))
+	local reflectH = Vector3.new(reflect.X, 0, reflect.Z)
+	if reflectH.Magnitude < 1e-4 then
+		return -NormalizeRunwayForward(localState.runwayForward)
+	end
+	return reflectH.Unit
+end
+
+function RunwaySession.EnterObstacleBounceFromTree(
+	humanoid: Humanoid,
+	hrp: BasePart,
+	nowClock: number,
+	normalH: Vector3,
+	moveDir: Vector3,
+	reason: string
+)
+	if localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindObstacleBounce then
+		return
+	end
+	RunwaySession.TransitionDistanceLogStage("ObstacleBounce", reason, hrp, string.format("takeoffCount=%d", localState.takeoffCount))
+	local v = hrp.AssemblyLinearVelocity
+	local velocityH = HorizontalVelocity(v)
+	if velocityH.Magnitude < 1e-3 then
+		velocityH = RunwaySession.NormalizeHorizontalForward(moveDir) * RunwaySession.ResolveTreeHitNumber(
+			cfg.RUNWAY_TREE_HIT_BOUNCE_MIN_SPEED,
+			18,
+			0,
+			cfg.ANTI_CHEAT_MAX_ALONG_SPEED
+		)
+	end
+	local bounceDir = RunwaySession.ComputeTreeBounceDirection(velocityH, normalH)
+	local speedScale = RunwaySession.ResolveTreeHitNumber(cfg.RUNWAY_TREE_HIT_BOUNCE_SPEED_SCALE, 0.55, 0, 2)
+	local minSpeed = RunwaySession.ResolveTreeHitNumber(cfg.RUNWAY_TREE_HIT_BOUNCE_MIN_SPEED, 18, 0, cfg.ANTI_CHEAT_MAX_ALONG_SPEED)
+	local bounceSpeed = math.clamp(math.max(minSpeed, velocityH.Magnitude * speedScale), 0, cfg.ANTI_CHEAT_MAX_ALONG_SPEED)
+	local bounceVy = RunwaySession.ResolveTreeHitNumber(cfg.RUNWAY_TREE_HIT_BOUNCE_UP_VY, 18, 0, 200)
+	RunwaySession.CancelJumpWindowTimeoutUntilGroundedAgain()
+	RunwaySession.ClearJumpHorizontalLerp()
+	RunwaySession.ClearScriptedSlideMotion()
+	RunwaySession.ClearChestBounceMotion()
+	Refs.obstacleBounceForward = bounceDir
+	Refs.treeHitLastProcessClock = nowClock
+	RunwaySession.ResetTreeHitBlockedState()
+	if localState.phase == Ph.Slide then
+		RunwaySession.ApplyObstacleBounceSlideKindTransition(nowClock)
+	else
+		RunwaySession.EnterSlidePhase(nowClock, SlideKindObstacleBounce, humanoid)
+	end
+	RunwaySession.StartObstacleBouncePhaseA(hrp, bounceDir, bounceSpeed, bounceVy, nowClock)
+end
+
+function RunwaySession.ProcessJumpRunwayTreeHit(humanoid: Humanoid, hrp: BasePart, nowClock: number)
+	if not RunwaySession.IsTreeHitCheckActive() then
+		RunwaySession.ResetTreeHitBlockedState()
+		return
+	end
+	local cooldownSec = RunwaySession.ResolveTreeHitNumber(cfg.RUNWAY_TREE_HIT_COOLDOWN_SEC, 0.25, 0, 3)
+	if nowClock - Refs.treeHitLastProcessClock < cooldownSec then
+		return
+	end
+	local moveDir = RunwaySession.ResolveTreeHitMoveDirection(hrp)
+	local hit = RunwaySession.RaycastJumpRunwayTreeHit(hrp, moveDir)
+	if hit == nil then
+		RunwaySession.ResetTreeHitBlockedState()
+		return
+	end
+	local impactDot, normalH = RunwaySession.ComputeTreeHitImpactDot(hit, moveDir)
+	local slowThreshold = RunwaySession.ResolveTreeHitNumber(cfg.RUNWAY_TREE_HIT_SLOW_DOT_THRESHOLD, 0.18, -1, 1)
+	if impactDot < slowThreshold then
+		RunwaySession.ResetTreeHitBlockedState()
+		return
+	end
+	local currentAlong = RunwaySession.CurrentAlongProgress(hrp)
+	if Refs.treeHitBlockedStartClock == nil or Refs.treeHitBlockedStartAlong == nil then
+		Refs.treeHitBlockedStartClock = nowClock
+		Refs.treeHitBlockedStartAlong = currentAlong
+	end
+	local bounceThreshold = RunwaySession.ResolveTreeHitNumber(cfg.RUNWAY_TREE_HIT_BOUNCE_DOT_THRESHOLD, 0.58, -1, 1)
+	local blockedLongEnough = false
+	local startClock = Refs.treeHitBlockedStartClock
+	local startAlong = Refs.treeHitBlockedStartAlong
+	if startClock ~= nil and startAlong ~= nil then
+		blockedLongEnough = nowClock - (startClock :: number) >= 0.25 and currentAlong - (startAlong :: number) <= 0.35
+	end
+	if impactDot >= bounceThreshold or blockedLongEnough then
+		RunwaySession.EnterObstacleBounceFromTree(humanoid, hrp, nowClock, normalH, moveDir, "tree_bounce")
+		return
+	end
+	local slowScale = RunwaySession.ResolveTreeHitNumber(cfg.RUNWAY_TREE_HIT_SLOW_SPEED_SCALE, 0.65, 0, 1)
+	if localState.phase == Ph.Slide then
+		if localState.finalLandSubPhase == 1 then
+			RunwaySession.ApplyFinalLandPhaseATreeSlow(hrp, slowScale)
+		else
+			RunwaySession.ApplyProneSlideTreeSlow(hrp, nowClock, slowScale)
+		end
+	else
+		RunwaySession.ApplyAirborneTreeSlow(hrp, slowScale)
+	end
+	Refs.treeHitLastProcessClock = nowClock
+end
+
 function RunwaySession.ResolveProneSlidePlaceDistance(): number
 	local motion = Refs.slideMotion
 	local hitDistance = ResolveChestHitHorizontalMaxDistStuds()
@@ -1789,10 +2056,13 @@ function RunwaySession.ResolveProneSlidePlaceDistance(): number
 end
 
 function RunwaySession.GetProneSlideHrpGroundHeight(): number
-	local heightRaw = if localState.runwaySlideKind == SlideKindMiss
-		then cfg.RUNWAY_MISS_SLIDE_PRONE_HRP_GROUND_HEIGHT
-		else cfg.RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT
-	return RunwaySession.ResolveProneHrpGroundHeight(heightRaw, 2.8)
+	if localState.runwaySlideKind == SlideKindMiss then
+		return RunwaySession.ResolveProneHrpGroundHeight(cfg.RUNWAY_MISS_SLIDE_PRONE_HRP_GROUND_HEIGHT, 2.8)
+	end
+	if localState.runwaySlideKind == SlideKindObstacleBounce then
+		return RunwaySession.ResolveProneHrpGroundHeight(cfg.RUNWAY_OBSTACLE_BOUNCE_SLIDE_PRONE_HRP_GROUND_HEIGHT, 2.8)
+	end
+	return RunwaySession.ResolveProneHrpGroundHeight(cfg.RUNWAY_FINAL_LAND_PRONE_HRP_GROUND_HEIGHT, 2.8)
 end
 
 function RunwaySession.ComputeGroundedPronePosition(pos: Vector3, character: Model?): Vector3
@@ -1809,13 +2079,23 @@ function RunwaySession.ApplyScriptedProneSlideMotion(hrp: BasePart, nowClock: nu
 		return false
 	end
 	local distance = RunwaySession.ComputeScriptedSlideDistanceAt(motion, nowClock)
-	motion.lastDistance = distance
 	local character = hrp:FindFirstAncestorOfClass("Model")
+	if localState.runwaySlideKind == SlideKindObstacleBounce and localState.finalLandSubPhase == 2 then
+		local blockedDistance = RunwaySession.ResolveObstacleBounceProneSlideBlockedDistance(motion, distance)
+		if blockedDistance + 0.01 < distance then
+			RunwaySession.FreezeScriptedSlideMotionAtDistance(motion, blockedDistance, nowClock)
+			distance = blockedDistance
+		end
+	end
+	motion.lastDistance = distance
 	local nextPos = RunwaySession.ComputeGroundedPronePosition(
 		motion.startPosition + motion.forward * distance,
 		character
 	)
-	hrp.CFrame = RunwaySession.BuildProneRunwayCFrame(nextPos, motion.forward)
+	local proneForward = if localState.runwaySlideKind == SlideKindObstacleBounce
+		then NormalizeRunwayForward(localState.runwayForward)
+		else motion.forward
+	hrp.CFrame = RunwaySession.BuildProneRunwayCFrame(nextPos, proneForward)
 	hrp.AssemblyLinearVelocity = Vector3.zero
 	hrp.AssemblyAngularVelocity = Vector3.zero
 	return true
@@ -1982,6 +2262,39 @@ function RunwaySession.ApplyFinalLandPhaseAPop(hrp: BasePart, fwdH: Vector3, now
 	hrp.AssemblyLinearVelocity = fwdH * alongPop + Vector3.new(0, vyPop, 0) + perpHPh * perpMul
 end
 
+function RunwaySession.StartObstacleBouncePhaseA(hrp: BasePart, bounceDir: Vector3, bounceSpeed: number, bounceVy: number, nowClock: number)
+	local fwdH = RunwaySession.NormalizeHorizontalForward(bounceDir)
+	local faceFwdH = NormalizeRunwayForward(localState.runwayForward)
+	localState.finalLandPhaseAPopCount = 1
+	localState.finalLandTumbleImpulseApplied = true
+	localState.finalLandTumbleRollAngleRad = 0
+	localState.finalLandLockedTumbleAlong = math.clamp(bounceSpeed, 0, cfg.ANTI_CHEAT_MAX_ALONG_SPEED)
+	localState.finalLandTumblePrevPopVy = math.max(0, bounceVy)
+	localState.finalLandTumbleAirAccumSec = 0
+	localState.finalLandTumbleLeftGround = false
+	localState.finalLandTumbleUseAirClock = bounceVy > 0.5
+	localState.finalLandPhaseAGroundedStartClock = nil
+	local gBase = workspace.Gravity
+	if gBase < 1e-3 then
+		gBase = 196.2
+	end
+	local gScale = cfg.RUNWAY_FINAL_LAND_PHASE_A_EFFECTIVE_GRAVITY_SCALE
+	if typeof(gScale) ~= "number" or gScale ~= gScale or gScale <= 0 then
+		gScale = cfg.RUNWAY_SESSION_EFFECTIVE_GRAVITY_SCALE
+	end
+	local gEff = gBase * gScale
+	localState.finalLandTumblePredAirTimeSec = if bounceVy > 0.5
+		then math.clamp(2 * bounceVy / math.max(1e-4, gEff), 0.12, 8)
+		else math.max(0.12, cfg.RUNWAY_FINAL_LAND_TUMBLE_NO_POP_ROLL_SEC)
+	localState.jumpBoostVy = if bounceVy > 1e-5 then bounceVy else nil
+	localState.jumpBoostUntilClock = if bounceVy > 1e-5 then nowClock + cfg.RUNWAY_JUMP_BOOST_HOLD_SEC else 0
+	localState.finalLandCachedLandingAlong = localState.finalLandLockedTumbleAlong
+	localState.finalLandCachedLandingVy = -math.max(0, bounceVy)
+	Refs.finalLandTumbleStartHrpCf = CFrame.lookAt(hrp.Position, hrp.Position + faceFwdH, Vector3.yAxis)
+	hrp.AssemblyLinearVelocity = fwdH * localState.finalLandLockedTumbleAlong + Vector3.new(0, bounceVy, 0)
+	hrp.AssemblyAngularVelocity = hrp.AssemblyAngularVelocity * 0.25
+end
+
 function RunwaySession.ComputeFinalLandTumbleRollOmegaRadPerSec(): number
 	local scaleRaw = cfg.RUNWAY_FINAL_LAND_TUMBLE_ROLL_OMEGA_SCALE
 	local scale = (typeof(scaleRaw) == "number" and scaleRaw == scaleRaw and scaleRaw > 0) and scaleRaw or 1
@@ -2043,7 +2356,10 @@ function RunwaySession.StartFinalLandPronePhase(nowClock: number, hrp: BasePart?
 		hrp.AssemblyLinearVelocity = Vector3.zero
 		hrp.AssemblyAngularVelocity = Vector3.zero
 		localState.finalLandProneSlideAlongStart = RunwaySession.CurrentAlongProgress(hrp)
-		Refs.chestSlideFwdH = fwdHInit
+		local chestFwdH = if localState.runwaySlideKind == SlideKindObstacleBounce
+			then NormalizeRunwayForward(localState.runwayForward)
+			else fwdHInit
+		Refs.chestSlideFwdH = chestFwdH
 		-- 记录本次跑道的沿轴距离，用于宝箱与怪物动态配置
 		local alongAtPhaseB = RunwaySession.CurrentAlongProgress(hrp)
 		Refs.lastRunAlongDistance = alongAtPhaseB
@@ -2051,6 +2367,11 @@ function RunwaySession.StartFinalLandPronePhase(nowClock: number, hrp: BasePart?
 		local chestByDist = GameConfig.GetLittleElfChestByDistance(alongAtPhaseB)
 		local chestIdOverride = if chestByDist then chestByDist.id else nil
 		Refs.chestDynamicConfigId = chestIdOverride
+		if localState.runwaySlideKind == SlideKindObstacleBounce then
+			Refs.chestPredictedPlaceDistance = 0
+			Refs.chestScheduledSpawnPos = nil
+			return
+		end
 		local placeDistance = RunwaySession.ResolveProneSlidePlaceDistance()
 		Refs.chestPredictedPlaceDistance = placeDistance
 		local spawnPos = RunwaySession.ComputeLittleElfChestSpawnPosition(hrp, fwdHInit, placeDistance)
@@ -2105,9 +2426,15 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 			end
 		end
 		RunwaySession.ApplyScriptedProneSlideMotion(hrp, nowClock)
+		local motion = Refs.slideMotion
+		if localState.runwaySlideKind == SlideKindObstacleBounce then
+			if motion ~= nil and motion.lastDistance >= motion.totalDistance - 0.05 then
+				RunwaySession.HandleObstacleBounceSlideStop(humanoid, hrp)
+			end
+			return
+		end
 		local chestModel = Refs.chestSpawnedModel
 		if chestModel ~= nil and chestModel.Parent ~= nil and Refs.chestRunwayAwaitingExit ~= true then
-			local motion = Refs.slideMotion
 			local reachedPathHit = motion ~= nil and motion.lastDistance >= motion.totalDistance - 0.05
 			if reachedPathHit or RunwaySession.IsPlayerNearLittleElfChest(hrp, chestModel, fwdH) then
 				local chestConfigId = if Refs.chestDynamicConfigId ~= nil then Refs.chestDynamicConfigId else cfg.RUNWAY_CHEST_CONFIG_ID
@@ -2264,6 +2591,9 @@ function RunwaySession.ApplyFinalLandingRenderOrientation(
 		end
 		omega = RunwaySession.ComputeFinalLandTumbleRollOmegaRadPerSec() * rollSignLegacy
 	end
+	if localState.runwaySlideKind == SlideKindObstacleBounce then
+		omega = -omega
+	end
 	localState.finalLandTumbleRollAngleRad += omega * dt
 	local spun = RunwaySession.ComputeFinalLandTumbleSpunAt(pos, forward, localState.finalLandTumbleRollAngleRad)
 	hrp.CFrame = spun
@@ -2271,11 +2601,50 @@ function RunwaySession.ApplyFinalLandingRenderOrientation(
 	hrp.AssemblyAngularVelocity = hrp.AssemblyAngularVelocity * math.exp(-14 * dt)
 end
 
+function RunwaySession.ApplyObstacleBounceSlideKindTransition(nowClock: number)
+	if Refs.chestRunwayAwaitingExit ~= true and Refs.chestRewardPresentationStarted ~= true then
+		if Refs.chestSpawnedForThisRun == true or Refs.chestScheduledSpawnPos ~= nil then
+			Refs.chestSpawnDelayToken += 1
+			RunwaySession.DestroyLittleElfChestSpawnedModel()
+			Refs.chestSpawnedForThisRun = false
+			Refs.chestScheduledSpawnPos = nil
+			Refs.chestPredictedPlaceDistance = nil
+		end
+	end
+	RunwaySession.DestroyRunwayRing()
+	localState.runwaySlideKind = SlideKindObstacleBounce
+	Refs.treeHitBlockedStartClock = nil
+	Refs.treeHitBlockedStartAlong = nil
+	localState.jumpBoostVy = nil
+	localState.jumpBoostUntilClock = 0
+	localState.finalLandSubPhase = 1
+	localState.finalLandPronePhaseStartClock = 0
+	localState.finalLandPhaseAPopCount = 0
+	localState.finalLandProneSlideAlongSpeedStart = 0
+	localState.finalLandTumbleImpulseApplied = false
+	localState.finalLandLockedTumbleAlong = 0
+	localState.finalLandTumblePrevPopVy = 0
+	localState.finalLandTumblePredAirTimeSec = 0
+	localState.finalLandTumbleAirAccumSec = 0
+	localState.finalLandTumbleLeftGround = false
+	localState.finalLandTumbleUseAirClock = false
+	localState.finalLandPhaseAGroundedStartClock = nil
+	RunwaySession.ClearFinalLandingSlideModuleLocals()
+	RunwaySession.ClearScriptedSlideMotion()
+	localState.finalLandTumbleRollAngleRad = 0
+	localState.finalLandProneBStage = 0
+	localState.finalLandPronePrefallStartClock = 0
+	localState.finalLandProneSlideAlongStart = nil
+	localState.slideEndClock = nowClock + 7200
+end
+
 function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, humanoidOpt: Humanoid?)
 	if localState.phase == Ph.Slide then
 		return
 	end
-	RunwaySession.ApplyPlayerSlideCollisionGroup(localPlayer.Character)
+	if slideKind == SlideKindStandard then
+		RunwaySession.ApplyPlayerSlideCollisionGroup(localPlayer.Character)
+	end
 	RunwaySession.SlideTraceDestroy()
 	local phaseBefore = localState.phase
 	localState.phase = Ph.Slide
@@ -2290,6 +2659,8 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 	localState.chainJumpWindowAwaitingGround = false
 	Refs.forwardBlockedStartClock = nil
 	Refs.forwardBlockedStartAlong = nil
+	Refs.treeHitBlockedStartClock = nil
+	Refs.treeHitBlockedStartAlong = nil
 	localState.slideStartClock = nowClock
 	RunwaySession.ClearScriptedSlideMotion()
 	RunwaySession.ClearChestBounceMotion()
@@ -2392,6 +2763,8 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 			Refs.chestScheduledSpawnPos = spawnPos
 			RunwaySession.ScheduleLittleElfChestAtPhaseBEnter(fwdHChest, spawnPos)
 		end
+	elseif slideKind == SlideKindObstacleBounce then
+		RunwaySession.ApplyObstacleBounceSlideKindTransition(nowClock)
 	else
 		localState.finalLandSubPhase = 1
 		localState.finalLandPronePhaseStartClock = 0
@@ -2432,6 +2805,10 @@ function RunwaySession.IsRunwayFinalLandingSlidePhase(): boolean
 	return localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindFinalLanding
 end
 
+function RunwaySession.IsRunwayObstacleBounceSlidePhase(): boolean
+	return localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindObstacleBounce
+end
+
 function RunwaySession.ResolveRunwayLocomotionMode(humanoid: Humanoid, nowClock: number): string
 	if not RunwaySession.IsRunwayActivePhase(localState.phase) then
 		return RUNWAY_LOCOMOTION_NONE
@@ -2449,6 +2826,14 @@ function RunwaySession.ResolveRunwayLocomotionMode(humanoid: Humanoid, nowClock:
 		localState.phase == Ph.Slide
 		and localState.runwaySlideKind == SlideKindFinalLanding
 		and (localState.finalLandSubPhase == 1 or localState.finalLandSubPhase == 2)
+	then
+		return RUNWAY_LOCOMOTION_NONE
+	end
+	if
+		localState.phase == Ph.Slide
+		and localState.runwaySlideKind == SlideKindObstacleBounce
+		and (localState.finalLandSubPhase == 1 or localState.finalLandSubPhase == 2)
+		and Refs.chestRewardWaitPose ~= true
 	then
 		return RUNWAY_LOCOMOTION_NONE
 	end
@@ -2516,7 +2901,7 @@ function RunwaySession.EnsureHumanoidFreefallState(humanoid: Humanoid)
 end
 
 function RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoid: Humanoid)
-	if not RunwaySession.IsRunwayFinalLandingSlidePhase() then
+	if not RunwaySession.IsRunwayFinalLandingSlidePhase() and not RunwaySession.IsRunwayObstacleBounceSlidePhase() then
 		return
 	end
 	if Refs.chestRewardWaitPose == true then
@@ -2599,7 +2984,9 @@ function RunwaySession.ApplyRunwayLocomotionAnimation(humanoid: Humanoid, forwar
 	if mode == RUNWAY_LOCOMOTION_NONE then
 		RunwaySession.StopJumpWindowWalkAnimation()
 		if Refs.chestRewardWaitPose ~= true then
-			RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoid)
+			if RunwaySession.IsRunwayFinalLandingSlidePhase() or RunwaySession.IsRunwayObstacleBounceSlidePhase() then
+				RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoid)
+			end
 		end
 		humanoid:Move(Vector3.zero, false)
 		return
@@ -3098,10 +3485,23 @@ function RunwaySession.SlideTraceRaycastGroundHit(hrp: BasePart, humanoid: Human
 	local cast = Vector3.new(0, -cfg.RUNWAY_GROUND_PROBE_DOWN, 0)
 	local rp = RaycastParams.new()
 	rp.FilterType = Enum.RaycastFilterType.Exclude
+	local excludeList: { Instance } = {}
 	local char = humanoid.Parent
 	if char ~= nil and char:IsA("Model") then
-		rp.FilterDescendantsInstances = { char }
+		table.insert(excludeList, char)
 	end
+	local treeFolder = workspace:FindFirstChild("tree")
+	if treeFolder ~= nil then
+		table.insert(excludeList, treeFolder)
+	end
+	local localFx = workspace:FindFirstChild("JumpRunwayLocalFx")
+	if localFx ~= nil then
+		table.insert(excludeList, localFx)
+	end
+	if Refs.slideTraceRootInstance ~= nil then
+		table.insert(excludeList, Refs.slideTraceRootInstance :: Instance)
+	end
+	rp.FilterDescendantsInstances = excludeList
 	local hit = workspace:Raycast(origin, cast, rp)
 	if hit == nil or hit.Normal.Y < cfg.RUNWAY_GROUND_MIN_NORMAL_Y then
 		return nil
@@ -3189,7 +3589,11 @@ function RunwaySession.SlideTraceUpdate(humanoid: Humanoid, hrp: BasePart)
 	end
 	local shouldTraces =
 		localState.phase == Ph.Slide
-		and (localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss)
+		and (
+			localState.runwaySlideKind == SlideKindFinalLanding
+			or localState.runwaySlideKind == SlideKindMiss
+			or localState.runwaySlideKind == SlideKindObstacleBounce
+		)
 		and localState.finalLandSubPhase == 2
 		and localState.finalLandProneBStage >= 1
 	if not shouldTraces then
@@ -4464,7 +4868,11 @@ function RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid: Humanoid, nowClock:
 	end
 	if
 		localState.phase == Ph.Slide
-		and (localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss)
+		and (
+			localState.runwaySlideKind == SlideKindFinalLanding
+			or localState.runwaySlideKind == SlideKindMiss
+			or localState.runwaySlideKind == SlideKindObstacleBounce
+		)
 		and (localState.finalLandSubPhase == 1 or localState.finalLandSubPhase == 2)
 	then
 		if humanoid.WalkSpeed ~= 0 then
@@ -4728,9 +5136,15 @@ function RunwaySession.ApplyLocalPhysics(dt: number)
 		if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
 			RunwaySession.UpdateDashVerticalOnly(hrp, dt)
 		end
+		RunwaySession.ProcessJumpRunwayTreeHit(humanoid, hrp, nowClock)
 	elseif localState.phase == Ph.Slide then
 		if localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss then
 			RunwaySession.ApplyFinalLandingSlidePhysics(hrp, forward, dt, nowClock, humanoid)
+			RunwaySession.ProcessJumpRunwayTreeHit(humanoid, hrp, nowClock)
+		elseif localState.runwaySlideKind == SlideKindObstacleBounce then
+			local bounceForward = RunwaySession.ResolveObstacleBounceChestForward(hrp)
+			RunwaySession.ApplyFinalLandingSlidePhysics(hrp, bounceForward, dt, nowClock, humanoid)
+			RunwaySession.ProcessJumpRunwayTreeHit(humanoid, hrp, nowClock)
 		else
 			RunwaySession.UpdateSlideVelocity(hrp, forward, nowClock)
 		end
@@ -4793,15 +5207,39 @@ function RunwaySession.OnPostSimulationLocomotion(dt: number)
 			RunwaySession.ApplyFinalLandingRenderOrientation(humanoid, hrp, forward, dt, nowClock, cfg.RUNWAY_MISS_SLIDE_PRONE_HRP_GROUND_HEIGHT)
 			RunwaySession.SlideTraceUpdate(humanoid, hrp)
 		end
+	elseif hrp ~= nil and localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindObstacleBounce then
+		if not RunwaySession.IsLittleElfChestRunwayFlowActive() then
+			local faceForward = NormalizeRunwayForward(localState.runwayForward)
+			RunwaySession.ApplyFinalLandingRenderOrientation(
+				humanoid,
+				hrp,
+				faceForward,
+				dt,
+				nowClock,
+				cfg.RUNWAY_OBSTACLE_BOUNCE_SLIDE_PRONE_HRP_GROUND_HEIGHT
+			)
+			RunwaySession.SlideTraceUpdate(humanoid, hrp)
+		end
 	end
-	local isFinalLandingSlide = localState.phase == Ph.Slide and (localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss)
+	local isFinalLandingSlide = localState.phase == Ph.Slide
+		and (
+			localState.runwaySlideKind == SlideKindFinalLanding
+			or localState.runwaySlideKind == SlideKindMiss
+			or localState.runwaySlideKind == SlideKindObstacleBounce
+		)
 	if RunwaySession.IsLittleElfChestRunwayFlowActive() and Refs.chestRewardWaitPose == true then
 		RunwaySession.RestoreHumanoidAutoRotateAfterFinalPitch(humanoid)
 		if hrp ~= nil then
-			RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoid, hrp, forward)
+			local waitForward = if localState.runwaySlideKind == SlideKindObstacleBounce
+				then NormalizeRunwayForward(localState.runwayForward)
+				else forward
+			RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoid, hrp, waitForward)
 		end
 	elseif Refs.chestPostRewardExitCleanup == true and hrp ~= nil then
-		RunwaySession.SnapCharacterHrpToGround(humanoid, hrp, forward)
+		local cleanupForward = if localState.runwaySlideKind == SlideKindObstacleBounce
+			then NormalizeRunwayForward(localState.runwayForward)
+			else forward
+		RunwaySession.SnapCharacterHrpToGround(humanoid, hrp, cleanupForward)
 		hrp.AssemblyLinearVelocity = Vector3.zero
 		hrp.AssemblyAngularVelocity = Vector3.zero
 	elseif
@@ -4825,13 +5263,23 @@ function RunwaySession.OnJumpRunwayFinalTiltRenderStep(dt: number)
 		return
 	end
 	local forward = NormalizeRunwayForward(localState.runwayForward)
-	if localState.phase == Ph.Slide and (localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss) then
+	if
+		localState.phase == Ph.Slide
+		and (
+			localState.runwaySlideKind == SlideKindFinalLanding
+			or localState.runwaySlideKind == SlideKindMiss
+			or localState.runwaySlideKind == SlideKindObstacleBounce
+		)
+	then
+		local renderForward = if localState.runwaySlideKind == SlideKindObstacleBounce
+			then NormalizeRunwayForward(localState.runwayForward)
+			else forward
 		if RunwaySession.IsLittleElfChestRunwayFlowActive() then
 			RunwaySession.EnsureHumanoidAutoRotateOffForFinalPitch(humanoid)
 			if Refs.chestBounceActive == true then
-				RunwaySession.ApplyLittleElfChestProneBounceOrientation(humanoid, hrp, forward, dt)
+				RunwaySession.ApplyLittleElfChestProneBounceOrientation(humanoid, hrp, renderForward, dt)
 			else
-				RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoid, hrp, forward)
+				RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoid, hrp, renderForward)
 			end
 		end
 	else
@@ -4971,7 +5419,10 @@ function RunwaySession.PollBeginLineOverlapForJumpWindow()
 end
 
 function RunwaySession.ProcessFinalLandingSubPhaseTransition(humanoid: Humanoid, hrp: BasePart, nowClock: number)
-	if localState.phase ~= Ph.Slide or localState.runwaySlideKind ~= SlideKindFinalLanding then
+	if
+		localState.phase ~= Ph.Slide
+		or (localState.runwaySlideKind ~= SlideKindFinalLanding and localState.runwaySlideKind ~= SlideKindObstacleBounce)
+	then
 		return
 	end
 	if localState.finalLandSubPhase ~= 1 then
@@ -4980,7 +5431,9 @@ function RunwaySession.ProcessFinalLandingSubPhaseTransition(humanoid: Humanoid,
 	if not localState.finalLandTumbleImpulseApplied then
 		return
 	end
-	local forwardCheck = NormalizeRunwayForward(localState.runwayForward)
+	local forwardCheck = if localState.runwaySlideKind == SlideKindObstacleBounce
+		then RunwaySession.ResolveObstacleBounceChestForward(hrp)
+		else NormalizeRunwayForward(localState.runwayForward)
 	local maxPhaseASecRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_MAX_SEC
 	local maxPhaseASec = (typeof(maxPhaseASecRaw) == "number" and maxPhaseASecRaw == maxPhaseASecRaw and maxPhaseASecRaw > 0)
 		and maxPhaseASecRaw
@@ -5101,6 +5554,71 @@ function RunwaySession.ScheduleLittleElfChestAtPhaseBEnter(
 	RunwaySession.SpawnLittleElfChestAtPosition(fwdH, spawnPos)
 end
 
+function RunwaySession.ResolveObstacleBounceChestForward(hrp: BasePart): Vector3
+	local fwd = Refs.obstacleBounceForward or NormalizeRunwayForward(localState.runwayForward)
+	local fwdH = Vector3.new(fwd.X, 0, fwd.Z)
+	if fwdH.Magnitude < 1e-4 then
+		local look = hrp.CFrame.LookVector
+		fwdH = Vector3.new(look.X, 0, look.Z)
+	end
+	if fwdH.Magnitude < 1e-4 then
+		return NormalizeRunwayForward(localState.runwayForward)
+	end
+	return fwdH.Unit
+end
+
+function RunwaySession.BuildObstacleBounceProneSlideBlockIncludeList(): { Instance }
+	local includeList: { Instance } = {}
+	local treeFolder = workspace:FindFirstChild("tree")
+	if treeFolder ~= nil then
+		table.insert(includeList, treeFolder)
+	end
+	local obstacleFolder = workspace:FindFirstChild("Obstacle")
+	if obstacleFolder ~= nil then
+		table.insert(includeList, obstacleFolder)
+	end
+	local groundFolder = workspace:FindFirstChild("Ground")
+	if groundFolder ~= nil then
+		local wallFolder = groundFolder:FindFirstChild("Wall")
+		if wallFolder ~= nil then
+			table.insert(includeList, wallFolder)
+		end
+	end
+	return includeList
+end
+
+function RunwaySession.ResolveObstacleBounceProneSlideBlockedDistance(
+	motion: ScriptedSlideMotion,
+	desiredDistance: number
+): number
+	if desiredDistance <= 1e-3 then
+		return desiredDistance
+	end
+	local includeList = RunwaySession.BuildObstacleBounceProneSlideBlockIncludeList()
+	if #includeList == 0 then
+		return desiredDistance
+	end
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Include
+	rayParams.FilterDescendantsInstances = includeList
+	local rayOrigin = motion.startPosition + Vector3.new(0, 0.35, 0)
+	local hit = workspace:Raycast(rayOrigin, motion.forward * desiredDistance, rayParams)
+	if hit == nil or not hit.Instance:IsA("BasePart") then
+		return desiredDistance
+	end
+	if not hit.Instance.CanCollide then
+		return desiredDistance
+	end
+	return math.max(0, hit.Distance - ObstacleBounceProneSlideBlockMarginStuds)
+end
+
+function RunwaySession.FreezeScriptedSlideMotionAtDistance(motion: ScriptedSlideMotion, stopDistance: number, nowClock: number)
+	stopDistance = math.clamp(stopDistance, 0, motion.totalDistance)
+	motion.totalDistance = stopDistance
+	motion.lastDistance = stopDistance
+	motion.duration = math.max(0, nowClock - motion.startClock)
+end
+
 function RunwaySession.IsLittleElfChestRunwayFlowActive(): boolean
 	return Refs.chestRunwayAwaitingExit == true
 end
@@ -5159,7 +5677,11 @@ function RunwaySession.WarnSlideEndContext(reason: string)
 end
 
 function RunwaySession.ShouldBlockFinalLandingSlideEndForChest(): boolean
-	if localState.runwaySlideKind ~= SlideKindFinalLanding and localState.runwaySlideKind ~= SlideKindMiss then
+	if
+		localState.runwaySlideKind ~= SlideKindFinalLanding
+		and localState.runwaySlideKind ~= SlideKindMiss
+		and localState.runwaySlideKind ~= SlideKindObstacleBounce
+	then
 		return false
 	end
 	if localState.finalLandSubPhase ~= 2 then
@@ -5193,7 +5715,11 @@ function RunwaySession.ShouldDeferFinalReportForSlideChest(): boolean
 	if localState.finalLandSubPhase ~= 2 then
 		return false
 	end
-	if localState.runwaySlideKind ~= SlideKindFinalLanding and localState.runwaySlideKind ~= SlideKindMiss then
+	if
+		localState.runwaySlideKind ~= SlideKindFinalLanding
+		and localState.runwaySlideKind ~= SlideKindMiss
+		and localState.runwaySlideKind ~= SlideKindObstacleBounce
+	then
 		return false
 	end
 	if Refs.chestRewardPresentationStarted == true or Refs.chestRunwayAwaitingExit == true then
@@ -5228,6 +5754,8 @@ function RunwaySession.ClearLittleElfChestRefs()
 	Refs.chestPredictedPlaceDistance = nil
 	Refs.chestBackpackDeliverRequested = false
 	Refs.lastRunAlongDistance = nil
+	Refs.obstacleBounceForward = nil
+	RunwaySession.ResetTreeHitBlockedState()
 	RunwaySession.ClearScriptedSlideMotion()
 	ChaserClientManager.CleanupChaser()
 end
@@ -5729,11 +6257,15 @@ end
 
 function RunwaySession.EnterLittleElfChestRewardWaitPose(humanoid: Humanoid, hrp: BasePart)
 	Refs.chestBounceActive = false
+	RunwaySession.ClearChestBounceMotion()
 	Refs.chestRewardWaitPose = true
 	Refs.chestHitSequenceActive = false
+	RunwaySession.ClearScriptedSlideMotion()
+	RunwaySession.ClearFinalLandingSlideModuleLocals()
 	RunwaySession.DestroyRunwayGravityForce()
 	local forwardReward = NormalizeRunwayForward(localState.runwayForward)
 	RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoid, hrp, forwardReward)
+	RunwaySession.EnsureHumanoidRunningState(humanoid)
 end
 
 function RunwaySession.TryForceReportFinalAfterChestExit()
@@ -5749,7 +6281,8 @@ function RunwaySession.TryForceReportFinalAfterChestExit()
 	end
 	local forwardFinal = NormalizeRunwayForward(localState.runwayForward)
 	local origin = localState.runwayOrigin
-	local finalAlong = if origin ~= nil then (hrpFinal.Position - origin):Dot(forwardFinal) else 0
+	local baseline = localState.alongBaseline or 0
+	local finalAlong = if origin ~= nil then (hrpFinal.Position - origin):Dot(forwardFinal) - baseline else 0
 	NetMsg.FireRequestJumpRunwayInput({
 		kind = Kind.Final,
 		finalAlong = finalAlong,
@@ -5836,6 +6369,102 @@ function RunwaySession.IsPlayerNearLittleElfChest(hrp: BasePart, chestModel: Mod
 	end
 	-- 固定宝箱流程只要求进入水平命中半径；允许帧步进导致角色略微越过宝箱后仍能开箱。
 	return true
+end
+
+function RunwaySession.IsObstacleBounceHrpBeforeStartTrigger(hrp: BasePart): boolean
+	local startTrigger, _ = RunwaySession.ResolveSceneParts()
+	if startTrigger == nil then
+		return false
+	end
+	return hrp.Position.X < startTrigger.Position.X
+end
+
+function RunwaySession.ExitObstacleBounceBeforeStartTrigger(humanoid: Humanoid, hrp: BasePart)
+	RunwaySession.RestorePlatformStandAfterFinalLand(humanoid)
+	RunwaySession.ClearFinalLandingSlideModuleLocals()
+	RunwaySession.ClearScriptedSlideMotion()
+	RunwaySession.RestoreHumanoidAutoRotateAfterFinalPitch(humanoid)
+	RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(humanoid, hrp)
+	if NetMsg.JumpRunwayRemotesExist() and not localState.finalSent and Refs.missAbortSentForThisRun ~= true then
+		Refs.missAbortSentForThisRun = true
+		NetMsg.FireRequestJumpRunwayInput({
+			kind = Kind.Abort,
+			clientClock = os.clock(),
+			clientPhase = localState.phase,
+		})
+		localState.finalSent = true
+	end
+	RunwaySession.SlideTraceScheduleDestroyAfterRunwayEnd()
+	RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(humanoid)
+	RunwaySession.ClearRunwayFlyingHumanoid(humanoid)
+	if localState.controlsDisabled then
+		RunwaySession.SetControlsEnabled(true)
+	end
+	RunwaySession.ResetLocalRunToIdle()
+end
+
+function RunwaySession.HandleObstacleBounceSlideStop(humanoid: Humanoid, hrp: BasePart)
+	if RunwaySession.IsObstacleBounceHrpBeforeStartTrigger(hrp) then
+		RunwaySession.ExitObstacleBounceBeforeStartTrigger(humanoid, hrp)
+		return
+	end
+	RunwaySession.OpenLittleElfChestAfterObstacleBounceStop(humanoid, hrp)
+end
+
+function RunwaySession.OpenLittleElfChestAfterObstacleBounceStop(humanoid: Humanoid, hrp: BasePart)
+	if Refs.chestRunwayAwaitingExit == true or Refs.chestRewardPresentationStarted == true then
+		return
+	end
+	local faceFwdH = NormalizeRunwayForward(localState.runwayForward)
+	Refs.chestSlideFwdH = faceFwdH
+	local chestConfigId = if Refs.chestDynamicConfigId ~= nil then Refs.chestDynamicConfigId else cfg.RUNWAY_CHEST_CONFIG_ID
+	local chestConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
+	if not chestConfig or actualChests == nil then
+		return
+	end
+	local template = GameConfig.FindResourceTemplateByResourceName(actualChests, chestConfig.resourceName)
+	if not template then
+		return
+	end
+	local ahead = RunwaySession.ResolveTreeHitNumber(cfg.RUNWAY_TREE_HIT_DIRECT_OPEN_CHEST_AHEAD_STUDS, 3, 0, 16)
+	local spawnPos = RunwaySession.ComputeLittleElfChestSpawnPositionAtOrigin(hrp.Position, hrp, faceFwdH, ahead)
+	local chestModel = GameConfig.CloneTemplateAsModel(template)
+	chestModel.Name = "RunwayLittleElfChest"
+	RunwaySession.SetModelCollisionGroup(chestModel, ChestCollisionGroupName)
+	local landPos = RunwaySession.ResolveLittleElfChestGroundPosition(spawnPos, chestModel)
+	local openCFrame = RunwaySession.BuildLittleElfChestOpenCFrame(landPos, faceFwdH, chestModel)
+	for _, part in ipairs(chestModel:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanQuery = true
+			part.CanTouch = false
+			part.Massless = true
+		end
+	end
+	chestModel:PivotTo(openCFrame)
+	chestModel.Parent = workspace
+	Refs.chestSpawnedForThisRun = true
+	Refs.chestSpawnedModel = chestModel
+	Refs.chestGroundOpenCFrame = openCFrame
+	Refs.chestOpenCFrame = openCFrame
+	Refs.chestLandedOnGround = true
+	Refs.chestReadyForHit = false
+	Refs.chestRunwayAwaitingExit = true
+	Refs.chestBounceActive = false
+	Refs.chestHitSequenceActive = true
+	Refs.chestPickedConfigId = chestConfigId
+	Refs.chestPickedBrainrotId = nil
+	Refs.chestPickedVariantId = nil
+	Refs.chestPendingReward = nil
+	Refs.chestRewardPresentationStarted = false
+	localState.slideEndClock = math.huge
+	RunwaySession.EnterLittleElfChestRewardWaitPose(humanoid, hrp)
+	local chestOpenDistance = RunwaySession.CurrentAlongProgress(hrp)
+	ClientGameInfo.UpdateJumpRunwayBestDistance(chestOpenDistance)
+	NetMsg.FireRequestJumpRunwayBestDistance(chestOpenDistance)
+	NetMsg.FireRequestJumpRunwayLittleElfChestReward(chestConfigId)
+	task.spawn(RunwaySession.TryPresentLittleElfChestReward)
 end
 
 function RunwaySession.ProcessLittleElfChestHit(chestModel: Model, fwdH: Vector3, chestConfigId: number)
@@ -5957,6 +6586,7 @@ function RunwaySession.SpawnLittleElfChestAtPosition(fwdH: Vector3, spawnPos: Ve
 	Refs.chestReadyForHit = false
 	Refs.chestLandedOnGround = false
 	Refs.chestLandClock = nil
+	local spawnToken = Refs.chestSpawnDelayToken
 
 	local chestModel = GameConfig.CloneTemplateAsModel(template)
 	chestModel.Name = "RunwayLittleElfChest"
@@ -6016,6 +6646,9 @@ function RunwaySession.SpawnLittleElfChestAtPosition(fwdH: Vector3, spawnPos: Ve
 		local driver = Instance.new("NumberValue")
 		driver.Value = CHEST_FALL_MAX_HEIGHT_STUDS
 		local conn = driver:GetPropertyChangedSignal("Value"):Connect(function()
+			if Refs.chestSpawnDelayToken ~= spawnToken then
+				return
+			end
 			if chestModel and chestModel.Parent then
 				local currentPos = landPos + Vector3.new(0, driver.Value, 0)
 				chestModel:PivotTo(CFrame.new(currentPos))
@@ -6030,6 +6663,9 @@ function RunwaySession.SpawnLittleElfChestAtPosition(fwdH: Vector3, spawnPos: Ve
 		tween.Completed:Wait()
 		conn:Disconnect()
 		driver:Destroy()
+		if Refs.chestSpawnDelayToken ~= spawnToken then
+			return
+		end
 		if chestModel and chestModel.Parent then
 			chestModel:PivotTo(landCf)
 			Refs.chestLandedOnGround = true
@@ -6168,7 +6804,11 @@ function RunwaySession.UpdateTick(dt: number)
 	if
 		localState.phase == Ph.Slide
 		and localState.finalLandSubPhase == 2
-		and (localState.runwaySlideKind == SlideKindFinalLanding or localState.runwaySlideKind == SlideKindMiss)
+		and (
+			localState.runwaySlideKind == SlideKindFinalLanding
+			or localState.runwaySlideKind == SlideKindMiss
+			or localState.runwaySlideKind == SlideKindObstacleBounce
+		)
 	then
 		RunwaySession.TryLittleElfChestProximityHit(hrp)
 	end
@@ -6189,7 +6829,7 @@ function RunwaySession.UpdateTick(dt: number)
 			RunwaySession.TryForceReportFinalAfterChestExit()
 			RunwaySession.ResetLocalRunToIdle()
 			return
-		elseif localState.runwaySlideKind == SlideKindMiss then
+		elseif localState.runwaySlideKind == SlideKindMiss or localState.runwaySlideKind == SlideKindObstacleBounce then
 			if not RunwaySession.IsRunwayScriptedGrounded(humanoid) then
 				return
 			end
@@ -6923,6 +7563,13 @@ function RunwaySession.OnHeartbeat(dt: number)
 end
 
 function RunwaySession.OnCameraRenderStep(dt: number)
+	local cameraSmoothSpeed: number? = nil
+	if localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindObstacleBounce then
+		local bounceSmooth = cfg.RUNWAY_CAMERA_BOUNCE_SMOOTH_SPEED
+		if typeof(bounceSmooth) == "number" and bounceSmooth == bounceSmooth and bounceSmooth > 0 then
+			cameraSmoothSpeed = bounceSmooth
+		end
+	end
 	RunwayCameraController.Update(
 		workspace,
 		cfg,
@@ -6931,7 +7578,8 @@ function RunwaySession.OnCameraRenderStep(dt: number)
 		RunwaySession.IsRunwayActivePhase,
 		RunwaySession.GetCharacterParts,
 		localState.runwayForward,
-		NormalizeRunwayForward
+		NormalizeRunwayForward,
+		cameraSmoothSpeed
 	)
 end
 

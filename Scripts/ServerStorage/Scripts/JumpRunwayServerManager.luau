@@ -290,7 +290,11 @@ local function LogJumpEnd(player: Player, st: RunState, isDead: number)
 		return
 	end
 	st.analyticsEndLogged = true
-	local distance = math.min(maxAlongByUserId[player.UserId] or 0, cfg.ANTI_CHEAT_DISTANCE_HARD_CAP)
+	local distanceSource = playerFinalScore[player.UserId]
+	if distanceSource == nil then
+		distanceSource = maxAlongByUserId[player.UserId] or 0
+	end
+	local distance = math.min(distanceSource, cfg.ANTI_CHEAT_DISTANCE_HARD_CAP)
 	-- player_speed 埋点忽略减速，使用 walkSpeedLevel 对应速度
 	AnalyticsTool.LogJumpEnd(
 		player,
@@ -366,8 +370,12 @@ local function BeginCleaning(player: Player, st: RunState)
 	end
 end
 
-local function LockScoreAndTeleport(player: Player, st: RunState, nowClock: number)
-	local capped = math.min(maxAlongByUserId[player.UserId] or 0, cfg.ANTI_CHEAT_DISTANCE_HARD_CAP)
+local function LockScoreAndTeleport(player: Player, st: RunState, nowClock: number, finalAlongOpt: number?)
+	local scoreSource = maxAlongByUserId[player.UserId] or 0
+	if finalAlongOpt ~= nil and finalAlongOpt == finalAlongOpt then
+		scoreSource = math.max(0, finalAlongOpt :: number)
+	end
+	local capped = math.min(scoreSource, cfg.ANTI_CHEAT_DISTANCE_HARD_CAP)
 	print("[JumpRunwayServerManager] LockScoreAndTeleport for", player.Name, "capped", capped)
 	playerFinalScore[player.UserId] = capped
 	player:SetAttribute("JumpRunwayCooldownUntil", nowClock + cfg.RUN_START_COOLDOWN)
@@ -795,8 +803,8 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 			)
 		end
 	elseif kind == Kind.Final then
-		print("[JumpRunwayServerManager] Final report for", player.Name, "distance", maxAlongByUserId[player.UserId])
-		LockScoreAndTeleport(player, st, nowClock)
+		print("[JumpRunwayServerManager] Final report for", player.Name, "distance", report.finalAlong or maxAlongByUserId[player.UserId])
+		LockScoreAndTeleport(player, st, nowClock, report.finalAlong)
 	elseif kind == Kind.Input then
 		if report.jumpPressed == true then
 			ServerGameInfo.IncrementJumpRunwayJumpCount(player)
