@@ -60,6 +60,30 @@ type PendingPaidShopItem = {
 }
 local pendingPaidShopItemByUserId: { [number]: PendingPaidShopItem } = {}
 
+local function HasUniquePaidProductForItem(itemType: number, itemId: number, productId: number): boolean
+	if productId <= 0 then
+		return false
+	end
+
+	if itemType == GameConfig.ItemType.ExEquip then
+		for otherItemId, equipData in GameConfig.ExEquipDataMap do
+			if otherItemId ~= itemId and equipData.productId == productId then
+				return false
+			end
+		end
+		return true
+	elseif itemType == GameConfig.ItemType.Jetpack then
+		for otherItemId, jetpackData in GameConfig.JetpackDataMap do
+			if otherItemId ~= itemId and jetpackData.productId == productId then
+				return false
+			end
+		end
+		return true
+	end
+
+	return false
+end
+
 local analyticsToolModule: any = nil
 local function analyticsTool(): any
 	if analyticsToolModule == nil then
@@ -426,6 +450,17 @@ end
 function ServerGameInfo.SetPendingPaidShopItem(player: Player, itemType: number, itemId: number, productId: number): boolean
 	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil or productId <= 0 then
+		return false
+	end
+	if not HasUniquePaidProductForItem(itemType, itemId, productId) then
+		warn(
+			string.format(
+				"[ServerGameInfo] Rejecting pending paid item: ambiguous productId=%d for itemType=%d itemId=%d",
+				productId,
+				itemType,
+				itemId
+			)
+		)
 		return false
 	end
 	if itemType == GameConfig.ItemType.ExEquip then
