@@ -20,7 +20,7 @@ local requireAnyForDeferredModules = require :: any
 
 local playerInfoMap: { [number]: GameConfig.PlayerInfo } = {}
 local lastBroadcastModelYieldMap: { [number]: { [string]: number } } = {}
-local DebugModelYieldLogEnabled = true
+local DebugModelYieldLogEnabled = false
 local ModelYieldAccrueDebugIntervalSec = 10
 local lastModelYieldAccrueDebugUnixByKey: { [string]: number } = {}
 

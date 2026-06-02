@@ -81,7 +81,7 @@ local LOCAL_SLOT_RECOVERY_MAX_ATTEMPTS = 24
 -- 调试：设为 true 时在 ApplySlotVisuals 节流打印，用于排查高频全量刷新（默认关闭）
 local DEBUG_HOME_SLOT_REFRESH = false
 local lastDebugHomeApplyClock = 0.0
-local DEBUG_COLLECT_YIELD_LOG = true
+local DEBUG_COLLECT_YIELD_LOG = false
 local COLLECT_YIELD_ZERO_LOG_INTERVAL = 1
 local lastCollectYieldZeroLogAtByKey: { [string]: number } = {}
 
