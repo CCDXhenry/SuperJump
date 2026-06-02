@@ -213,6 +213,7 @@ local function CreateSelectEquipBtn(jetpackId: number, jetpackData: GameConfig.J
 	local equipBtn = equipBtnPre:Clone()
 	equipBtn.Parent = scrollingFrame
 	equipBtn.Visible = true
+	equipBtn:SetAttribute("equipId", jetpackId)
 	local usingJetpackId = localPlayerInfo.jetpackInventory.currentId
 	local equipImg: ImageLabel = equipBtn:FindFirstChild("EquipImg") :: ImageLabel
 

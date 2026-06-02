@@ -209,6 +209,7 @@ local function CreateSelectEquipBtn(equipId: number, equipData: GameConfig.ExEqu
 	local equipBtn = equipBtnPre:Clone()
 	equipBtn.Parent = scrollingFrame
 	equipBtn.Visible = true
+	equipBtn:SetAttribute("equipId", equipId)
 	local usingEquipId = localPlayerInfo.exEquipInventory.currentId
 	local equipImg: ImageLabel = equipBtn:FindFirstChild("EquipImg") :: ImageLabel
 

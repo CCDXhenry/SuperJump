@@ -178,12 +178,26 @@ local function GetEstimatedCollectableYield(pointIndexStr: string, placed: GameC
 	return if elapsed >= GUIDE_COLLECT_MIN_ELAPSED_SEC then perSecond * elapsed else 0
 end
 
-local function IsTargetJetpackOwned(info: GameConfig.ClientLocalPlayerInfo): boolean
-	return info.jetpackInventory.ownedList[tostring(GameConfig.GuideTargetJetpackId)] == true
-end
-
 local function IsTargetExEquipOwned(info: GameConfig.ClientLocalPlayerInfo): boolean
 	return info.exEquipInventory.ownedList[tostring(GameConfig.GuideTargetExEquipId)] == true
+end
+
+local function HasAnyOwnedJetpack(info: GameConfig.ClientLocalPlayerInfo): boolean
+	for _, isOwned in pairs(info.jetpackInventory.ownedList) do
+		if isOwned == true then
+			return true
+		end
+	end
+	return false
+end
+
+local function HasAnyOwnedExEquip(info: GameConfig.ClientLocalPlayerInfo): boolean
+	for _, isOwned in pairs(info.exEquipInventory.ownedList) do
+		if isOwned == true then
+			return true
+		end
+	end
+	return false
 end
 
 local function IsTargetJetpackAffordable(info: GameConfig.ClientLocalPlayerInfo): boolean
@@ -201,10 +215,10 @@ local function TryCompleteOwnedPurchaseGuideSteps()
 	if info == nil then
 		return
 	end
-	if IsTargetJetpackOwned(info) and not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished) then
+	if HasAnyOwnedJetpack(info) and not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished) then
 		CompleteGuideStep(GameConfig.GuideStepKey.JetpackBuyFinished)
 	end
-	if IsTargetExEquipOwned(info) and not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
+	if HasAnyOwnedExEquip(info) and not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
 		CompleteGuideStep(GameConfig.GuideStepKey.ExEquipBuyFinished)
 	end
 end
@@ -594,6 +608,10 @@ local function ResolveStartTriggerWorldPosition(): Vector3?
 	local startModel = if startPoint then startPoint:FindFirstChild("StartPointModel") else nil
 	local startTrigger = if startModel then startModel:FindFirstChild("StartTrigger") else nil
 	if startTrigger ~= nil and startTrigger:IsA("BasePart") then
+		local guideAttachment = startTrigger:FindFirstChild("GuideAttachment")
+		if guideAttachment and guideAttachment:IsA("Attachment") then
+			return guideAttachment.WorldPosition
+		end
 		return startTrigger.Position
 	end
 	return nil
@@ -886,23 +904,27 @@ local function ResolveGuideType(): number
 		end
 	end
 
-	if IsTargetJetpackOwned(info) then
-		if not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished) then
-			CompleteGuideStep(GameConfig.GuideStepKey.JetpackBuyFinished)
-		end
+	local hasAnyOwnedJetpack = HasAnyOwnedJetpack(info)
+	if hasAnyOwnedJetpack and not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished) then
+		CompleteGuideStep(GameConfig.GuideStepKey.JetpackBuyFinished)
+	end
+	if hasAnyOwnedJetpack then
 		if IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished)
 			and not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackRunwayRetryFinished)
 		then
 			return GameConfig.GuideType.TutorialJetpackRunwayRetry
 		end
-	elseif not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished) and IsTargetJetpackAffordable(info) then
+	elseif not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished)
+		and not HasAnyOwnedJetpack(info)
+		and IsTargetJetpackAffordable(info)
+	then
 		return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialJetpackBuy)
 	end
 
+	if HasAnyOwnedExEquip(info) and not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
+		CompleteGuideStep(GameConfig.GuideStepKey.ExEquipBuyFinished)
+	end
 	if IsTargetExEquipOwned(info) then
-		if not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
-			CompleteGuideStep(GameConfig.GuideStepKey.ExEquipBuyFinished)
-		end
 		if not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipUseFinished) then
 			return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipUse)
 		end
@@ -912,7 +934,10 @@ local function ResolveGuideType(): number
 		then
 			return GameConfig.GuideType.TutorialJumpPowerRunwayRetry
 		end
-	elseif not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) and IsTargetExEquipAffordable(info) then
+	elseif not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished)
+		and not HasAnyOwnedExEquip(info)
+		and IsTargetExEquipAffordable(info)
+	then
 		return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipBuy)
 	end
 

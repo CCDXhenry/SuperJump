@@ -174,29 +174,6 @@ local function FindShopFrame(windowFrameName: string): Frame?
 	return nil
 end
 
-local function FindFirstShopItemButton(windowFrameName: string): GuiButton?
-	local shopFrame = FindShopFrame(windowFrameName)
-	if shopFrame == nil then
-		return nil
-	end
-	local scrollingFrame = shopFrame:FindFirstChild("ScrollingFrame")
-	if scrollingFrame == nil or not scrollingFrame:IsA("ScrollingFrame") then
-		return nil
-	end
-	local bestButton: GuiButton? = nil
-	local bestOrder = math.huge
-	for _, child in scrollingFrame:GetChildren() do
-		if child:IsA("GuiButton") and child.Visible then
-			local order = child.LayoutOrder
-			if order < bestOrder then
-				bestButton = child
-				bestOrder = order
-			end
-		end
-	end
-	return bestButton
-end
-
 local function FindShopBuyButton(windowFrameName: string): GuiButton?
 	local shopFrame = FindShopFrame(windowFrameName)
 	if shopFrame == nil then
@@ -213,6 +190,132 @@ local function FindShopBuyButton(windowFrameName: string): GuiButton?
 	local buyBtn = infoFrame:FindFirstChild("BuyBtn")
 	if buyBtn ~= nil and buyBtn:IsA("GuiButton") and buyBtn.Visible then
 		return buyBtn
+	end
+	return nil
+end
+
+local function GetLocalCoinCount(): number
+	local localInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if localInfo == nil then
+		return 0
+	end
+	return localInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
+end
+
+local function FindSelectedShopItemButton(windowFrameName: string): GuiButton?
+	local shopFrame = FindShopFrame(windowFrameName)
+	if shopFrame == nil then
+		return nil
+	end
+	local scrollingFrame = shopFrame:FindFirstChild("ScrollingFrame")
+	if scrollingFrame == nil or not scrollingFrame:IsA("ScrollingFrame") then
+		return nil
+	end
+	for _, child in scrollingFrame:GetChildren() do
+		if child:IsA("GuiButton") and child.Visible then
+			local selectImg = child:FindFirstChild("SelectImg")
+			if selectImg and selectImg:IsA("GuiObject") and selectImg.Visible then
+				return child
+			end
+		end
+	end
+	return nil
+end
+
+local function CanAffordJetpackByCoin(jetpackId: number): boolean
+	local jetpackData = GameConfig.JetpackDataMap[jetpackId]
+	if jetpackData == nil then
+		return false
+	end
+	local localInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if localInfo == nil then
+		return false
+	end
+	if localInfo.jetpackInventory.ownedList[tostring(jetpackId)] == true then
+		return false
+	end
+	local coinCount = GetLocalCoinCount()
+	if jetpackData.costType == GameConfig.CostType.Coin or jetpackData.costType == GameConfig.CostType.CoinOrRb then
+		return coinCount >= jetpackData.costCoin
+	end
+	return false
+end
+
+local function CanAffordExEquipByCoin(equipId: number): boolean
+	local equipData = GameConfig.ExEquipDataMap[equipId]
+	if equipData == nil then
+		return false
+	end
+	local localInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if localInfo == nil then
+		return false
+	end
+	if localInfo.exEquipInventory.ownedList[tostring(equipId)] == true then
+		return false
+	end
+	local coinCount = GetLocalCoinCount()
+	if equipData.costType == GameConfig.CostType.Coin or equipData.costType == GameConfig.CostType.CoinOrRb then
+		return coinCount >= equipData.costCoin
+	end
+	return false
+end
+
+local function FindFirstItemButtonByOrder(windowFrameName: string): GuiButton?
+	local shopFrame = FindShopFrame(windowFrameName)
+	if shopFrame == nil then
+		return nil
+	end
+	local scrollingFrame = shopFrame:FindFirstChild("ScrollingFrame")
+	if scrollingFrame == nil or not scrollingFrame:IsA("ScrollingFrame") then
+		return nil
+	end
+	local bestButton: GuiButton? = nil
+	local bestOrder = math.huge
+	for _, child in scrollingFrame:GetChildren() do
+		if child:IsA("GuiButton") and child.Visible then
+			if child.LayoutOrder < bestOrder then
+				bestButton = child
+				bestOrder = child.LayoutOrder
+			end
+		end
+	end
+	return bestButton
+end
+
+local function FindJetpackGuideButton(): GuiButton?
+	local selectedBtn = FindSelectedShopItemButton("JetpackShopFrame")
+	if selectedBtn ~= nil then
+		local selectedId = selectedBtn:GetAttribute("equipId")
+		if typeof(selectedId) == "number" and CanAffordJetpackByCoin(selectedId) then
+			return FindShopBuyButton("JetpackShopFrame")
+		end
+	end
+
+	local firstBtn = FindFirstItemButtonByOrder("JetpackShopFrame")
+	if firstBtn ~= nil then
+		local firstId = firstBtn:GetAttribute("equipId")
+		if typeof(firstId) == "number" and CanAffordJetpackByCoin(firstId) then
+			return firstBtn
+		end
+	end
+	return nil
+end
+
+local function FindExEquipGuideButton(): GuiButton?
+	local selectedBtn = FindSelectedShopItemButton("ExEquipShopFrame")
+	if selectedBtn ~= nil then
+		local selectedId = selectedBtn:GetAttribute("equipId")
+		if typeof(selectedId) == "number" and CanAffordExEquipByCoin(selectedId) then
+			return FindShopBuyButton("ExEquipShopFrame")
+		end
+	end
+
+	local firstBtn = FindFirstItemButtonByOrder("ExEquipShopFrame")
+	if firstBtn ~= nil then
+		local firstId = firstBtn:GetAttribute("equipId")
+		if typeof(firstId) == "number" and CanAffordExEquipByCoin(firstId) then
+			return firstBtn
+		end
 	end
 	return nil
 end
@@ -236,14 +339,6 @@ local function FindExEquipBackpackSlotButton(): GuiButton?
 		end
 	end
 	return nil
-end
-
-local function FindJetpackGuideButton(): GuiButton?
-	return FindShopBuyButton("JetpackShopFrame") or FindFirstShopItemButton("JetpackShopFrame")
-end
-
-local function FindExEquipGuideButton(): GuiButton?
-	return FindShopBuyButton("ExEquipShopFrame") or FindFirstShopItemButton("ExEquipShopFrame")
 end
 
 local function IsOutsideRunwaySessionGuideType(guideType: number): boolean
