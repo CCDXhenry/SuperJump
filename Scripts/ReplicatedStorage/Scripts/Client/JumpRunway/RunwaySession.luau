@@ -247,6 +247,7 @@ local Refs: {
 	guideSlowMotionStepKey: string?,
 	guideSlowMotionGuideType: number,
 	guideSlowMotionLocallyCompletedStepKeys: { [string]: boolean },
+	guideSlowMotionFreezePosition: Vector3?,
 	finalJumpGuideSlowMotionApexReady: boolean,
 	finalJumpGuideSlowMotionAscentSeen: boolean,
 	finalJumpGuideSlowMotionPrevRawVy: number?,
@@ -329,6 +330,7 @@ local Refs: {
 	guideSlowMotionStepKey = nil,
 	guideSlowMotionGuideType = GameConfig.GuideType.None,
 	guideSlowMotionLocallyCompletedStepKeys = {},
+	guideSlowMotionFreezePosition = nil,
 	finalJumpGuideSlowMotionApexReady = false,
 	finalJumpGuideSlowMotionAscentSeen = false,
 	finalJumpGuideSlowMotionPrevRawVy = nil,
@@ -1117,7 +1119,7 @@ function RunwaySession.GetRunwayEffectiveGravityScale(): number
 		return cfg.RUNWAY_SLIDE_EFFECTIVE_GRAVITY_SCALE
 	end
 	if localState.phase == Ph.Airborne and localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
-		if localState.dashHeld and localState.fuel > 0 then
+		if RunwaySession.IsFinalDashThrustActive() then
 			return cfg.RUNWAY_FINAL_DASH_EFFECTIVE_GRAVITY_SCALE
 		end
 	end
@@ -1396,6 +1398,22 @@ function RunwaySession.GetGuideSlowMotionScale(): number
 	return if Refs.guideSlowMotionActive then GuideSlowMotionSpeedScale else 1
 end
 
+function RunwaySession.IsFinalDashTutorialGateOpen(): boolean
+	if RunwaySession.IsGuideStepDone(GameConfig.GuideStepKey.FinalDashFinished) then
+		return true
+	end
+	return Refs.guideSlowMotionActive
+		and Refs.guideSlowMotionStepKey == GameConfig.GuideStepKey.FinalDashFinished
+end
+
+function RunwaySession.IsFinalDashThrustActive(): boolean
+	return localState.phase == Ph.Airborne
+		and localState.takeoffCount >= cfg.N_TOTAL_JUMPS
+		and localState.dashHeld
+		and localState.fuel > 0
+		and RunwaySession.IsFinalDashTutorialGateOpen()
+end
+
 function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt: number, humanoid: Humanoid)
 	local v = hrp.AssemblyLinearVelocity
 	local vy = RunwaySession.GetBoostedVerticalY(v.Y)
@@ -1417,7 +1435,7 @@ function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt
 			local base = RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, localState.takeoffCount, vy)
 			local playerThrustSpeed = RunwaySession.GetExpectedPlayerMaxThrustSpeed()
 			local capExtra = math.max(0, playerThrustSpeed)
-			if localState.dashHeld and localState.fuel > 0 then
+			if RunwaySession.IsFinalDashThrustActive() then
 				localState.finalDashAlongExtra = math.min(
 					localState.finalDashAlongExtra + cfg.DASH_ACCEL * dt,
 					capExtra
@@ -1505,6 +1523,25 @@ end
 function RunwaySession.CFrameAtPositionWithSameOrientation(cf: CFrame, pos: Vector3): CFrame
 	local rx, ry, rz = cf:ToOrientation()
 	return CFrame.new(pos) * CFrame.fromOrientation(rx, ry, rz)
+end
+
+function RunwaySession.FreezeGuideSlowMotionFinalDashPosition(hrp: BasePart)
+	if not Refs.guideSlowMotionActive or Refs.guideSlowMotionStepKey ~= GameConfig.GuideStepKey.FinalDashFinished then
+		Refs.guideSlowMotionFreezePosition = nil
+		return
+	end
+	if localState.phase ~= Ph.Airborne or localState.takeoffCount < cfg.N_TOTAL_JUMPS then
+		Refs.guideSlowMotionFreezePosition = nil
+		return
+	end
+	local freezePosition = Refs.guideSlowMotionFreezePosition
+	if freezePosition == nil then
+		freezePosition = hrp.Position
+		Refs.guideSlowMotionFreezePosition = freezePosition
+	end
+	hrp.CFrame = RunwaySession.CFrameAtPositionWithSameOrientation(hrp.CFrame, freezePosition)
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	hrp.AssemblyAngularVelocity = Vector3.zero
 end
 
 function RunwaySession.ApplyRunwayYawCorrection(hrp: BasePart, forward: Vector3, dt: number)
@@ -3017,7 +3054,7 @@ end
 
 -- 终局跳水平冲刺在 UpdateAutoRunVelocity 内与基底合并；此处仅处理冲刺向上加速度
 function RunwaySession.UpdateDashVerticalOnly(hrp: BasePart, dt: number)
-	if not localState.dashHeld or localState.fuel <= 0 then
+	if not RunwaySession.IsFinalDashThrustActive() then
 		return
 	end
 	local v = hrp.AssemblyLinearVelocity
@@ -3102,8 +3139,7 @@ function RunwaySession.UpdateJetpackFlameDashFx(nowClock: number)
 	end
 	local dashFxActive = localState.phase == Ph.Airborne
 		and localState.takeoffCount >= cfg.N_TOTAL_JUMPS
-		and localState.dashHeld
-		and localState.fuel > 0
+		and RunwaySession.IsFinalDashThrustActive()
 	if not dashFxActive then
 		RunwaySession.SetJetpackDashParticlesEnabled(false)
 		RunwaySession.RestoreJetpackFlameIdleColors()
@@ -4007,7 +4043,7 @@ function RunwaySession.ApplyRunwayFinalBodyPitch(hrp: BasePart, forward: Vector3
 		return
 	end
 	local extraDegTarget = 0
-	if localState.dashHeld and localState.fuel > 0 then
+	if RunwaySession.IsFinalDashThrustActive() then
 		extraDegTarget = cfg.RUNWAY_FINAL_DASH_EXTRA_PITCH_DEG
 	end
 	local pitchRate = cfg.RUNWAY_FINAL_PITCH_SMOOTH_RATE
@@ -5030,10 +5066,12 @@ function RunwaySession.SetRunwayGuideSlowMotion(guideType: number, stepKey: stri
 	Refs.guideSlowMotionStepKey = stepKey
 	Refs.guideSlowMotionGuideType = guideType
 	ClientGameInfo.SetCurrentGuideType(guideType)
-	local _character, _humanoid, hrp = RunwaySession.GetCharacterParts()
-	if hrp ~= nil then
-		hrp.AssemblyLinearVelocity *= GuideSlowMotionSpeedScale
-		hrp.AssemblyAngularVelocity *= GuideSlowMotionSpeedScale
+	if stepKey == GameConfig.GuideStepKey.FinalDashFinished then
+		local _character, _humanoid, hrp = RunwaySession.GetCharacterParts()
+		localState.dashHeld = false
+		localState.finalDashAlongExtra = 0
+		Refs.guideSlowMotionFreezePosition = if hrp ~= nil then hrp.Position else nil
+		RunwaySession.NetReportDashIfChanged()
 	end
 end
 
@@ -5041,6 +5079,7 @@ function RunwaySession.ClearRunwayGuideSlowMotion()
 	Refs.guideSlowMotionActive = false
 	Refs.guideSlowMotionStepKey = nil
 	Refs.guideSlowMotionGuideType = GameConfig.GuideType.None
+	Refs.guideSlowMotionFreezePosition = nil
 	RunwaySession.RestoreGuideSlowMotionAnimatorTracks()
 	if ClientGameInfo.GetCurrentGuideType() == GameConfig.GuideType.TutorialBeginLineJump
 		or ClientGameInfo.GetCurrentGuideType() == GameConfig.GuideType.TutorialLandingJump
@@ -5251,6 +5290,9 @@ function RunwaySession.OnPostSimulationLocomotion(dt: number)
 		end
 	else
 		RunwaySession.RestoreHumanoidAutoRotateAfterFinalPitch(humanoid)
+	end
+	if hrp ~= nil then
+		RunwaySession.FreezeGuideSlowMotionFinalDashPosition(hrp)
 	end
 end
 
@@ -6763,7 +6805,7 @@ function RunwaySession.UpdateTick(dt: number)
 		return
 	end
 	if localState.phase == Ph.Airborne and localState.takeoffCount == cfg.N_TOTAL_JUMPS then
-		if localState.dashHeld and localState.fuel > 0 then
+		if RunwaySession.IsFinalDashThrustActive() then
 			localState.fuel = math.max(0, localState.fuel - cfg.DASH_FUEL_DRAIN_PER_SEC * dt)
 		end
 	end
@@ -7438,8 +7480,10 @@ function RunwaySession.OnInputBegan(input: InputObject, processed: boolean)
 	end
 	-- 冲刺：与起跳相同的主操作键（Space / 左键 / 触摸）；终局空由 takeoffCount/fuel 决定是否叠加速
 	if IsRunwayPrimaryActionInput(input) and RunwaySession.IsRunwayActivePhase(localState.phase) then
-		localState.dashHeld = true
-		RunwaySession.NetReportDashIfChanged()
+		if RunwaySession.IsFinalDashTutorialGateOpen() then
+			localState.dashHeld = true
+			RunwaySession.NetReportDashIfChanged()
+		end
 	end
 end
 
@@ -7575,6 +7619,7 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	localState.alongBaseline = scoreBaselineAlong
 	localState.phase = Ph.AutoRun
 	localState.takeoffCount = 0
+	localState.dashHeld = false
 	localState.jumpSpeedCumulativeRatingBonus = 0
 	localState.jumpSpeedCurrentReductionDelta = 0
 	localState.fuel = 0
