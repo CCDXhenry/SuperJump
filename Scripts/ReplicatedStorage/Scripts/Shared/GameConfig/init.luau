@@ -819,6 +819,12 @@ GameConfig.JumpRunwayDesigner = {
 	JUMP_WINDOW_RATING_PERFECT_MAX_FRAC = 1 / 3,
 	-- 窗内 Ok 时间占比上限；↑ Ok 窗口更宽
 	JUMP_WINDOW_RATING_OK_MAX_FRAC = 2 / 3,
+	-- BeginLine 前固定 Perfect 距离（stud）；距起跳线 ≤ 此值时线前起跳直接 Perfect
+	RUNWAY_BEGIN_LINE_PERFECT_DISTANCE_STUDS = 3,
+	-- 起跳窗/链式 HUD 武装距离带（stud）；距地 ≤ 此值进入 Ok 预备区
+	RUNWAY_PRELAND_MAX_DIST_STUDS = 10,
+	-- 链式 Perfect 近地区起点高度（stud）；PRELAND 到此为 Ok 插值，此高度到贴地为 Perfect 插值
+	RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS = 3.5,
 	-- 起跳窗慢漂 WalkSpeed；↑ 窗内更易微调站位
 	JUMP_WINDOW_WALK_SPEED = 10,
 
@@ -826,7 +832,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- —— ② 沿轴水平速度 ——
 	-- ═══════════════════════════════════════
 	-- 默认跳跃力
-	DEFAULT_JUMP_POWER = 20,
+	DEFAULT_JUMP_POWER = 16,
 	-- 跳跃力锻炼间隔
 	JUMP_POWER_EXERCISE_INTERVAL = 1,
 	-- 跑步机锻炼固定跑步动画速度（等效 WalkSpeed，用于 AdjustSpeed 计算）
@@ -870,9 +876,6 @@ GameConfig.JumpRunwayDesigner = {
 	RUNWAY_SLIDE_EFFECTIVE_GRAVITY_SCALE = 1,
 	-- 脚本贴地射线容差(stud)；↑ 更易判贴地
 	RUNWAY_SCRIPTED_GROUNDED_MAX_DIST_ABOVE_BASELINE_STUDS = 0,
-	-- 链式起跳窗口开始倒计时的高度(stud)：玩家距地 ≤ 此值时启动评分倒计时；
-	-- 在此高度以上（但已在 bandOk 范围内）起跳 → 强制 Ok；此高度以下起跳 → 按 deltaT 算 Perfect/Ok/Late
-	RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS = 3.5,
 
 	-- ═══════════════════════════════════════
 	-- —— ④ 终局冲刺 Dash ——
@@ -1029,9 +1032,11 @@ GameConfig.JumpRunway = {
 	-- 起跳窗内 deltaT/T_WINDOW：前 1/3 为 Perfect，至 2/3 为 Ok，之后为 Late
 	JUMP_WINDOW_RATING_PERFECT_MAX_FRAC = jumpRunwayDesigner.JUMP_WINDOW_RATING_PERFECT_MAX_FRAC,
 	JUMP_WINDOW_RATING_OK_MAX_FRAC = jumpRunwayDesigner.JUMP_WINDOW_RATING_OK_MAX_FRAC,
+	-- BeginLine 前固定 Perfect 距离（stud）
+	RUNWAY_BEGIN_LINE_PERFECT_DISTANCE_STUDS = jumpRunwayDesigner.RUNWAY_BEGIN_LINE_PERFECT_DISTANCE_STUDS,
 	-- 起跳窗/链式 HUD 武装距离带（仅几何，无 vy）：RaycastFeet 的 dist ≤ baseline + 本值；baseline 在 TryStartLocalRun 采样。未标定时退化为 dist ≤ 本值（绝对 stud）。
 	-- IsRunwayPreLanding 另含 RUNWAY_PRELAND_MAX_VY，用于起跳输入等逻辑。
-	RUNWAY_PRELAND_MAX_DIST_STUDS = 10,
+	RUNWAY_PRELAND_MAX_DIST_STUDS = jumpRunwayDesigner.RUNWAY_PRELAND_MAX_DIST_STUDS,
 	RUNWAY_PRELAND_MAX_VY = 4.0,
 	-- 起跳窗内：脚本贴地后再过该秒数才切慢漂；此前沿轴脚本推速与当前段 min 对齐（速度连续）
 	RUNWAY_JUMPWINDOW_DRIFT_DELAY_AFTER_TOUCH_SEC = 0.1,
@@ -1057,10 +1062,8 @@ GameConfig.JumpRunway = {
 	FIRST_TAKEOFF_AUTORUN_SPEED = jumpRunwayDesigner.FIRST_TAKEOFF_AUTORUN_SPEED,
 	-- 水平速度：每段 max = jumpPower + 累计起跳评级 bonus；min = max - 本次起跳前最终减速完的速度 * JUMP_SPEED_REDUCTION_RATIO
 	JUMP_SPEED_REDUCTION_RATIO = jumpRunwayDesigner.JUMP_SPEED_REDUCTION_RATIO,
-	-- 与 ComputeJumpWindowRatingTier 一致：外层 [jumpIndex]，内层 1=Perfect，2=Ok，3=Late；每次起跳（含线前首跳配置的 tier）基于起跳前最终速度计算对应 bonus
+	-- 与 ComputeJumpWindowRatingTier 一致：外层 [jumpIndex]，内层 1=Perfect，2=Ok，3=Late；每次起跳基于起跳前最终速度计算对应 bonus
 	JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER = jumpRunwayDesigner.JUMP_WINDOW_RATING_SPEED_BONUS_BY_TIER,
-	-- AutoRun 且尚未触碰起跳线时起跳：速度 bonus 使用该 tier（默认 2=Ok）；浮层与之一致。
-	JUMP_FIRST_TAKEOFF_BEFORE_LINE_SPEED_RATING_TIER = 2,
 	-- —— 起跳竖直、冲量与各阶段有效重力 ——
 	-- 竖直速度 = jumpPower * JUMP_VERTICAL_RATIO；原 jumpPower 绝对值改为水平速度基准
 	JUMP_VERTICAL_RATIO = jumpRunwayDesigner.JUMP_VERTICAL_RATIO,
@@ -1080,7 +1083,7 @@ GameConfig.JumpRunway = {
 	RUNWAY_GROUND_MIN_NORMAL_Y = 0.25,
 	-- IsRunwayScriptedGrounded 射线分支：有 baseline 时 dist < baseline + 本值 视为脚射线贴地；与 RUNWAY_PRELAND_MAX_DIST_STUDS（起跳窗带）分离
 	RUNWAY_SCRIPTED_GROUNDED_MAX_DIST_ABOVE_BASELINE_STUDS = jumpRunwayDesigner.RUNWAY_SCRIPTED_GROUNDED_MAX_DIST_ABOVE_BASELINE_STUDS,
-	-- 链式起跳窗口开始倒计时的高度(stud)：dist ≤ baseline + 本值时启动评分倒计时
+	-- 链式起跳窗口近地区起点高度(stud)：PRELAND 到此为 Ok 插值，此高度到贴地为 Perfect 插值
 	RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS = jumpRunwayDesigner.RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS,
 	-- IsRunwayScriptedGrounded：FloorMaterial=Air 且脚射线未命中时，若已记录起跑 HRP 世界 Y，且 |当前 HRP.Y - 基准| ≤ 本值（且通过同函数内 vy<12），仍视为贴地。0 关闭仅走射线/状态机回退
 	RUNWAY_SCRIPTED_GROUNDED_HRP_Y_DEVIATION_STUDS = 0.5,
