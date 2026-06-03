@@ -5954,7 +5954,7 @@ function RunwaySession.UpdateStartTriggerReentryState()
 			RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger)
 		elseif Refs.chestCarryReturnActive == true then
 			RunwaySession.TryExitEscapePhaseAtStartTrigger(startTrigger)
-		elseif Refs.chestCarryReturnActive ~= true and Refs.startTriggerStartArmed == true then
+		elseif Refs.chestCarryReturnActive ~= true and not RunwaySession.ShouldBlockJumpRunwayStartAtStartTrigger() then
 			if humanoid and not RunwaySession.IsRunwayActivePhase(localState.phase) then
 				if RunwaySession.SnapLocalPlayerToRunwayGroundIfAirborne(startTrigger, humanoid, hrp) then
 					RunwaySession.TryStartLocalRun(startTrigger)
@@ -5972,6 +5972,9 @@ end
 
 function RunwaySession.ShouldBlockJumpRunwayStartAtStartTrigger(): boolean
 	if Refs.startTriggerStartArmed == false then
+		return true
+	end
+	if ClientGameInfo.IsExercising() then
 		return true
 	end
 	local character = localPlayer.Character
@@ -7729,7 +7732,7 @@ function RunwaySession.BindSceneTriggers()
 					RunwaySession.TryExitEscapePhaseAtStartTrigger(startTrigger)
 					return
 				end
-				if Refs.startTriggerStartArmed ~= true then
+				if RunwaySession.ShouldBlockJumpRunwayStartAtStartTrigger() then
 					return
 				end
 				if RunwaySession.IsRunwayActivePhase(localState.phase) then

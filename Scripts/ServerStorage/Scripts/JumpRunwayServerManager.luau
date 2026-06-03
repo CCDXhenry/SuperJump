@@ -58,6 +58,7 @@ type PendingLittleElfChestReward = {
 local pendingLittleElfChestRewardMap: { [number]: PendingLittleElfChestReward } = {}
 
 local JumpRunwayLittleElfChestCarryAttr = "JumpRunwayLittleElfChestCarry"
+local ExercisingAttr = "Exercising"
 local StartTriggerCloseEnoughMinStuds = 24
 
 local function EnsureCollisionGroup(groupName: string)
@@ -426,6 +427,9 @@ end
 
 local function TryStartSession(player: Player, report: NetMsg.JumpRunwayInputReport, nowClock: number): boolean
 	if runMap[player.UserId] ~= nil then
+		return false
+	end
+	if player:GetAttribute(ExercisingAttr) == true then
 		return false
 	end
 	local lastCd = player:GetAttribute("JumpRunwayCooldownUntil") :: number?
