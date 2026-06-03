@@ -921,10 +921,11 @@ local function ResolveGuideType(): number
 		return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialJetpackBuy)
 	end
 
-	if HasAnyOwnedExEquip(info) and not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
+	local hasAnyOwnedExEquip = HasAnyOwnedExEquip(info)
+	if hasAnyOwnedExEquip and not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
 		CompleteGuideStep(GameConfig.GuideStepKey.ExEquipBuyFinished)
 	end
-	if IsTargetExEquipOwned(info) then
+	if hasAnyOwnedExEquip then
 		if not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipUseFinished) then
 			return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipUse)
 		end
