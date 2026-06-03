@@ -4446,6 +4446,9 @@ function RunwaySession.ApplyDistanceRecorderDisplay(lbl: TextLabel, hrp: BasePar
 end
 
 function RunwaySession.UpdateDistanceRecorder(humanoid: Humanoid, hrp: BasePart)
+	if ClientGameInfo.IsInJumpRunwayEscapePhase() then
+		return
+	end
 	local part = Refs.runwayDistanceRecorderPart
 	if part == nil or part.Parent == nil then
 		return
@@ -4657,6 +4660,7 @@ end
 function RunwaySession.ResetLocalRunToIdle()
 	ClientMsg.FireJumpRunWayStopEscapeRedScreen()
 	local _, humanoid, hrp = RunwaySession.GetCharacterParts()
+	ClientGameInfo.SetInJumpRunwayEscapePhase(false)
 	ClientGameInfo.SetInJumpRunway(false)
 	RunwaySession.ClearRunwayGuideSlowMotion()
 	RunwaySession.ResetFinalJumpGuideSlowMotionApexGate()
@@ -6115,7 +6119,9 @@ function RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger: Part
 	Refs.chestCarryReturnActive = false
 	ChaserClientManager.StopAndFadeChaser()
 	ClientMsg.FireJumpRunWayStopEscapeRedScreen()
+	RunwaySession.DestroyDistanceRecorder()
 	NetMsg.FireRequestJumpRunwayLittleElfChestGrant()
+	ClientGameInfo.SetInJumpRunwayEscapePhase(false)
 	ClientGameInfo.SetInJumpRunway(false)
 	task.delay(1, function()
 		if Refs.chestBackpackDeliverRequested ~= true then
@@ -7784,7 +7790,11 @@ end
 
 function RunwaySession.BindRunwayExitOnCharacterDeathOrRemove()
 	local function resetIfRunwayActive()
-		if RunwaySession.IsRunwayActivePhase(localState.phase) or Refs.chestCarryReturnActive == true then
+		if
+			RunwaySession.IsRunwayActivePhase(localState.phase)
+			or Refs.chestCarryReturnActive == true
+			or ClientGameInfo.IsInJumpRunwayEscapePhase()
+		then
 			RunwaySession.ResetLocalRunToIdle()
 		end
 	end
