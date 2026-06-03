@@ -12,6 +12,7 @@ local replicatedStorage = game:GetService("ReplicatedStorage")
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
+local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
 
 local chaserModels = replicatedStorage:FindFirstChild("Models"):FindFirstChild("Chaser")
 local chaserTemplate = if chaserModels then chaserModels:FindFirstChild("Chaser") :: Model? else nil
@@ -22,6 +23,7 @@ local activeChaser: Model? = nil
 local heartbeatConn: RBXScriptConnection? = nil
 local faded = false
 local stopped = false
+local chaserKillGuideStepSent = false
 
 local chaserCollisionGroup = "Chaser"
 local playerCollisionGroup = "Player"
@@ -194,6 +196,7 @@ local function InternalCleanup()
 	end
 	faded = false
 	stopped = false
+	chaserKillGuideStepSent = false
 end
 
 local function InternalCleanupFull()
@@ -336,6 +339,10 @@ function ChaserClientManager.SpawnChaser(
 					return
 				end
 				KillCharacter(hitCharacter)
+				if not chaserKillGuideStepSent then
+					chaserKillGuideStepSent = true
+					NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.ChaserKillExperienced)
+				end
 				stopped = true
 				task.delay(2, function()
 					if activeChaser == nil then

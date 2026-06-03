@@ -953,10 +953,16 @@ local function ResolveGuideType(): number
 	if not IsGuideStepDone(info, GameConfig.GuideStepKey.WalkSpeedUpgradeFinished) then
 		if HasWalkSpeedUpgraded(info) then
 			CompleteGuideStep(GameConfig.GuideStepKey.WalkSpeedUpgradeFinished)
-		elseif IsWalkSpeedUpgradeAffordable(info) then
-			return FilterOutsideRunwaySessionGuide(
-				MaybeIslandTeleportOr(GameConfig.GuideType.TutorialWalkSpeedUpgrade)
-			)
+		elseif IsGuideStepDone(info, GameConfig.GuideStepKey.ChaserKillExperienced) then
+			if IsWalkSpeedUpgradeAffordable(info) then
+				return FilterOutsideRunwaySessionGuide(
+					MaybeIslandTeleportOr(GameConfig.GuideType.TutorialWalkSpeedUpgrade)
+				)
+			elseif HasCollectableBrainrotYield(info) then
+				return FilterOutsideRunwaySessionGuide(
+					MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotCollect)
+				)
+			end
 		end
 	end
 

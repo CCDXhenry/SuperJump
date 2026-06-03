@@ -64,6 +64,7 @@ GameConfig.GuideStepKey = {
 	BrainrotPlaceFinished = "BrainrotPlaceFinished",
 	BrainrotCollectFinished = "BrainrotCollectFinished",
 	BrainrotUpgradeFinished = "BrainrotUpgradeFinished",
+	ChaserKillExperienced = "ChaserKillExperienced",
 	WalkSpeedUpgradeFinished = "WalkSpeedUpgradeFinished",
 	StartTriggerFinished = "StartTriggerFinished",
 	BeginLineJumpFinished = "BeginLineJumpFinished",
