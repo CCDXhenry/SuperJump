@@ -738,6 +738,44 @@ GameConfig.BrainrotQualityTextMap = {
 }
 
 GameConfig.BrainrotLevelTierSize = 30
+-- Brainrot 模型缩放：每升 1 级在当前尺寸上复利增加的百分比（1 表示每级 ×1.01）
+GameConfig.BrainrotLevelScalePercentPerLevel = 1
+-- VisualModel 上缓存 Models 目录模板原始 GetScale()，避免等级缩放覆盖资源初始大小
+GameConfig.BrainrotTemplateBaseScaleAttributeName = "BrainrotTemplateBaseScale"
+
+function GameConfig.GetBrainrotModelScale(level: number): number
+	local safeLevel = math.max(1, math.floor(level))
+	local perLevelMultiplier = 1 + GameConfig.BrainrotLevelScalePercentPerLevel / 100
+	return perLevelMultiplier ^ (safeLevel - 1)
+end
+
+-- 读取 Models/Brainrots 中模板在目录里配置的原始缩放（Model:GetScale）
+function GameConfig.GetBrainrotTemplateBaseScale(template: Instance): number
+	if template:IsA("Model") then
+		local templateScale = template:GetScale()
+		if templateScale > 0 then
+			return templateScale
+		end
+	end
+	return 1
+end
+
+function GameConfig.ApplyBrainrotModelScale(model: Model, level: number, templateBaseScale: number?)
+	local baseScale = templateBaseScale
+	if baseScale == nil then
+		local stored = model:GetAttribute(GameConfig.BrainrotTemplateBaseScaleAttributeName)
+		if typeof(stored) == "number" and stored > 0 then
+			baseScale = stored
+		else
+			baseScale = model:GetScale()
+			if baseScale <= 0 then
+				baseScale = 1
+			end
+		end
+	end
+	model:SetAttribute(GameConfig.BrainrotTemplateBaseScaleAttributeName, baseScale)
+	model:ScaleTo(baseScale * GameConfig.GetBrainrotModelScale(level))
+end
 
 local brainrotQualityMaxTierForLevelColor = 0
 for tierKey in pairs(GameConfig.BrainrotQualityConfig) do

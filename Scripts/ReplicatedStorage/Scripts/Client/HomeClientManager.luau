@@ -32,6 +32,8 @@ local slotStateCache: { [string]: { active: boolean, homeInfo: any?, isLocalPlay
 -- 服务端同步时的权威 unclaimedYield；展示数字 = 该值 + 每秒增量 * floor(服务器时间 - anchorTime)
 local yieldAnchorServerTime: { [number]: { [string]: number } } = {}
 local yieldAnchorModelInstanceId: { [number]: { [string]: string } } = {}
+local localUpgradePreviewLevelByKey: { [string]: number } = {}
+local lastClaimRequestClockByKey: { [string]: number } = {}
 local floorModelsCache: { [string]: { [number]: Model } } = {}
 local upgradeUITemplateBackup: SurfaceGui? = nil
 local FLOOR_HEIGHT = 32.6
@@ -72,6 +74,7 @@ local INTERACTION_FOCUS_REFRESH_INTERVAL = 0.1
 -- 略大于激活距离仍保留上一展台焦点，避免在 MaxActivationDistance 边界抖动时关掉 Prompt 打断按住
 local INTERACTION_FOCUS_RELEASE_MARGIN_STUDS = 6
 local COLLECT_YIELD_TEXT_REFRESH_INTERVAL = 0.12
+local CLAIM_REQUEST_COOLDOWN_SEC = 0.8
 local lastCollectYieldTextRefreshAt = 0.0
 local BILLBOARD_TRACKED_ATTR = "BillboardTracked"
 local PLACE_MODEL_INFO_UI_BASE_STUDS_OFFSET_Y_ATTR = "BaseStudsOffsetY"
@@ -154,6 +157,10 @@ local function resetYieldAnchor(ownerUserId: number, pointIndexStr: string)
 	byPoint[pointIndexStr] = workspace:GetServerTimeNow()
 end
 
+local function getLocalUpgradePreviewKey(ownerUserId: number, pointIndexStr: string, instanceId: string): string
+	return tostring(ownerUserId) .. ":" .. pointIndexStr .. ":" .. instanceId
+end
+
 local function setCollectYieldText(
 	collectText: TextLabel,
 	text: string,
@@ -187,7 +194,12 @@ local function clearYieldAnchorsForOwner(ownerUserId: number)
 	yieldAnchorModelInstanceId[ownerUserId] = nil
 end
 
-local function preserveCurrentYieldForSameModels(slotName: string, incomingHomeInfo: any?)
+local function preserveCurrentYieldForSameModels(
+	slotName: string,
+	incomingHomeInfo: any?,
+	ownerUserId: number,
+	incomingRebirthLevel: number?
+)
 	if not incomingHomeInfo or not incomingHomeInfo.placedModels then
 		return
 	end
@@ -195,6 +207,8 @@ local function preserveCurrentYieldForSameModels(slotName: string, incomingHomeI
 	if not currentState or not currentState.homeInfo or not currentState.homeInfo.placedModels then
 		return
 	end
+	local currentRebirthLevel = if currentState.rebirthLevel ~= nil then currentState.rebirthLevel else 0
+	local resolvedIncomingRebirthLevel = if incomingRebirthLevel ~= nil then incomingRebirthLevel else currentRebirthLevel
 	for pointIndexStr, incomingPlacedData in pairs(incomingHomeInfo.placedModels) do
 		local currentPlacedData = currentState.homeInfo.placedModels[pointIndexStr]
 		if currentPlacedData == nil then
@@ -205,6 +219,41 @@ local function preserveCurrentYieldForSameModels(slotName: string, incomingHomeI
 		local incomingInstanceId = tostring(incomingAny.instanceId or "")
 		local currentInstanceId = tostring(currentAny.instanceId or "")
 		if incomingInstanceId ~= currentInstanceId then
+			continue
+		end
+		local currentLevel = tonumber(currentAny.level) or 1
+		local incomingLevel = tonumber(incomingAny.level) or 1
+		local previewKey = getLocalUpgradePreviewKey(ownerUserId, pointIndexStr, incomingInstanceId)
+		local previewLevel = localUpgradePreviewLevelByKey[previewKey]
+		if previewLevel ~= nil then
+			if incomingLevel < previewLevel then
+				incomingAny.level = previewLevel
+				incomingLevel = previewLevel
+			else
+				localUpgradePreviewLevelByKey[previewKey] = nil
+			end
+		end
+		local currentVariantId = tonumber(currentAny.variantId) or 0
+		local incomingVariantId = tonumber(incomingAny.variantId) or 0
+		local yieldRateChanged = currentLevel ~= incomingLevel
+			or currentVariantId ~= incomingVariantId
+			or currentRebirthLevel ~= resolvedIncomingRebirthLevel
+		if yieldRateChanged then
+			local currentBaseYield: number = if type(currentAny.unclaimedYield) == "number" then currentAny.unclaimedYield else 0
+			local currentAnchorT = getYieldAnchorTime(ownerUserId, pointIndexStr)
+			local currentPerSec = getPerSecondUnclaimedIncrement(currentPlacedData, currentRebirthLevel)
+			local currentElapsed = math.max(0, math.floor(workspace:GetServerTimeNow() - currentAnchorT))
+			local currentDisplayYield = currentBaseYield + currentPerSec * currentElapsed
+			DebugCollectYieldLog("HomeInfoPreserveYieldRateChange", ownerUserId, pointIndexStr, {
+				homeSlot = slotName,
+				instanceId = incomingInstanceId,
+				currentLevel = currentLevel,
+				incomingLevel = incomingLevel,
+				currentYield = currentBaseYield,
+				displayYield = currentDisplayYield,
+			})
+			incomingAny.unclaimedYield = currentDisplayYield
+			resetYieldAnchor(ownerUserId, pointIndexStr)
 			continue
 		end
 		local incomingYield = if type(incomingAny.unclaimedYield) == "number" then incomingAny.unclaimedYield else 0
@@ -380,6 +429,63 @@ local function ApplySlotVisuals(slotName: string)
 	else
 		ClearHomeVisuals(slotName)
 	end
+end
+
+local function ApplyLocalBrainrotUpgradePreview(slotName: string, pointIndex: number, levelAdd: number?): boolean
+	local state = slotStateCache[slotName]
+	local playerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if not state or not state.homeInfo or not state.isLocalPlayer or not playerInfo then
+		return false
+	end
+
+	local pointIndexStr = tostring(pointIndex)
+	local placedData = state.homeInfo.placedModels[pointIndexStr]
+	if not placedData then
+		return false
+	end
+
+	local brainrotData = GameConfig.BrainrotIdMap[placedData.configId]
+	if not brainrotData then
+		return false
+	end
+
+	local resolvedLevelAdd = math.max(1, levelAdd or 1)
+	local currentLevel = placedData.level or 1
+	local totalCost = 0
+	for i = 0, resolvedLevelAdd - 1 do
+		totalCost += GameConfig.GetBrainrotUpgradeCost(brainrotData.baseAbility, currentLevel + i)
+	end
+
+	local currencyKey = tostring(GameConfig.CurrencyType.Coin)
+	local currentGold = playerInfo.currencies[currencyKey] or 0
+	if currentGold < totalCost then
+		return false
+	end
+
+	local ownerUserId = players.LocalPlayer.UserId
+	local rebirthForYield = if state.rebirthLevel ~= nil then state.rebirthLevel else 0
+	local displayYield = getExtrapolatedUnclaimedDisplay(ownerUserId, pointIndexStr, placedData, rebirthForYield)
+	local placedDataAny = placedData :: any
+	placedDataAny.unclaimedYield = displayYield
+	resetYieldAnchor(ownerUserId, pointIndexStr)
+	placedData.level = currentLevel + resolvedLevelAdd
+	local instanceId = tostring(placedDataAny.instanceId or "")
+	localUpgradePreviewLevelByKey[getLocalUpgradePreviewKey(ownerUserId, pointIndexStr, instanceId)] = placedData.level
+
+	playerInfo.currencies[currencyKey] = currentGold - totalCost
+	ClientMsg.FireLocalPlayerCurrencyUpdate()
+
+	if playerInfo.homeInfo and playerInfo.homeInfo.placedModels then
+		local localPlacedData = playerInfo.homeInfo.placedModels[pointIndexStr]
+		if localPlacedData and localPlacedData ~= placedData then
+			local localPlacedDataAny = localPlacedData :: any
+			localPlacedDataAny.unclaimedYield = displayYield
+			localPlacedData.level = placedData.level
+		end
+	end
+
+	ApplySlotVisuals(slotName)
+	return true
 end
 
 -- Helper to update prompt visibility/text without full plot refresh
@@ -1117,22 +1223,34 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 						end
 
 						if pIdx and targetId ~= 0 then
-							local modelInfo = state.homeInfo.placedModels[tostring(pIdx)]
+							local pointIndexStr = tostring(pIdx)
+							local claimKey = tostring(targetId) .. ":" .. pointIndexStr
+							local nowClock = os.clock()
+							local lastClaimClock = lastClaimRequestClockByKey[claimKey] or 0
+							if nowClock - lastClaimClock < CLAIM_REQUEST_COOLDOWN_SEC then
+								return
+							end
+
+							local modelInfo = state.homeInfo.placedModels[pointIndexStr]
 							local rebirthForYield = if state.rebirthLevel ~= nil then state.rebirthLevel else 0
 							local estimatedYield = if modelInfo ~= nil
-								then getExtrapolatedUnclaimedDisplay(targetId, tostring(pIdx), modelInfo, rebirthForYield)
+								then getExtrapolatedUnclaimedDisplay(targetId, pointIndexStr, modelInfo, rebirthForYield)
 								else 0
+							if modelInfo == nil or estimatedYield <= 0 then
+								return
+							end
+							lastClaimRequestClockByKey[claimKey] = nowClock
 							if targetId == players.LocalPlayer.UserId and modelInfo ~= nil and estimatedYield > 0 then
 								NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.BrainrotCollectFinished)
 							end
 							if targetId == players.LocalPlayer.UserId and modelInfo ~= nil then
 								local modelInfoAny = modelInfo :: any
-								DebugCollectYieldLog("ClaimTouchLocalClear", targetId, tostring(pIdx), {
+								DebugCollectYieldLog("ClaimTouchLocalClear", targetId, pointIndexStr, {
 									beforeBase = modelInfoAny.unclaimedYield or 0,
 									estimatedYield = estimatedYield,
 								})
 								modelInfoAny.unclaimedYield = 0
-								resetYieldAnchor(targetId, tostring(pIdx))
+								resetYieldAnchor(targetId, pointIndexStr)
 							end
 							NetMsg.FireRequestClaimYield(targetId, pIdx)
 						end
@@ -1296,6 +1414,7 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 													return
 												end
 												GameSoundManager.PlayUpgradeAbilitySound()
+												ApplyLocalBrainrotUpgradePreview(slotName, pIdx, 1)
 												NetMsg.FireRequestUpgradeModel(pIdx)
 												NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.BrainrotUpgradeFinished)
 											end
@@ -1358,6 +1477,11 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 					SetupBillboardAdaptation(brainrotUI)
 				end
 
+				GameConfig.ApplyBrainrotModelScale(
+					newVisual,
+					placedData.level or 1,
+					GameConfig.GetBrainrotTemplateBaseScale(template)
+				)
 				newVisual.Parent = folder
 				local placedVariantId = if placedData.variantId and placedData.variantId > 0 then placedData.variantId else 0
 				BrainrotVariantVisualTool.AttachVariantEffect(newVisual, placedVariantId)
@@ -1371,6 +1495,10 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 					table.concat(GameConfig.GetResourceNameCandidates(brainrotData.resourceName), ", ")
 				)
 			end
+		end
+
+		if visualModel and visualModel:IsA("Model") then
+			GameConfig.ApplyBrainrotModelScale(visualModel :: Model, placedData.level or 1)
 		end
 
 		-- Sync BrainrotInfoUI data
@@ -2143,6 +2271,7 @@ local function OnPromptTriggered(prompt: ProximityPrompt, player: Player)
 			end
 
 			GameSoundManager.PlayUpgradeAbilitySound()
+			ApplyLocalBrainrotUpgradePreview(slotName, pointIndex, 1)
 			NetMsg.FireRequestUpgradeModel(pointIndex)
 			NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.BrainrotUpgradeFinished)
 		else
@@ -2302,7 +2431,7 @@ function HomeClientManager.Init()
 				})
 			end
 		end
-		preserveCurrentYieldForSameModels(homeSlot, homeInfo)
+		preserveCurrentYieldForSameModels(homeSlot, homeInfo, playerId, resolvedRebirthLevel)
 		slotStateCache[homeSlot] = {
 			active = true,
 			homeInfo = homeInfo,

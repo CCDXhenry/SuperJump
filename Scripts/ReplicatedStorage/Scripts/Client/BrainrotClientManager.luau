@@ -68,11 +68,21 @@ local function ResolveTargetVariantId(targetPart: BasePart, overrideVariantId: n
 	return tonumber(targetPart:GetAttribute("VariantId")) or 0
 end
 
+local function SyncBrainrotVisualScale(targetPart: BasePart, visualModel: Model)
+	local itemType = targetPart:GetAttribute("ItemType") :: number? or GameConfig.ItemType.Brainrot
+	if itemType ~= GameConfig.ItemType.Brainrot then
+		return
+	end
+	local level = (targetPart:GetAttribute("Level") :: number) or 1
+	GameConfig.ApplyBrainrotModelScale(visualModel, level)
+end
+
 local function RefreshVariantUiOnTarget(targetPart: BasePart, overrideVariantId: number?)
 	local variantId = ResolveTargetVariantId(targetPart, overrideVariantId)
 	local existingVisual = targetPart:FindFirstChild("VisualModel")
 	if existingVisual and existingVisual:IsA("Model") then
 		local resolvedVariantId = variantId or 0
+		SyncBrainrotVisualScale(targetPart, existingVisual)
 		BrainrotVariantVisualTool.AttachVariantEffect(existingVisual, resolvedVariantId)
 		BrainrotVariantVisualTool.ApplyVisualCarryWeld(targetPart, existingVisual, resolvedVariantId)
 	end
@@ -109,6 +119,15 @@ local function EnsureVisualModelChildTracking(targetPart: BasePart)
 			RefreshVariantUiOnTarget(targetPart)
 		end
 	end)
+	if targetPart:GetAttribute("BrainrotLevelScaleTracked") ~= true then
+		targetPart:SetAttribute("BrainrotLevelScaleTracked", true)
+		targetPart:GetAttributeChangedSignal("Level"):Connect(function()
+			local visual = targetPart:FindFirstChild("VisualModel")
+			if visual and visual:IsA("Model") then
+				SyncBrainrotVisualScale(targetPart, visual)
+			end
+		end)
+	end
 end
 
 local function SetupVisualBrainrot(targetPart: BasePart, overrideVariantId: number?)
@@ -184,13 +203,17 @@ local function SetupVisualBrainrot(targetPart: BasePart, overrideVariantId: numb
 		end
 	end
 
+	local level = (targetPart:GetAttribute("Level") :: number) or 1
+	GameConfig.ApplyBrainrotModelScale(
+		newVisual,
+		level,
+		GameConfig.GetBrainrotTemplateBaseScale(template)
+	)
 	newVisual.Parent = targetPart
 
 	local variantId = ResolveTargetVariantId(targetPart, overrideVariantId)
 	BrainrotVariantVisualTool.AttachVariantEffect(newVisual, variantId)
 	BrainrotVariantVisualTool.ApplyVisualCarryWeld(targetPart, newVisual, variantId)
-
-	local level = (targetPart:GetAttribute("Level") :: number) or 1
 	AttachInfoUIToModel(targetPart, targetPart :: BasePart, configId, level, data.quality or 1, newVisual)
 end
 
@@ -338,6 +361,9 @@ local function ProcessDescendantAdded(descendant: Instance)
 				local quality = (descendant:GetAttribute("Quality") :: number) or 1
 				local variantId = tonumber(descendant:GetAttribute("VariantId")) or 0
 				BrainrotVariantVisualTool.AttachVariantEffect(visualModel, variantId)
+				if descendant:GetAttribute("ItemType") == GameConfig.ItemType.Brainrot then
+					GameConfig.ApplyBrainrotModelScale(visualModel, level)
+				end
 				AttachInfoUIToModel(
 					descendant,
 					visualModel.PrimaryPart or visualModel:FindFirstChildWhichIsA("BasePart") or (visualModel:GetChildren()[1] :: any),

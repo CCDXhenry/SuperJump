@@ -86,6 +86,11 @@ local function CreateToolForItem(player: Player, item: GameConfig.BrainrotQueueI
 						part.CanTouch = false
 					end
 				end
+				GameConfig.ApplyBrainrotModelScale(
+					visualModel,
+					item.level,
+					GameConfig.GetBrainrotTemplateBaseScale(template)
+				)
 				visualModel:PivotTo(handle.CFrame)
 				visualModel.Parent = tool
 

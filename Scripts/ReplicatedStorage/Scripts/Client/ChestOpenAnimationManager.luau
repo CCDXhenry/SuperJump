@@ -102,6 +102,22 @@ local function GetChestShakeDuration(duration: number): number
 	return duration * ChestShakeDurationMultiplier
 end
 
+local function ResolveBrainrotTemplateBaseScale(brainrotId: number): number
+	local config = GameConfig.BrainrotIdMap[brainrotId]
+	if not config then
+		return 1
+	end
+	local template = GameConfig.FindResourceTemplateByResourceName(actualModels, config.resourceName)
+	if not template then
+		return 1
+	end
+	return GameConfig.GetBrainrotTemplateBaseScale(template)
+end
+
+local function GetBrainrotRevealAnimScale(level: number, animScale: number, templateBaseScale: number): number
+	return templateBaseScale * GameConfig.GetBrainrotModelScale(level) * animScale
+end
+
 local function CreateOrUpdateInfoUI(
 	parentInstance: Instance,
 	adornee: BasePart,
@@ -488,10 +504,15 @@ local function PlayInWorld(
 		BrainrotVariantVisualTool.AttachVariantEffect(displayModel, variantId)
 		local resolvedVariantId = if variantId > 0 then variantId else nil
 		CreateOrUpdateInfoUI(displayModel, displayRoot, brainrotId, chestLevel, displayModel, true, resolvedVariantId)
+		local templateBaseScale = ResolveBrainrotTemplateBaseScale(brainrotId)
+		local revealScale = GetBrainrotRevealAnimScale(chestLevel, BrainrotRandomRevealScale, templateBaseScale)
+		local finalRevealScale = GetBrainrotRevealAnimScale(chestLevel, BrainrotFinalRevealScale, templateBaseScale)
+		local finalSettleScale = GetBrainrotRevealAnimScale(chestLevel, BrainrotFinalSettleScale, templateBaseScale)
+		local tinyScale = GetBrainrotRevealAnimScale(chestLevel, TinyScale, templateBaseScale)
 		TweenModelScale(
 			displayModel,
-			TinyScale,
-			BrainrotRandomRevealScale,
+			tinyScale,
+			revealScale,
 			GetBrainrotOpenScaleDuration(0.14),
 			Enum.EasingStyle.Back,
 			Enum.EasingDirection.Out
@@ -499,16 +520,16 @@ local function PlayInWorld(
 		if stayAsFinal then
 			TweenModelScale(
 				displayModel,
-				BrainrotRandomRevealScale,
-				BrainrotFinalRevealScale,
+				revealScale,
+				finalRevealScale,
 				GetBrainrotOpenScaleDuration(0.22),
 				Enum.EasingStyle.Back,
 				Enum.EasingDirection.Out
 			)
 			TweenModelScale(
 				displayModel,
-				BrainrotFinalRevealScale,
-				BrainrotFinalSettleScale,
+				finalRevealScale,
+				finalSettleScale,
 				GetBrainrotOpenScaleDuration(0.1),
 				Enum.EasingStyle.Quad,
 				Enum.EasingDirection.Out
@@ -516,8 +537,8 @@ local function PlayInWorld(
 			task.wait(0.08)
 			TweenModelScale(
 				displayModel,
-				BrainrotFinalSettleScale,
-				TinyScale,
+				finalSettleScale,
+				tinyScale,
 				GetBrainrotOpenScaleDuration(0.18),
 				Enum.EasingStyle.Back,
 				Enum.EasingDirection.In
@@ -529,8 +550,8 @@ local function PlayInWorld(
 			task.wait(0.05)
 			TweenModelScale(
 				displayModel,
-				BrainrotRandomRevealScale,
-				TinyScale,
+				revealScale,
+				tinyScale,
 				GetBrainrotOpenScaleDuration(0.1),
 				Enum.EasingStyle.Quad,
 				Enum.EasingDirection.In
@@ -674,10 +695,13 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 			BrainrotVariantVisualTool.AttachVariantEffect(showModel, randomVariantId)
 			local resolvedRandomVariantId = if randomVariantId > 0 then randomVariantId else nil
 			CreateOrUpdateInfoUI(tool, root, randomId, chestLevel, showModel, true, resolvedRandomVariantId)
+			local templateBaseScale = ResolveBrainrotTemplateBaseScale(randomId)
+			local revealScale = GetBrainrotRevealAnimScale(chestLevel, BrainrotRandomRevealScale, templateBaseScale)
+			local tinyScale = GetBrainrotRevealAnimScale(chestLevel, TinyScale, templateBaseScale)
 			TweenModelScale(
 				showModel,
-				TinyScale,
-				BrainrotRandomRevealScale,
+				tinyScale,
+				revealScale,
 				GetBrainrotOpenScaleDuration(0.14),
 				Enum.EasingStyle.Back,
 				Enum.EasingDirection.Out
@@ -685,8 +709,8 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 			task.wait(0.05)
 			TweenModelScale(
 				showModel,
-				BrainrotRandomRevealScale,
-				TinyScale,
+				revealScale,
+				tinyScale,
 				GetBrainrotOpenScaleDuration(0.1),
 				Enum.EasingStyle.Quad,
 				Enum.EasingDirection.In
@@ -701,18 +725,22 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 			BrainrotVariantVisualTool.AttachVariantEffect(finalModel, finalVariantId)
 			local resolvedFinalVariantId = if finalVariantId > 0 then finalVariantId else nil
 			CreateOrUpdateInfoUI(tool, finalRoot, finalBrainrotId, chestLevel, finalModel, true, resolvedFinalVariantId)
+			local templateBaseScale = ResolveBrainrotTemplateBaseScale(finalBrainrotId)
+			local tinyScale = GetBrainrotRevealAnimScale(chestLevel, TinyScale, templateBaseScale)
+			local finalRevealScale = GetBrainrotRevealAnimScale(chestLevel, BrainrotFinalRevealScale, templateBaseScale)
+			local finalSettleScale = GetBrainrotRevealAnimScale(chestLevel, BrainrotFinalSettleScale, templateBaseScale)
 			TweenModelScale(
 				finalModel,
-				TinyScale,
-				BrainrotFinalRevealScale,
+				tinyScale,
+				finalRevealScale,
 				GetBrainrotOpenScaleDuration(0.22),
 				Enum.EasingStyle.Back,
 				Enum.EasingDirection.Out
 			)
 			TweenModelScale(
 				finalModel,
-				BrainrotFinalRevealScale,
-				BrainrotFinalSettleScale,
+				finalRevealScale,
+				finalSettleScale,
 				GetBrainrotOpenScaleDuration(0.1),
 				Enum.EasingStyle.Quad,
 				Enum.EasingDirection.Out

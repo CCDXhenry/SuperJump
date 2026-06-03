@@ -63,11 +63,14 @@ function ModelBillboardOffsetTool.GetVisualOffsetY(model: Model, adornee: BasePa
 	local vfx = model:FindFirstChild(DefaultVfxInstanceName, true)
 	if vfx and vfx:IsA("BasePart") then
 		maxY = GetBasePartMaxWorldY(vfx)
-	else
-		maxY = GetAnchorWorldY(model, resolvedAnchorName)
-		if maxY == nil then
-			maxY = GetModelMaxY(model)
-		end
+	end
+	local anchorY = GetAnchorWorldY(model, resolvedAnchorName)
+	if anchorY ~= nil and (maxY == nil or anchorY > maxY) then
+		maxY = anchorY
+	end
+	local modelMaxY = GetModelMaxY(model)
+	if modelMaxY ~= nil and (maxY == nil or modelMaxY > maxY) then
+		maxY = modelMaxY
 	end
 
 	if maxY == nil then

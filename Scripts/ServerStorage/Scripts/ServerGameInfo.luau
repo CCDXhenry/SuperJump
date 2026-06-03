@@ -22,7 +22,9 @@ local playerInfoMap: { [number]: GameConfig.PlayerInfo } = {}
 local lastBroadcastModelYieldMap: { [number]: { [string]: number } } = {}
 local DebugModelYieldLogEnabled = false
 local ModelYieldAccrueDebugIntervalSec = 10
+local ModelYieldClaimCooldownSec = 1
 local lastModelYieldAccrueDebugUnixByKey: { [string]: number } = {}
+local lastModelYieldClaimClockByKey: { [string]: number } = {}
 
 -- 存档或历史 bug 可能导致等级 > maxLevel；夹紧并写回，避免 abilityList 取空后回退到 1 级
 type ShopLevelsClampTarget = GameConfig.ShopInfo
@@ -779,6 +781,19 @@ function ServerGameInfo.ClaimModelYield(player: Player, targetPlayerId: number, 
 		return
 	end
 
+	local pointIndexStr = tostring(pointIndex)
+	local claimKey = tostring(targetPlayerId) .. ":" .. pointIndexStr
+	local nowClock = os.clock()
+	local lastClaimClock = lastModelYieldClaimClockByKey[claimKey] or 0
+	if nowClock - lastClaimClock < ModelYieldClaimCooldownSec then
+		DebugModelYieldLog("ClaimCooldownSkip", targetPlayerId, pointIndexStr, {
+			collectorUserId = player.UserId,
+			unclaimedYield = model.unclaimedYield,
+			elapsedClock = nowClock - lastClaimClock,
+		})
+		return
+	end
+
 	local modelAny = model :: any
 	local nowUnix = DateTime.now().UnixTimestamp
 	local startUnix: number? = modelAny.yieldAccrueStartUnix
@@ -804,6 +819,7 @@ function ServerGameInfo.ClaimModelYield(player: Player, targetPlayerId: number, 
 	model.unclaimedYield = 0
 	modelAny.yieldAccrueStartUnix = nowUnix
 	modelAny.yieldAccruedSeconds = nil
+	lastModelYieldClaimClockByKey[claimKey] = nowClock
 	targetInfo.playerInfoChanged = true
 
 	-- 给当前触摸者（player）增加货币
