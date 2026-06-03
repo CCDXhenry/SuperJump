@@ -2485,7 +2485,7 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 			local reachedPathHit = motion ~= nil and motion.lastDistance >= motion.totalDistance - 0.05
 			if reachedPathHit or RunwaySession.IsPlayerNearLittleElfChest(hrp, chestModel, fwdH) then
 				local chestConfigId = if Refs.chestDynamicConfigId ~= nil then Refs.chestDynamicConfigId else cfg.RUNWAY_CHEST_CONFIG_ID
-				RunwaySession.ProcessLittleElfChestHit(chestModel, fwdH, chestConfigId)
+				RunwaySession.ProcessLittleElfChestHit(chestModel, fwdH, chestConfigId, reachedPathHit)
 				return
 			end
 		end
@@ -6502,7 +6502,7 @@ function RunwaySession.OpenLittleElfChestAfterObstacleBounceStop(humanoid: Human
 	task.spawn(RunwaySession.TryPresentLittleElfChestReward)
 end
 
-function RunwaySession.ProcessLittleElfChestHit(chestModel: Model, fwdH: Vector3, chestConfigId: number)
+function RunwaySession.ProcessLittleElfChestHit(chestModel: Model, fwdH: Vector3, chestConfigId: number, allowPathTerminalHit: boolean?)
 	if Refs.chestRunwayAwaitingExit == true then
 		return
 	end
@@ -6513,8 +6513,21 @@ function RunwaySession.ProcessLittleElfChestHit(chestModel: Model, fwdH: Vector3
 	if hrpT == nil or humanoidT == nil then
 		return
 	end
-	if not RunwaySession.IsPlayerNearLittleElfChest(hrpT, chestModel, fwdH) then
+	local isNearChest = RunwaySession.IsPlayerNearLittleElfChest(hrpT, chestModel, fwdH)
+	if not isNearChest and allowPathTerminalHit ~= true then
 		return
+	end
+	if not isNearChest then
+		local chestPos = chestModel:GetPivot().Position
+		local deltaH = Vector3.new(chestPos.X - hrpT.Position.X, 0, chestPos.Z - hrpT.Position.Z)
+		warn(
+			string.format(
+				"[RunwaySession] LittleElfChest terminal path hit accepted outside near radius. chestConfigId=%d chestDist=%.2f hitRadius=%.2f",
+				chestConfigId,
+				deltaH.Magnitude,
+				ResolveChestHitHorizontalMaxDistStuds()
+			)
+		)
 	end
 	RunwaySession.TransitionDistanceLogStage(
 		"ChestBounce",
