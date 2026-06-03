@@ -646,6 +646,38 @@ function RunwaySession.AppendRunwayGroundWallExcludeList(excludeList: { Instance
 	end
 end
 
+function RunwaySession.BuildRunwayGroundRaycastExcludeList(character: Model?, extraExcludeList: { Instance }?): { Instance }
+	local excludeList: { Instance } = {}
+	if character ~= nil then
+		table.insert(excludeList, character)
+	end
+	if extraExcludeList ~= nil then
+		for _, inst in ipairs(extraExcludeList) do
+			table.insert(excludeList, inst)
+		end
+	end
+	local obstacleFolder = workspace:FindFirstChild("Obstacle")
+	if obstacleFolder ~= nil then
+		table.insert(excludeList, obstacleFolder)
+	end
+	local treeFolder = workspace:FindFirstChild("tree")
+	if treeFolder ~= nil then
+		table.insert(excludeList, treeFolder)
+	end
+	local localFx = workspace:FindFirstChild("JumpRunwayLocalFx")
+	if localFx ~= nil then
+		table.insert(excludeList, localFx)
+	end
+	if Refs.chestSpawnedModel ~= nil then
+		table.insert(excludeList, Refs.chestSpawnedModel :: Model)
+	end
+	if Refs.bestDistanceWallModel ~= nil then
+		table.insert(excludeList, Refs.bestDistanceWallModel :: Model)
+	end
+	RunwaySession.AppendRunwayGroundWallExcludeList(excludeList)
+	return excludeList
+end
+
 function RunwaySession.BuildRunwayObstacleRaycastExcludeList(character: Model): { Instance }
 	local excludeList: { Instance } = { character }
 	local localFx = workspace:FindFirstChild("JumpRunwayLocalFx")
@@ -702,32 +734,50 @@ end
 function RunwaySession.BuildRunwayGroundRaycastParams(humanoid: Humanoid): RaycastParams
 	local rp = RaycastParams.new()
 	rp.FilterType = Enum.RaycastFilterType.Exclude
-	local excludeList: { Instance } = {}
 	local char = humanoid.Parent
+	local character: Model? = nil
 	if char ~= nil and char:IsA("Model") then
-		table.insert(excludeList, char)
+		character = char
 	end
-	local obstacleFolder = workspace:FindFirstChild("Obstacle")
-	if obstacleFolder ~= nil then
-		table.insert(excludeList, obstacleFolder)
-	end
-	local treeFolder = workspace:FindFirstChild("tree")
-	if treeFolder ~= nil then
-		table.insert(excludeList, treeFolder)
-	end
-	local localFx = workspace:FindFirstChild("JumpRunwayLocalFx")
-	if localFx ~= nil then
-		table.insert(excludeList, localFx)
-	end
-	if Refs.chestSpawnedModel ~= nil then
-		table.insert(excludeList, Refs.chestSpawnedModel :: Model)
-	end
-	if Refs.bestDistanceWallModel ~= nil then
-		table.insert(excludeList, Refs.bestDistanceWallModel :: Model)
-	end
-	RunwaySession.AppendRunwayGroundWallExcludeList(excludeList)
-	rp.FilterDescendantsInstances = excludeList
+	rp.FilterDescendantsInstances = RunwaySession.BuildRunwayGroundRaycastExcludeList(character, nil)
 	return rp
+end
+
+function RunwaySession.RaycastRunwayGroundYAtPosition(pos: Vector3, character: Model?, extraExcludeList: { Instance }?): number?
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	rayParams.FilterDescendantsInstances = RunwaySession.BuildRunwayGroundRaycastExcludeList(character, extraExcludeList)
+	local raycastHeight = ResolveConfigNumber(cfg.RUNWAY_CHEST_GROUND_RAYCAST_HEIGHT_STUDS, 256)
+	local raycastDistance = ResolveConfigNumber(cfg.RUNWAY_CHEST_GROUND_RAYCAST_DISTANCE_STUDS, 512)
+	local rayOrigin = Vector3.new(pos.X, pos.Y + raycastHeight, pos.Z)
+	local rayResult = workspace:Raycast(rayOrigin, Vector3.new(0, -raycastDistance, 0), rayParams)
+	if rayResult == nil or rayResult.Normal.Y < cfg.RUNWAY_GROUND_MIN_NORMAL_Y then
+		return nil
+	end
+	return rayResult.Position.Y
+end
+
+function RunwaySession.BuildLittleElfChestGroundPosition(targetPos: Vector3, groundY: number): Vector3
+	return Vector3.new(
+		targetPos.X,
+		groundY + CHEST_GROUND_RAISE_STUDS,
+		targetPos.Z
+	)
+end
+
+function RunwaySession.ComputeLittleElfChestFallbackSpawnPosition(
+	originPos: Vector3,
+	hrpForHeight: BasePart,
+	fwdH: Vector3,
+	placeDistance: number
+): Vector3
+	local character = hrpForHeight:FindFirstAncestorOfClass("Model")
+	local originGroundY = RunwaySession.RaycastRunwayGroundYAtPosition(originPos, character, nil)
+	if originGroundY ~= nil then
+		local targetXZ = originPos + fwdH * placeDistance
+		return RunwaySession.BuildLittleElfChestGroundPosition(targetXZ, originGroundY)
+	end
+	return originPos + fwdH * placeDistance
 end
 
 function RunwaySession.RaycastRunwayForwardBlock(character: Model, hrp: BasePart, forward: Vector3): RaycastResult?
@@ -1604,53 +1654,13 @@ function RunwaySession.GetHumanoidRootGroundHeight(humanoid: Humanoid, hrp: Base
 	return math.max(0, hipHeight + rootHalfHeight)
 end
 
-function RunwaySession.GetRunwayGroundYUnderHrp(humanoid: Humanoid, hrp: BasePart): number?
+function RunwaySession.GetRunwayGroundYUnderHrp(_humanoid: Humanoid, hrp: BasePart): number?
 	local character = hrp:FindFirstAncestorOfClass("Model")
-	local rayParams = RaycastParams.new()
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	if character ~= nil then
-		rayParams.FilterDescendantsInstances = { character }
-	end
-	local rayOrigin = hrp.Position + Vector3.new(0, 8, 0)
-	local rayResult = workspace:Raycast(rayOrigin, Vector3.new(0, -64, 0), rayParams)
-	if rayResult == nil or rayResult.Normal.Y < cfg.RUNWAY_GROUND_MIN_NORMAL_Y then
-		return nil
-	end
-	return rayResult.Position.Y
+	return RunwaySession.RaycastRunwayGroundYAtPosition(hrp.Position, character, nil)
 end
 
 function RunwaySession.GetRunwayGroundYAtWorldPosition(pos: Vector3, character: Model?): number?
-	local rayParams = RaycastParams.new()
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	local excludeList: { Instance } = {}
-	if character ~= nil then
-		table.insert(excludeList, character)
-	end
-	local obstacleFolder = workspace:FindFirstChild("Obstacle")
-	if obstacleFolder ~= nil then
-		table.insert(excludeList, obstacleFolder)
-	end
-	local treeFolder = workspace:FindFirstChild("tree")
-	if treeFolder ~= nil then
-		table.insert(excludeList, treeFolder)
-	end
-	local localFx = workspace:FindFirstChild("JumpRunwayLocalFx")
-	if localFx ~= nil then
-		table.insert(excludeList, localFx)
-	end
-	if Refs.chestSpawnedModel ~= nil then
-		table.insert(excludeList, Refs.chestSpawnedModel :: Model)
-	end
-	RunwaySession.AppendRunwayGroundWallExcludeList(excludeList)
-	rayParams.FilterDescendantsInstances = excludeList
-	local raycastHeight = ResolveConfigNumber(cfg.RUNWAY_CHEST_GROUND_RAYCAST_HEIGHT_STUDS, 256)
-	local raycastDistance = ResolveConfigNumber(cfg.RUNWAY_CHEST_GROUND_RAYCAST_DISTANCE_STUDS, 512)
-	local rayOrigin = Vector3.new(pos.X, pos.Y + raycastHeight, pos.Z)
-	local rayResult = workspace:Raycast(rayOrigin, Vector3.new(0, -raycastDistance, 0), rayParams)
-	if rayResult == nil or rayResult.Normal.Y < cfg.RUNWAY_GROUND_MIN_NORMAL_Y then
-		return nil
-	end
-	return rayResult.Position.Y
+	return RunwaySession.RaycastRunwayGroundYAtPosition(pos, character, nil)
 end
 
 function RunwaySession.ResolveProneHrpGroundHeight(rawHeight: any, fallbackHeight: number): number
@@ -5822,38 +5832,12 @@ function RunwaySession.ComputeLittleElfChestSpawnPositionAtOrigin(
 	placeDistance: number
 ): Vector3
 	local targetXZ = originPos + fwdH * placeDistance
-	local raycastHeight = ResolveConfigNumber(cfg.RUNWAY_CHEST_GROUND_RAYCAST_HEIGHT_STUDS, 256)
-	local raycastDistance = ResolveConfigNumber(cfg.RUNWAY_CHEST_GROUND_RAYCAST_DISTANCE_STUDS, 512)
-	local rayStart = Vector3.new(targetXZ.X, originPos.Y + raycastHeight, targetXZ.Z)
-	local rayParams = RaycastParams.new()
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	local excludeList: { Instance } = {}
 	local character = hrpForHeight:FindFirstAncestorOfClass("Model")
-	if character then
-		table.insert(excludeList, character)
+	local groundY = RunwaySession.RaycastRunwayGroundYAtPosition(targetXZ, character, nil)
+	if groundY ~= nil then
+		return RunwaySession.BuildLittleElfChestGroundPosition(targetXZ, groundY)
 	end
-	local obstacleFolder = workspace:FindFirstChild("Obstacle")
-	if obstacleFolder ~= nil then
-		table.insert(excludeList, obstacleFolder)
-	end
-	local treeFolder = workspace:FindFirstChild("tree")
-	if treeFolder ~= nil then
-		table.insert(excludeList, treeFolder)
-	end
-	local localFx = workspace:FindFirstChild("JumpRunwayLocalFx")
-	if localFx ~= nil then
-		table.insert(excludeList, localFx)
-	end
-	rayParams.FilterDescendantsInstances = excludeList
-	local rayResult = workspace:Raycast(rayStart, Vector3.new(0, -raycastDistance, 0), rayParams)
-	local groundY = if rayResult then rayResult.Position.Y else originPos.Y - 1
-	-- 落点以跑道地面射线为准，略高于地面避免穿模（不再钳到 HRP 趴滑高度，否则会视觉上悬空）
-	local chestY = groundY + CHEST_GROUND_RAISE_STUDS
-	return Vector3.new(
-		targetXZ.X,
-		chestY,
-		targetXZ.Z
-	)
+	return RunwaySession.ComputeLittleElfChestFallbackSpawnPosition(originPos, hrpForHeight, fwdH, placeDistance)
 end
 
 function RunwaySession.ComputeLittleElfChestSpawnPosition(hrp: BasePart, fwdH: Vector3, placeDistance: number): Vector3
@@ -6727,35 +6711,14 @@ function RunwaySession.SpawnLittleElfChestAtPosition(fwdH: Vector3, spawnPos: Ve
 end
 
 function RunwaySession.ResolveLittleElfChestGroundPosition(targetPos: Vector3, chestModel: Model?): Vector3
-	local rayParams = RaycastParams.new()
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-	local filterList: { Instance } = {}
+	local extraExcludeList: { Instance } = {}
 	if chestModel then
-		table.insert(filterList, chestModel)
+		table.insert(extraExcludeList, chestModel)
 	end
 	local character = localPlayer.Character
-	if character then
-		table.insert(filterList, character)
-	end
-	local obstacleFolder = workspace:FindFirstChild("Obstacle")
-	if obstacleFolder ~= nil then
-		table.insert(filterList, obstacleFolder)
-	end
-	local treeFolder = workspace:FindFirstChild("tree")
-	if treeFolder ~= nil then
-		table.insert(filterList, treeFolder)
-	end
-	local localFx = workspace:FindFirstChild("JumpRunwayLocalFx")
-	if localFx ~= nil then
-		table.insert(filterList, localFx)
-	end
-	rayParams.FilterDescendantsInstances = filterList
-	local raycastHeight = ResolveConfigNumber(cfg.RUNWAY_CHEST_GROUND_RAYCAST_HEIGHT_STUDS, 256)
-	local raycastDistance = ResolveConfigNumber(cfg.RUNWAY_CHEST_GROUND_RAYCAST_DISTANCE_STUDS, 512)
-	local rayOrigin = Vector3.new(targetPos.X, targetPos.Y + raycastHeight, targetPos.Z)
-	local rayResult = workspace:Raycast(rayOrigin, Vector3.new(0, -raycastDistance, 0), rayParams)
-	if rayResult then
-		return Vector3.new(targetPos.X, rayResult.Position.Y + CHEST_GROUND_RAISE_STUDS, targetPos.Z)
+	local groundY = RunwaySession.RaycastRunwayGroundYAtPosition(targetPos, character, extraExcludeList)
+	if groundY ~= nil then
+		return RunwaySession.BuildLittleElfChestGroundPosition(targetPos, groundY)
 	end
 	return targetPos
 end
