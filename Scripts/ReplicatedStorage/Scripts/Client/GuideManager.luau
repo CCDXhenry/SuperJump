@@ -210,6 +210,11 @@ local function IsTargetExEquipAffordable(info: GameConfig.ClientLocalPlayerInfo)
 	return equipData ~= nil and GetCoinCount(info) >= equipData.costCoin
 end
 
+local function IsExEquipGuideUnlocked(info: GameConfig.ClientLocalPlayerInfo): boolean
+	return IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished)
+		and IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackRunwayRetryFinished)
+end
+
 local function TryCompleteOwnedPurchaseGuideSteps()
 	local info = ClientGameInfo.GetLocalPlayerInfo()
 	if info == nil then
@@ -921,25 +926,28 @@ local function ResolveGuideType(): number
 		return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialJetpackBuy)
 	end
 
-	local hasAnyOwnedExEquip = HasAnyOwnedExEquip(info)
-	if hasAnyOwnedExEquip and not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
-		CompleteGuideStep(GameConfig.GuideStepKey.ExEquipBuyFinished)
-	end
-	if hasAnyOwnedExEquip then
-		if not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipUseFinished) then
-			return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipUse)
+	if IsExEquipGuideUnlocked(info) then
+		local hasAnyOwnedExEquip = HasAnyOwnedExEquip(info)
+		if hasAnyOwnedExEquip and not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
+			CompleteGuideStep(GameConfig.GuideStepKey.ExEquipBuyFinished)
 		end
-		if IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipUseFinished)
-			and HasJumpPowerUpgraded(info)
-			and not IsGuideStepDone(info, GameConfig.GuideStepKey.JumpPowerRunwayRetryFinished)
+		if hasAnyOwnedExEquip then
+			if not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipUseFinished) then
+				return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipUse)
+			end
+			if
+				IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipUseFinished)
+				and HasJumpPowerUpgraded(info)
+				and not IsGuideStepDone(info, GameConfig.GuideStepKey.JumpPowerRunwayRetryFinished)
+			then
+				return GameConfig.GuideType.TutorialJumpPowerRunwayRetry
+			end
+		elseif not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished)
+			and not HasAnyOwnedExEquip(info)
+			and IsTargetExEquipAffordable(info)
 		then
-			return GameConfig.GuideType.TutorialJumpPowerRunwayRetry
+			return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipBuy)
 		end
-	elseif not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished)
-		and not HasAnyOwnedExEquip(info)
-		and IsTargetExEquipAffordable(info)
-	then
-		return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipBuy)
 	end
 
 	if not IsGuideStepDone(info, GameConfig.GuideStepKey.WalkSpeedUpgradeFinished) then
