@@ -328,7 +328,7 @@ function RefreshUpgradeValues()
 	local char = localPlayer.Character
 	local currentSpeed = baseSpeed
 	local isBuffed = false
-	if char then
+	if char and not IsInJumpRunwaySession() then
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		if hum then
 			currentSpeed = hum.WalkSpeed
@@ -499,7 +499,10 @@ ClientMsg.ConnectLocalPlayerJetpackInventoryUpdate(function()
 	RefreshUpgradeValues()
 end)
 
-ClientMsg.ConnectCurrentGuideTypeChanged(RefreshTeleportButtonsVisible)
+ClientMsg.ConnectCurrentGuideTypeChanged(function()
+	RefreshTeleportButtonsVisible()
+	RefreshUpgradeValues()
+end)
 RefreshTeleportButtonsVisible()
 
 -- 跑道模式中轮询实时燃料显示
