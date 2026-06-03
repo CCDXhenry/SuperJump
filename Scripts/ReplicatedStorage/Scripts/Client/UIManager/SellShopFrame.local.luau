@@ -1,3 +1,4 @@
+--!strict
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,29 +16,20 @@ local NetMsg = require(sharedScripts:WaitForChild("NetMsg"))
 local ClientMsg = require(clientScripts:WaitForChild("ClientMsg"))
 local GameSoundManager = require(clientScripts:WaitForChild("GameSoundManager"))
 local UIManager = require(clientScripts:WaitForChild("UIManager"))
-local BillboardManager = require(clientScripts:WaitForChild("BillboardManager"))
 local GameTexts = require(sharedScripts:WaitForChild("GameTexts"))
 local GameConfig = require(sharedScripts:WaitForChild("GameConfig"))
 local ClientGameInfo = require(clientScripts:WaitForChild("ClientGameInfo"))
 local TranslationTool = require(coreClientScripts:WaitForChild("TranslationTool"))
 local NumberExtension = require(coreSharedScripts:WaitForChild("NumberExtension"))
+local UIAdapter = require(coreClientScripts:WaitForChild("UIAdapter"))
 
 local ROW_COUNT = 4
 local CLOSE_DISTANCE_STUDS = 15
 
-local thisFrame = script.Parent :: BillboardGui
+local thisFrame = script.Parent :: Frame
 local windowId = thisFrame:GetAttribute("WindowId") :: string
 
-thisFrame.AlwaysOnTop = true
-
 local controllerFrame = thisFrame:WaitForChild("ControllerFrame") :: Frame
-
-local uiScale = controllerFrame:FindFirstChildOfClass("UIScale")
-if not uiScale then
-	uiScale = Instance.new("UIScale")
-	uiScale.Name = "UIScale"
-	uiScale.Parent = controllerFrame
-end
 
 local templateRow = controllerFrame:WaitForChild("RowFrame1") :: Frame
 local oldRow2 = controllerFrame:FindFirstChild("RowFrame2")
@@ -63,14 +55,16 @@ local LINE_TEXTS = {
 }
 
 local player = game.Players.LocalPlayer
-local camera = Workspace.CurrentCamera
 
 local sellShopModelFolder = Workspace:FindFirstChild("ShopModel")
 local sellShopModel = if sellShopModelFolder then sellShopModelFolder:FindFirstChild("SellShop") :: Model? else nil
-local rootPart = nil
+local rootPart: BasePart? = nil
 
 if sellShopModel then
 	rootPart = sellShopModel:FindFirstChild("RootPart") or sellShopModel:FindFirstChild("rootpart") or sellShopModel.PrimaryPart
+	if rootPart and not rootPart:IsA("BasePart") then
+		rootPart = nil
+	end
 end
 
 local TWEEN_INFO = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -217,61 +211,44 @@ for i = 1, ROW_COUNT do
 	end
 end
 
+local distanceConnection: RBXScriptConnection? = nil
+
 local function OnCloseWindow(id: string)
 	if id == windowId then
-		BillboardManager.Untrack(thisFrame)
+		UIAdapter.RemoveAdaptiveFrame(thisFrame)
 		thisFrame:Destroy()
 	end
 end
+
+local function StopDistanceCheck()
+	if distanceConnection then
+		distanceConnection:Disconnect()
+		distanceConnection = nil
+	end
+end
+
 ClientMsg.ConnectCloseWindow(OnCloseWindow)
 
-BillboardManager.Track(thisFrame)
+UIAdapter.AddAdaptiveFrame(thisFrame, UIAdapter.AdaptiveType.Center)
 
-local proxyAttachment: Attachment? = nil
-
-local connection = RunService.RenderStepped:Connect(function()
-	local character = player.Character
-	if not character then
-		return
-	end
-
-	local charPrimary = character.PrimaryPart
-	if not charPrimary then
-		return
-	end
-
-	if rootPart then
+if rootPart then
+	distanceConnection = RunService.RenderStepped:Connect(function()
+		local character = player.Character
+		if not character then
+			return
+		end
+		local charPrimary = character.PrimaryPart
+		if not charPrimary then
+			return
+		end
 		local distance = (charPrimary.Position - rootPart.Position).Magnitude
 		if distance > CLOSE_DISTANCE_STUDS then
 			UIManager.CloseWindow(windowId)
-			return
 		end
-	end
-
-	if not proxyAttachment or proxyAttachment.Parent ~= charPrimary then
-		proxyAttachment = charPrimary:FindFirstChild("SellShopUI_Attachment") :: Attachment?
-		if not proxyAttachment then
-			proxyAttachment = Instance.new("Attachment")
-			proxyAttachment.Name = "SellShopUI_Attachment"
-			proxyAttachment.Parent = charPrimary
-		end
-		thisFrame.Adornee = proxyAttachment
-	end
-
-	local right = camera.CFrame.RightVector
-	local up = camera.CFrame.UpVector
-	if proxyAttachment then
-		proxyAttachment.Position = charPrimary.CFrame:VectorToObjectSpace(right * 6 + up * 0.5)
-	end
-end)
+	end)
+end
 
 thisFrame.Destroying:Connect(function()
-	if connection then
-		connection:Disconnect()
-		connection = nil
-	end
-	if proxyAttachment then
-		proxyAttachment:Destroy()
-	end
-	BillboardManager.Untrack(thisFrame)
+	StopDistanceCheck()
+	UIAdapter.RemoveAdaptiveFrame(thisFrame)
 end)
