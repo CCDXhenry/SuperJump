@@ -266,6 +266,14 @@ local function preserveCurrentYieldForSameModels(
 				currentYield = currentYield,
 			})
 			incomingAny.unclaimedYield = currentYield
+		elseif incomingYield > currentYield then
+			DebugCollectYieldLog("HomeInfoAcceptAdvancedYield", ownerUserId, pointIndexStr, {
+				homeSlot = slotName,
+				instanceId = incomingInstanceId,
+				incomingYield = incomingYield,
+				currentYield = currentYield,
+			})
+			resetYieldAnchor(ownerUserId, pointIndexStr)
 		end
 	end
 end
