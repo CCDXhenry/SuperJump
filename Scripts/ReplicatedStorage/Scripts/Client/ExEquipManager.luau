@@ -76,8 +76,8 @@ local EXERCISE_POPUP_OUT_DISTANCE_MAX: number = 3
 local EXERCISE_POPUP_RANDOM_ANGLE_DEGREES: number = 360
 -- 第二段淡出开始时间占比，越小越早开始变透明。
 local EXERCISE_POPUP_FADE_START_RATIO: number = 0.45
-local EXERCISE_RUN_R15_ANIMATION_ID = "rbxassetid://507767968"
-local EXERCISE_RUN_R6_ANIMATION_ID = "rbxassetid://180426354"
+-- R15 默认跑步（507767968 为 Fall，勿混用）
+local EXERCISE_TREADMILL_ANIMATION_ID = "rbxassetid://507767714"
 local ClickRewardConfig = GameConfig.ExerciseClickReward
 
 -- 锻炼模式状态
@@ -89,8 +89,7 @@ local exerciseRunServiceConnection: RBXScriptConnection? = nil
 local exerciseInputConnection: RBXScriptConnection? = nil
 local exercisePrompt: ProximityPrompt? = nil
 local exerciseBikeAnimTrack: AnimationTrack? = nil
-local exerciseRunAnimTrack: AnimationTrack? = nil
-local exerciseRunAnimId: string? = nil
+local exerciseTreadmillAnimTrack: AnimationTrack? = nil
 local exercisePopupRandom = Random.new()
 local exerciseEquipId: number? = nil
 local exerciseClientSessionId: number = 0
@@ -840,12 +839,11 @@ local function ReleaseExerciseCharacterPhysics()
 		exerciseBikeAnimTrack:Destroy()
 		exerciseBikeAnimTrack = nil
 	end
-	if exerciseRunAnimTrack ~= nil then
-		exerciseRunAnimTrack:Stop(0)
-		exerciseRunAnimTrack:Destroy()
-		exerciseRunAnimTrack = nil
+	if exerciseTreadmillAnimTrack ~= nil then
+		exerciseTreadmillAnimTrack:Stop(0)
+		exerciseTreadmillAnimTrack:Destroy()
+		exerciseTreadmillAnimTrack = nil
 	end
-	exerciseRunAnimId = nil
 
 	if hrp ~= nil then
 		hrp.AssemblyLinearVelocity = Vector3.zero
@@ -920,76 +918,6 @@ local function GetExercisePromptFromModel(exerciseModel: Model): ProximityPrompt
 		return nil
 	end
 	return promptAttachment:FindFirstChild("ProximityPrompt") :: ProximityPrompt?
-end
-
-local function GetExerciseRunAnimationSpeed(): number
-	local walkSpeedConfig = GameConfig.Shop.WalkSpeed
-	local referenceWalkSpeed = walkSpeedConfig.abilityList[1] or 16
-	return GameConfig.ExerciseRunWalkSpeed / referenceWalkSpeed
-end
-
-local function ResolveExerciseRunAnimationId(humanoid: Humanoid): string
-	local character = humanoid.Parent
-	if character ~= nil and character:IsA("Model") then
-		local animate = character:FindFirstChild("Animate")
-		if animate ~= nil then
-			local runGroup = animate:FindFirstChild("run")
-			if runGroup ~= nil then
-				for _, inst in runGroup:GetDescendants() do
-					if inst:IsA("Animation") and inst.AnimationId ~= "" then
-						return inst.AnimationId
-					end
-				end
-			end
-		end
-	end
-	if humanoid.RigType == Enum.HumanoidRigType.R6 then
-		return EXERCISE_RUN_R6_ANIMATION_ID
-	end
-	return EXERCISE_RUN_R15_ANIMATION_ID
-end
-
-local function StopExerciseRunAnimation()
-	if exerciseRunAnimTrack ~= nil then
-		exerciseRunAnimTrack:Stop()
-		exerciseRunAnimTrack:Destroy()
-		exerciseRunAnimTrack = nil
-	end
-	exerciseRunAnimId = nil
-end
-
-local function EnsureExerciseRunAnimation(humanoid: Humanoid)
-	local animationId = ResolveExerciseRunAnimationId(humanoid)
-	local animationSpeed = GetExerciseRunAnimationSpeed()
-
-	if exerciseRunAnimTrack ~= nil and exerciseRunAnimId ~= animationId then
-		StopExerciseRunAnimation()
-	end
-
-	if exerciseRunAnimTrack == nil then
-		local animator = humanoid:FindFirstChildOfClass("Animator")
-		if animator == nil then
-			local newAnimator = Instance.new("Animator")
-			newAnimator.Parent = humanoid
-			animator = newAnimator
-		end
-		local runAnim = Instance.new("Animation")
-		runAnim.AnimationId = animationId
-		local loadedTrack = animator:LoadAnimation(runAnim)
-		loadedTrack.Looped = true
-		loadedTrack.Priority = Enum.AnimationPriority.Movement
-		exerciseRunAnimTrack = loadedTrack
-		exerciseRunAnimId = animationId
-	end
-
-	local runAnimTrack = exerciseRunAnimTrack
-	if runAnimTrack == nil then
-		return
-	end
-	if not runAnimTrack.IsPlaying then
-		runAnimTrack:Play()
-	end
-	runAnimTrack:AdjustSpeed(animationSpeed)
 end
 
 local function IsLocalActiveExerciseModel(instance: Instance): boolean
@@ -1249,7 +1177,19 @@ local function StartExercise(equipId: number)
 			end
 		end
 
-		if equipData.type == 2 then
+		if equipData.type == 1 then
+			-- Treadmill 类型：播放固定跑步动画（机制同 Bike）
+			if exerciseTreadmillAnimTrack == nil then
+				local animator: Animator? = exerciseHumanoid:FindFirstChildOfClass("Animator")
+				if animator ~= nil then
+					local treadmillAnim = Instance.new("Animation")
+					treadmillAnim.AnimationId = EXERCISE_TREADMILL_ANIMATION_ID
+					exerciseTreadmillAnimTrack = animator:LoadAnimation(treadmillAnim)
+					exerciseTreadmillAnimTrack.Looped = true
+					exerciseTreadmillAnimTrack:Play()
+				end
+			end
+		elseif equipData.type == 2 then
 			-- Bike 类型：播放专属骑行动画
 			if exerciseBikeAnimTrack == nil then
 				local animator: Animator? = exerciseHumanoid:FindFirstChildOfClass("Animator")
@@ -1261,9 +1201,6 @@ local function StartExercise(equipId: number)
 					exerciseBikeAnimTrack:Play()
 				end
 			end
-		else
-			-- 跑步机：直接播放固定速度的跑步动画，不依赖 Humanoid:Move / WalkSpeed
-			EnsureExerciseRunAnimation(exerciseHumanoid)
 		end
 	end)
 
