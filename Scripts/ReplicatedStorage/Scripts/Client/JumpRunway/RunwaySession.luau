@@ -4175,11 +4175,23 @@ function RunwaySession.EnsureJumpRunwayRocketBackpack(character: Model)
 	Refs.rocketBackpackPart = nil
 	local hrp = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if hrp == nil then
+		hrp = character:WaitForChild("HumanoidRootPart", 5) :: BasePart?
+	end
+	if hrp == nil then
 		return
 	end
 	local torso = character:FindFirstChild("UpperTorso") :: BasePart?
 	if torso == nil then
 		torso = character:FindFirstChild("Torso") :: BasePart?
+	end
+	if torso == nil then
+		torso = character:WaitForChild("UpperTorso", 2) :: BasePart?
+	end
+	if torso == nil then
+		torso = character:WaitForChild("Torso", 1) :: BasePart?
+	end
+	if character.Parent == nil then
+		return
 	end
 	local attachPart = torso or hrp
 

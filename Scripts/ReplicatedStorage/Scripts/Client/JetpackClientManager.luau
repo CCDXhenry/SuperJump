@@ -121,14 +121,26 @@ local function WeldAllDecorationJetpackPartsToPrimaryPart(jetpackRoot: Model, pr
 	end
 end
 
-local function GetCharacterAttachParts(character: Model): (BasePart?, BasePart?, BasePart?)
+local function WaitForCharacterAttachParts(character: Model): (BasePart?, BasePart?, BasePart?)
 	local hrp = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if hrp == nil then
+		hrp = character:WaitForChild("HumanoidRootPart", 5) :: BasePart?
+	end
+	if hrp == nil or character.Parent == nil then
 		return nil, nil, nil
 	end
 	local torso = character:FindFirstChild("UpperTorso") :: BasePart?
 	if torso == nil then
 		torso = character:FindFirstChild("Torso") :: BasePart?
+	end
+	if torso == nil then
+		torso = character:WaitForChild("UpperTorso", 2) :: BasePart?
+	end
+	if torso == nil then
+		torso = character:WaitForChild("Torso", 1) :: BasePart?
+	end
+	if character.Parent == nil then
+		return nil, nil, nil
 	end
 	local attachPart = torso or hrp
 	return hrp, torso, attachPart
@@ -232,7 +244,7 @@ local function EnsurePlayerJetpackDecoration(character: Model)
 
 	DestroyPlayerJetpackDecoration()
 
-	local hrp, torso, attachPart = GetCharacterAttachParts(character)
+	local hrp, torso, attachPart = WaitForCharacterAttachParts(character)
 	if hrp == nil or attachPart == nil then
 		return
 	end
