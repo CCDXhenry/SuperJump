@@ -85,7 +85,12 @@ local function RefreshInfoFrame()
 	icon.Image = equipData.iconImageId
 	local jumpHeightValue: TextLabel = infoFrame:FindFirstChild("JumpHeightValue") :: TextLabel
 	if jumpHeightValue then
-		TranslationTool.CustomAutoLocalizeTextLabel(jumpHeightValue, GameTexts.JumpHeightPerSecond.source, GameTexts.JumpHeightPerSecond.key, { tostring(equipData.ability) })
+		TranslationTool.CustomAutoLocalizeTextLabel(
+			jumpHeightValue,
+			GameTexts.JumpHeightPerSecond.source,
+			GameTexts.JumpHeightPerSecond.key,
+			{ NumberExtension.FormatBigNumberAA(equipData.ability) }
+		)
 	end
 
 	-- 刷新购买按钮
