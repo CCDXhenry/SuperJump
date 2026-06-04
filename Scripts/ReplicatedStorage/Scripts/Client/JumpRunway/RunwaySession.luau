@@ -139,6 +139,7 @@ local Refs: {
 	windowLabel: TextLabel?,
 	fuelLabel: TextLabel?,
 	vyLabel: TextLabel?,
+	stateLabel: TextLabel?,
 	finalTakeoffForceFreefallUntilClock: number,
 	initDone: boolean,
 	jumpStateEnabledBeforeRunway: boolean?,
@@ -1064,8 +1065,12 @@ end
 
 function RunwaySession.RefreshJumpRunWayFrameStats(hrp: BasePart?)
 	local distanceStuds = 0
+	local horizontalSpeed = 0
 	if hrp ~= nil and localState.runwayOrigin ~= nil then
 		distanceStuds = RunwaySession.ComputeRunwayDisplayDistanceStuds(hrp)
+	end
+	if hrp ~= nil then
+		horizontalSpeed = HorizontalVelocity(hrp.AssemblyLinearVelocity).Magnitude
 	end
 	local maxFuel = RunwaySession.GetExpectedPlayerMaxFuel()
 	local fuelVisible = localState.phase == Ph.Airborne
@@ -1079,7 +1084,7 @@ function RunwaySession.RefreshJumpRunWayFrameStats(hrp: BasePart?)
 			or localState.runwaySlideKind == SlideKindObstacleBounce
 		)
 	local distanceVisible = not isFinalSlideSecondStage and distanceStuds > 0
-	ClientMsg.FireJumpRunWayRefreshStats(distanceStuds, localState.fuel, maxFuel, fuelVisible, distanceVisible)
+	ClientMsg.FireJumpRunWayRefreshStats(distanceStuds, localState.fuel, maxFuel, fuelVisible, distanceVisible, horizontalSpeed)
 end
 
 function RunwaySession.RestoreRunningStateAfterFinalSegment(humanoid: Humanoid?)
@@ -1293,20 +1298,20 @@ function RunwaySession.GetCurrentFuel(): number
 	return RunwaySession.GetExpectedPlayerMaxFuel()
 end
 
-function RunwaySession.GetExpectedPlayerMaxThrustSpeed(): number
-   local fallback = 0
+function RunwaySession.GetExpectedPlayerThrustPercent(): number
+	local fallback = 100
 	local info = ClientGameInfo.GetLocalPlayerInfo()
 	if info == nil then
 		return fallback
 	end
-   local currentId = info.jetpackInventory.currentId
-   if currentId == nil or currentId == "" then
-       return 0
-   end
-   local jetpackData = GameConfig.JetpackDataMap[tonumber(currentId)]
-   if jetpackData then
-       return jetpackData.thrust
-   end
+	local currentId = info.jetpackInventory.currentId
+	if currentId == nil or currentId == "" then
+		return fallback
+	end
+	local jetpackData = GameConfig.JetpackDataMap[tonumber(currentId)]
+	if jetpackData then
+		return GameConfig.GetJetpackThrustPercent(jetpackData)
+	end
 	return fallback
 end
 
@@ -1483,8 +1488,8 @@ function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt
 	elseif localState.phase == Ph.Airborne and localState.takeoffCount <= cfg.N_TOTAL_JUMPS then
 		if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
 			local base = RunwaySession.GetJumpHorizontalForwardSpeed(nowClock, localState.takeoffCount, vy)
-			local playerThrustSpeed = RunwaySession.GetExpectedPlayerMaxThrustSpeed()
-			local capExtra = math.max(0, playerThrustSpeed)
+			local thrustPercent = RunwaySession.GetExpectedPlayerThrustPercent()
+			local capExtra = math.max(0, base * thrustPercent / 100)
 			if RunwaySession.IsFinalDashThrustActive() then
 				localState.finalDashAlongExtra = math.min(
 					localState.finalDashAlongExtra + cfg.DASH_ACCEL * dt,
@@ -1497,7 +1502,7 @@ function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt
 					localState.finalDashAlongExtra = 0
 				end
 			end
-			forwardSpeed = math.min(base + localState.finalDashAlongExtra, base + playerThrustSpeed)
+			forwardSpeed = math.min(base + localState.finalDashAlongExtra, base + capExtra)
 			localState.finalDashAlongExtra = math.max(0, forwardSpeed - base)
 		else
 			-- Airborne 全程走跳跃水平 lerp，不因落地窗口内判地切回 minAlongGrounded（会触发 run 并覆盖起跳冲量）。

@@ -89,7 +89,7 @@ local function RefreshInfoFrame()
 	end
 	local thrustValue: TextLabel = infoFrame:FindFirstChild("ThrustValue") :: TextLabel
 	if thrustValue then
-		thrustValue.Text = tostring(jetpackData.thrust)
+		thrustValue.Text = string.format("%s%%", NumberExtension.FormatBigNumberAA(GameConfig.GetJetpackThrustPercent(jetpackData)))
 	end
 
 	-- 刷新购买按钮

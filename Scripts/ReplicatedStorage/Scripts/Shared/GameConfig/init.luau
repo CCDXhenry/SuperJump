@@ -620,7 +620,7 @@ export type JetpackData = {
 	productId: number,
 	costRb: number,
 	fuel: number,
-	thrust: number,
+	ThrustValue: number?,
 	costType: number,
 	quality: number,
 }
@@ -633,6 +633,17 @@ export type JetpackInventory = {
 GameConfig.JetpackDataMap = {} :: { [number]: JetpackData }
 for _, data in JetpackDataModule do
 	GameConfig.JetpackDataMap[data.id] = data :: JetpackData
+end
+
+function GameConfig.GetJetpackThrustPercent(jetpackData: JetpackData?): number
+	if jetpackData == nil then
+		return 100
+	end
+	local thrustValue = jetpackData.ThrustValue
+	if typeof(thrustValue) ~= "number" or thrustValue ~= thrustValue then
+		return 100
+	end
+	return math.max(0, thrustValue)
 end
 
 export type MonsterData = {

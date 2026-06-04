@@ -14,6 +14,7 @@ local coreSharedScripts = core:WaitForChild("Scripts"):WaitForChild("Shared")
 
 local GameConfig = require(sharedScripts:WaitForChild("GameConfig"))
 local PlayerExtension = require(coreSharedScripts:WaitForChild("PlayerExtension"))
+local NumberExtension = require(coreSharedScripts:WaitForChild("NumberExtension"))
 local GameTexts = require(sharedScripts:WaitForChild("GameTexts"))
 local ClientMsg = require(clientScripts:WaitForChild("ClientMsg"))
 local ClientGameInfo = require(clientScripts:WaitForChild("ClientGameInfo"))
@@ -52,6 +53,8 @@ local fuelMask: Frame? = nil
 local fuelMaskBaseSizeY: UDim? = nil
 local distanceLabel: TextLabel? = nil
 local distanceValue: TextLabel? = nil
+local speedLabel: TextLabel? = nil
+local speedValue: TextLabel? = nil
 local tipText: TextLabel? = nil
 local tipTextBasePosition: UDim2? = nil
 local tipTextBaseRotation: number? = nil
@@ -539,6 +542,21 @@ local function ResolveDistanceValue()
 	distanceValue = value :: TextLabel
 end
 
+local function ResolveSpeedValue()
+	local speed = thisFrame:FindFirstChild("Speed")
+	if speed == nil or not speed:IsA("TextLabel") then
+		warn("[JumpRunWayFrame] Speed missing or not TextLabel")
+		return
+	end
+	speedLabel = speed :: TextLabel
+	local value = speed:FindFirstChild("Value")
+	if value == nil or not value:IsA("TextLabel") then
+		warn("[JumpRunWayFrame] Speed.Value missing or not TextLabel")
+		return
+	end
+	speedValue = value :: TextLabel
+end
+
 local function ResolveTipText()
 	local tip = thisFrame:FindFirstChild("TipText")
 	if tip == nil or not tip:IsA("TextLabel") then
@@ -627,7 +645,8 @@ local function RefreshRunwayStats(
 	currentFuel: number,
 	maxFuel: number,
 	fuelVisible: boolean,
-	distanceVisible: boolean
+	distanceVisible: boolean,
+	horizontalSpeed: number?
 )
 	local fuelRatio = if maxFuel > 0 then math.clamp(currentFuel / maxFuel, 0, 1) else 0
 	if fuelBg ~= nil then
@@ -653,6 +672,20 @@ local function RefreshRunwayStats(
 		distanceValue.Visible = movementBarVisible
 		if movementBarVisible then
 			distanceValue.Text = string.format("%dm", math.max(0, math.floor(distanceStuds + 0.5)))
+		end
+	end
+	if speedLabel ~= nil then
+		speedLabel.Visible = movementBarVisible
+	end
+	if speedValue ~= nil then
+		speedValue.Visible = movementBarVisible
+		if movementBarVisible then
+			TranslationTool.CustomAutoLocalizeTextLabel(
+				speedValue,
+				GameTexts.JumpRunwaySpeedMetersPerSecond.source,
+				GameTexts.JumpRunwaySpeedMetersPerSecond.key,
+				{ NumberExtension.FormatBigNumberAA(math.max(0, horizontalSpeed or 0)) }
+			)
 		end
 	end
 
@@ -875,6 +908,7 @@ ResolveRedScreen()
 ResolveMovementBar()
 ResolveFuelSizeBar()
 ResolveDistanceValue()
+ResolveSpeedValue()
 ResolveTipText()
 
 ClientMsg.ConnectJumpRunWayRefreshStats(RefreshRunwayStats)

@@ -289,16 +289,17 @@ function ClientMsg.ConnectLocalPlayerJumpPowerUpdate(callback: (jumpPowerInfo: G
 	end
 end
 
--- 跑道 HUD：刷新距离/燃料
+-- 跑道 HUD：刷新距离/燃料/实时速度
 function ClientMsg.FireJumpRunWayRefreshStats(
 	distanceStuds: number,
 	currentFuel: number,
 	maxFuel: number,
 	fuelVisible: boolean,
-	distanceVisible: boolean
+	distanceVisible: boolean,
+	horizontalSpeed: number?
 )
 	if jumpRunWayRefreshStatsEvent then
-		jumpRunWayRefreshStatsEvent:Fire(distanceStuds, currentFuel, maxFuel, fuelVisible, distanceVisible)
+		jumpRunWayRefreshStatsEvent:Fire(distanceStuds, currentFuel, maxFuel, fuelVisible, distanceVisible, horizontalSpeed)
 	end
 end
 
@@ -307,7 +308,8 @@ function ClientMsg.ConnectJumpRunWayRefreshStats(callback: (
 	currentFuel: number,
 	maxFuel: number,
 	fuelVisible: boolean,
-	distanceVisible: boolean
+	distanceVisible: boolean,
+	horizontalSpeed: number?
 ) -> ())
 	if jumpRunWayRefreshStatsEvent then
 		jumpRunWayRefreshStatsEvent.Event:Connect(callback)

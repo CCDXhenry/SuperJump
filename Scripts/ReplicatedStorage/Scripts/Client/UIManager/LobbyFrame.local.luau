@@ -374,8 +374,8 @@ function RefreshUpgradeValues()
 	end
 
 	-- MaxThrust: 从火箭背包库存读取
-	local maxThrustValue = if jetpackData then jetpackData.thrust else 0
-	maxThrustText.Text = string.format("+%s", NumberExtension.FormatBigNumberAA(maxThrustValue))
+	local maxThrustValue = GameConfig.GetJetpackThrustPercent(jetpackData)
+	maxThrustText.Text = string.format("+%s%%", NumberExtension.FormatBigNumberAA(maxThrustValue))
 
 	-- JumpPower
 	RefreshJumpPowerText(localPlayerInfo.jumpPower.lv)
