@@ -5919,6 +5919,20 @@ function RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character: Mode
 	return carrying:GetAttribute(JumpRunwayLittleElfChestCarryAttr) == true
 end
 
+function RunwaySession.IsLittleElfChestCreatedOrPending(): boolean
+	if Refs.chestSpawnedForThisRun == true or Refs.chestScheduledSpawnPos ~= nil then
+		return true
+	end
+	if Refs.chestRunwayAwaitingExit == true or Refs.chestRewardPresentationStarted == true then
+		return true
+	end
+	if Refs.chestHitSequenceActive == true or Refs.chestPendingReward ~= nil or Refs.chestPickedConfigId ~= nil then
+		return true
+	end
+	local chestModel = Refs.chestSpawnedModel
+	return chestModel ~= nil and chestModel.Parent ~= nil
+end
+
 function RunwaySession.IsPlayerInsideStartTriggerVolume(startTrigger: Part, hrp: BasePart): boolean
 	local localPos = startTrigger.CFrame:PointToObjectSpace(hrp.Position)
 	local halfSize = startTrigger.Size * 0.5
@@ -5989,6 +6003,9 @@ function RunwaySession.ShouldBlockJumpRunwayStartAtStartTrigger(): boolean
 	end
 	local character = localPlayer.Character
 	if character and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
+		return true
+	end
+	if RunwaySession.IsLittleElfChestCreatedOrPending() then
 		return true
 	end
 	return Refs.chestCarryReturnActive == true
