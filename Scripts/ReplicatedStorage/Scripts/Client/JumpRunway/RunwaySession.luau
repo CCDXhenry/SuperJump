@@ -6110,6 +6110,7 @@ function RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger: Part
 	NetMsg.FireRequestJumpRunwayLittleElfChestGrant()
 	ClientGameInfo.SetInJumpRunwayEscapePhase(false)
 	ClientGameInfo.SetInJumpRunway(false)
+	UIManager.CloseWindow(UIManager.WindowId.JumpRunWayFrame)
 	task.delay(1, function()
 		if Refs.chestBackpackDeliverRequested ~= true then
 			return
@@ -7739,6 +7740,10 @@ function RunwaySession.OnHeartbeat(dt: number)
 	RunwayUiController.Refresh(
 		RunwaySession.HudRefresh
 	)
+	if ClientGameInfo.IsInJumpRunwayEscapePhase() then
+		local _, _, hrp = RunwaySession.GetCharacterParts()
+		RunwaySession.RefreshJumpRunWayFrameStats(hrp)
+	end
 end
 
 function RunwaySession.OnCameraRenderStep(dt: number)

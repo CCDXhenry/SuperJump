@@ -490,6 +490,17 @@ function UIManager.IsWindowShowing(windowId: string): boolean
 	return window ~= nil
 end
 
+local function DestroyOrphanWindowById(windowId: string)
+	if gameScreenGui == nil then
+		return
+	end
+	for _, child in gameScreenGui:GetChildren() do
+		if child:GetAttribute("WindowId") == windowId then
+			child:Destroy()
+		end
+	end
+end
+
 --关闭窗口
 function UIManager.CloseWindow(windowId: string)
 	local window = addedWindows[windowId]
@@ -497,6 +508,8 @@ function UIManager.CloseWindow(windowId: string)
 		ClientMsg.FireCloseWindow(windowId)
 		addedWindows[windowId] = nil
 		CheckModalButtonVisible()
+	else
+		DestroyOrphanWindowById(windowId)
 	end
 end
 

@@ -1,6 +1,7 @@
 --!strict
 -- JumpRunWayFrame：跑道会话 HUD；RatingText 显隐复用 + 砸入缩放 + 变色淡出
 
+local players = game:GetService("Players")
 local tweenService = game:GetService("TweenService")
 local runService = game:GetService("RunService")
 local replicatedStorage = game:GetService("ReplicatedStorage")
@@ -9,8 +10,10 @@ local sharedScripts = scripts:WaitForChild("Shared")
 local clientScripts = scripts:WaitForChild("Client")
 local core = replicatedStorage:WaitForChild("Core")
 local coreClientScripts = core:WaitForChild("Scripts"):WaitForChild("Client")
+local coreSharedScripts = core:WaitForChild("Scripts"):WaitForChild("Shared")
 
 local GameConfig = require(sharedScripts:WaitForChild("GameConfig"))
+local PlayerExtension = require(coreSharedScripts:WaitForChild("PlayerExtension"))
 local GameTexts = require(sharedScripts:WaitForChild("GameTexts"))
 local ClientMsg = require(clientScripts:WaitForChild("ClientMsg"))
 local ClientGameInfo = require(clientScripts:WaitForChild("ClientGameInfo"))
@@ -25,6 +28,15 @@ local TipTextPopOffset = UDim2.new(0, 0, 0, -18)
 local TipTextTotalSec = 1.35
 
 local cfg = GameConfig.JumpRunway
+
+local localPlayer = players.LocalPlayer
+
+local TICK_INTERVAL_M = 100
+local VISIBLE_TICK_COUNT = 4
+local TICK_POOL_COUNT = VISIBLE_TICK_COUNT + 1
+local WINDOW_SPAN_M = TICK_INTERVAL_M * VISIBLE_TICK_COUNT
+local SCROLL_AT_RATIO = 0.75
+local MIN_TICK_CANVAS_SCALE_X = 2
 
 local thisFrame = script.Parent :: Frame
 local windowId = thisFrame:GetAttribute("WindowId") :: string
@@ -64,6 +76,254 @@ local escapeSmoothedTransMax = 0.6
 -- 周期/透明度区间平滑系数（越大跟得越紧）
 local EscapeRedScreenParamSmoothSpeed = 6
 
+local movementBarBg: ImageLabel? = nil
+local myselfImage: ImageLabel? = nil
+local playerImage: ImageLabel? = nil
+local ticksScroll: ScrollingFrame? = nil
+local tickLabels: { TextLabel } = {}
+local tickLabelPosY: UDim = UDim.new(0.5, 0)
+local tickLabelBaseSize: UDim2 = UDim2.fromScale(0.12, 0.4)
+local myselfImageBaseY: UDim? = nil
+local windowStartM = 0
+local movementBarInitialized = false
+local movementBarLastDistance = 0
+
+local function IsEscapeHudExemptGui(gui: GuiObject): boolean
+	if redScreen ~= nil and gui == redScreen then
+		return true
+	end
+	if movementBarBg ~= nil and gui == movementBarBg then
+		return true
+	end
+	return false
+end
+
+local function FormatTickMeters(meters: number): string
+	return string.format("%dm", math.max(0, math.floor(meters + 0.5)))
+end
+
+local function GetTickSpacingPx(): number
+	if ticksScroll == nil then
+		return 1
+	end
+	local w = ticksScroll.AbsoluteSize.X
+	if w < 4 then
+		return 1
+	end
+	return w / VISIBLE_TICK_COUNT
+end
+
+local function MetersToCanvasPx(meters: number, spacing: number): number
+	return (meters / TICK_INTERVAL_M) * spacing
+end
+
+local function ResolveUDimScale(value: UDim, absoluteSize: number, fallbackScale: number): number
+	if absoluteSize <= 0 then
+		if value.Scale ~= 0 then
+			return value.Scale
+		end
+		return fallbackScale
+	end
+	return value.Scale + value.Offset / absoluteSize
+end
+
+local function ResolveTickLabelSizeScale(canvasScaleX: number): UDim2
+	if ticksScroll == nil then
+		return tickLabelBaseSize
+	end
+	local scrollSize = ticksScroll.AbsoluteSize
+	return UDim2.fromScale(
+		ResolveUDimScale(tickLabelBaseSize.X, scrollSize.X, 0.12) / math.max(canvasScaleX, 0.001),
+		ResolveUDimScale(tickLabelBaseSize.Y, scrollSize.Y, 0.4)
+	)
+end
+
+-- 刻度在画布上的绝对坐标；滚动使「当前距离」对齐玩家锚点
+local function ComputeMovementBarScroll(distanceStuds: number): (number, number)
+	local spacing = GetTickSpacingPx()
+	local viewportW = if ticksScroll then ticksScroll.AbsoluteSize.X else 0
+	local pinPx = SCROLL_AT_RATIO * viewportW
+	local pinDistanceM = WINDOW_SPAN_M * SCROLL_AT_RATIO
+	local distancePx = MetersToCanvasPx(distanceStuds, spacing)
+
+	if distanceStuds < pinDistanceM then
+		return 0, math.clamp((distanceStuds / pinDistanceM) * SCROLL_AT_RATIO, 0, SCROLL_AT_RATIO)
+	end
+	return distancePx - pinPx, SCROLL_AT_RATIO
+end
+
+local function ApplyMyselfMarkerScale(markerScaleX: number)
+	if myselfImage == nil then
+		return
+	end
+	local yScale = if myselfImageBaseY then myselfImageBaseY.Scale else 0.5
+	local yOffset = if myselfImageBaseY then myselfImageBaseY.Offset else 0
+	myselfImage.Position = UDim2.new(math.clamp(markerScaleX, 0, 1), 0, yScale, yOffset)
+end
+
+local function UpdateTickRuler(distanceStuds: number, canvasX: number)
+	if ticksScroll == nil then
+		return
+	end
+	local spacing = GetTickSpacingPx()
+	local leftEdgeM = math.max(0, (canvasX / spacing) * TICK_INTERVAL_M)
+	local firstTickM = math.floor(leftEdgeM / TICK_INTERVAL_M) * TICK_INTERVAL_M
+	windowStartM = firstTickM
+	local canvasScaleX = math.max(
+		(distanceStuds + WINDOW_SPAN_M + TICK_INTERVAL_M * 2) / WINDOW_SPAN_M,
+		MIN_TICK_CANVAS_SCALE_X
+	)
+	local canvasSpanM = WINDOW_SPAN_M * canvasScaleX
+	local tickSize = ResolveTickLabelSizeScale(canvasScaleX)
+	local tickPosYScale = ResolveUDimScale(tickLabelPosY, ticksScroll.AbsoluteSize.Y, 0.5)
+
+	for i, label in tickLabels do
+		local meters = windowStartM + (i - 1) * TICK_INTERVAL_M
+		label.AnchorPoint = Vector2.new(0.5, 0.5)
+		label.Position = UDim2.fromScale(meters / canvasSpanM, tickPosYScale)
+		label.Size = tickSize
+		label.Text = if meters <= 0 then "" else FormatTickMeters(meters)
+		label.Visible = true
+	end
+
+	ticksScroll.CanvasSize = UDim2.fromScale(canvasScaleX, 1)
+end
+
+local function ApplyMovementBarFromDistance(distanceStuds: number)
+	if ticksScroll == nil then
+		return
+	end
+	local canvasX, markerScaleX = ComputeMovementBarScroll(distanceStuds)
+	ticksScroll.CanvasPosition = Vector2.new(math.max(0, canvasX), 0)
+	UpdateTickRuler(distanceStuds, math.max(0, canvasX))
+	ApplyMyselfMarkerScale(markerScaleX)
+end
+
+local function ResetMovementBarState(distanceStuds: number)
+	windowStartM = 0
+	if ticksScroll then
+		ticksScroll.CanvasPosition = Vector2.zero
+	end
+	ApplyMovementBarFromDistance(distanceStuds)
+end
+
+local function OnMovementBarHidden()
+	movementBarInitialized = false
+end
+
+local function UpdateMovementBar(distanceStuds: number)
+	if movementBarBg == nil or myselfImage == nil or ticksScroll == nil then
+		return
+	end
+	movementBarLastDistance = distanceStuds
+	if not movementBarInitialized then
+		movementBarInitialized = true
+		ResetMovementBarState(distanceStuds)
+		return
+	end
+	ApplyMovementBarFromDistance(distanceStuds)
+end
+
+local function BuildTickLabelPool(template: TextLabel)
+	table.clear(tickLabels)
+	for i = 1, TICK_POOL_COUNT do
+		local label = template:Clone()
+		label.Name = "TickLabel" .. tostring(i)
+		label.Visible = true
+		label.Parent = ticksScroll
+		tickLabels[i] = label
+	end
+	template.Visible = false
+end
+
+local function ConfigureDistanceTicksScroll(scroll: ScrollingFrame, bar: ImageLabel)
+	scroll.BackgroundTransparency = 1
+	scroll.BorderSizePixel = 0
+	scroll.ScrollBarThickness = 0
+	scroll.ScrollingEnabled = false
+	scroll.ClipsDescendants = true
+	scroll.AnchorPoint = Vector2.new(0, 0)
+	scroll.Position = UDim2.fromScale(0, 0)
+	scroll.Size = UDim2.fromScale(1, 1)
+	scroll.ZIndex = bar.ZIndex + 1
+end
+
+local function EnsureDistanceTicksScroll(bar: ImageLabel, template: TextLabel): ScrollingFrame
+	local existing = bar:FindFirstChild("DistanceTicksScroll")
+	if existing and existing:IsA("ScrollingFrame") then
+		ConfigureDistanceTicksScroll(existing, bar)
+		if template.Parent ~= existing then
+			template.Parent = existing
+		end
+		return existing
+	end
+	local scroll = Instance.new("ScrollingFrame")
+	scroll.Name = "DistanceTicksScroll"
+	scroll.Parent = bar
+	ConfigureDistanceTicksScroll(scroll, bar)
+	template.Parent = scroll
+	return scroll
+end
+
+local function ResolveMovementBar()
+	local bar = thisFrame:FindFirstChild("MovementBarBg")
+	if bar == nil or not bar:IsA("ImageLabel") then
+		warn("[JumpRunWayFrame] MovementBarBg missing or not ImageLabel")
+		return
+	end
+	movementBarBg = bar
+	movementBarBg.Visible = false
+
+	local marker = movementBarBg:FindFirstChild("MyselfImage")
+	if marker == nil or not marker:IsA("ImageLabel") then
+		warn("[JumpRunWayFrame] MovementBarBg.MyselfImage missing or not ImageLabel")
+		return
+	end
+	myselfImage = marker
+	if myselfImage.Parent ~= movementBarBg then
+		myselfImage.Parent = movementBarBg
+	end
+	myselfImage.AnchorPoint = Vector2.new(0.5, 0.5)
+	myselfImageBaseY = myselfImage.Position.Y
+	myselfImage.ZIndex = movementBarBg.ZIndex + 10
+
+	local portrait = myselfImage:FindFirstChild("PlayerImage")
+	if portrait == nil or not portrait:IsA("ImageLabel") then
+		warn("[JumpRunWayFrame] MovementBarBg.MyselfImage.PlayerImage missing or not ImageLabel")
+		return
+	end
+	playerImage = portrait
+	local headUrl = PlayerExtension.GetPlayerHeadImage(localPlayer.UserId, Enum.ThumbnailSize.Size100x100)
+	if headUrl ~= "" then
+		playerImage.Image = headUrl
+	end
+
+	local template = movementBarBg:FindFirstChild("TickLabelTemplate")
+	if template == nil or not template:IsA("TextLabel") then
+		local legacy = movementBarBg:FindFirstChild("TextLabel")
+		if legacy and legacy:IsA("TextLabel") then
+			legacy.Name = "TickLabelTemplate"
+			template = legacy
+		end
+	end
+	if template == nil or not template:IsA("TextLabel") then
+		warn("[JumpRunWayFrame] MovementBarBg.TickLabelTemplate missing or not TextLabel")
+		return
+	end
+	tickLabelPosY = template.Position.Y
+	tickLabelBaseSize = template.Size
+
+	ticksScroll = EnsureDistanceTicksScroll(movementBarBg, template)
+	BuildTickLabelPool(template)
+	task.defer(function()
+		if ticksScroll ~= nil and movementBarLastDistance > 0 then
+			ApplyMovementBarFromDistance(movementBarLastDistance)
+		elseif ticksScroll ~= nil then
+			ApplyMovementBarFromDistance(0)
+		end
+	end)
+end
+
 local function ResolveRedScreen()
 	local screen = thisFrame:FindFirstChild("RedScreen")
 	if screen == nil or not screen:IsA("ImageLabel") then
@@ -78,7 +338,7 @@ end
 local function CaptureEscapeHudVisibility()
 	table.clear(escapeHudVisibleSnapshot)
 	for _, child in thisFrame:GetChildren() do
-		if child:IsA("GuiObject") and child ~= redScreen then
+		if child:IsA("GuiObject") and not IsEscapeHudExemptGui(child) then
 			escapeHudVisibleSnapshot[child] = child.Visible
 		end
 	end
@@ -109,6 +369,10 @@ local function SetEscapeHudMode(enabled: boolean)
 			end
 		end
 		table.clear(escapeHudVisibleSnapshot)
+		if movementBarBg ~= nil then
+			movementBarBg.Visible = false
+			OnMovementBarHidden()
+		end
 	end
 end
 
@@ -197,6 +461,13 @@ local function DisconnectEscapeRedScreen()
 	end
 end
 
+local function HideMovementBarForRunwayExit()
+	if movementBarBg ~= nil then
+		movementBarBg.Visible = false
+		OnMovementBarHidden()
+	end
+end
+
 local function StopEscapeRedScreen()
 	DisconnectEscapeRedScreen()
 	if redScreen ~= nil then
@@ -204,6 +475,7 @@ local function StopEscapeRedScreen()
 		redScreen.ImageTransparency = 1
 	end
 	SetEscapeHudMode(false)
+	HideMovementBarForRunwayExit()
 end
 
 local function StartEscapeRedScreen()
@@ -372,13 +644,25 @@ local function RefreshRunwayStats(
 		)
 	end
 
+	local isEscapePhase = ClientGameInfo.IsInJumpRunwayEscapePhase()
+	local movementBarVisible = ClientGameInfo.IsInJumpRunway() and not isEscapePhase and distanceStuds > 0
 	if distanceLabel ~= nil then
-		distanceLabel.Visible = distanceVisible
+		distanceLabel.Visible = movementBarVisible
 	end
 	if distanceValue ~= nil then
-		distanceValue.Visible = distanceVisible
-		if distanceVisible then
+		distanceValue.Visible = movementBarVisible
+		if movementBarVisible then
 			distanceValue.Text = string.format("%dm", math.max(0, math.floor(distanceStuds + 0.5)))
+		end
+	end
+
+	if movementBarBg ~= nil then
+		if movementBarVisible then
+			movementBarBg.Visible = true
+			UpdateMovementBar(distanceStuds)
+		else
+			movementBarBg.Visible = false
+			OnMovementBarHidden()
 		end
 	end
 end
@@ -576,6 +860,7 @@ local function OnCloseWindow(closeWindowId: string)
 		return
 	end
 	StopEscapeRedScreen()
+	OnMovementBarHidden()
 	CancelRatingPresentationOnly()
 	CancelTipPresentationOnly()
 	if activeRatingText then
@@ -586,10 +871,11 @@ local function OnCloseWindow(closeWindowId: string)
 	thisFrame:Destroy()
 end
 
+ResolveRedScreen()
+ResolveMovementBar()
 ResolveFuelSizeBar()
 ResolveDistanceValue()
 ResolveTipText()
-ResolveRedScreen()
 
 ClientMsg.ConnectJumpRunWayRefreshStats(RefreshRunwayStats)
 ClientMsg.ConnectJumpRunWayShowRatingTier(ShowRatingTier)
@@ -600,6 +886,12 @@ ClientMsg.ConnectJumpRunWayEnterEscapeHudMode(function()
 end)
 ClientMsg.ConnectJumpRunWayStartEscapeRedScreen(StartEscapeRedScreen)
 ClientMsg.ConnectJumpRunWayStopEscapeRedScreen(StopEscapeRedScreen)
+ClientMsg.ConnectCurrentGuideTypeChanged(function()
+	if ClientGameInfo.IsInJumpRunway() or ClientGameInfo.IsInJumpRunwayEscapePhase() then
+		return
+	end
+	HideMovementBarForRunwayExit()
+end)
 ClientMsg.ConnectCloseWindow(OnCloseWindow)
 
 UIAdapter.AddAdaptiveFrame(thisFrame, UIAdapter.AdaptiveType.FullScreen)

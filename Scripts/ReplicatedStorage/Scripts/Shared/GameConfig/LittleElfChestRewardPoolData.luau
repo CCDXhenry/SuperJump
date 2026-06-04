@@ -1,7 +1,7 @@
 return {
 	[1] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 1,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -97,7 +97,7 @@ return {
 	},
 	[4] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 1,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -129,7 +129,7 @@ return {
 	},
 	[5] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 2,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -225,7 +225,7 @@ return {
 	},
 	[8] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 2,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -257,7 +257,7 @@ return {
 	},
 	[9] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 3,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -353,7 +353,7 @@ return {
 	},
 	[12] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 3,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -385,7 +385,7 @@ return {
 	},
 	[13] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 4,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -481,7 +481,7 @@ return {
 	},
 	[16] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 4,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -513,7 +513,7 @@ return {
 	},
 	[17] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 5,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -609,7 +609,7 @@ return {
 	},
 	[20] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 5,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -641,7 +641,7 @@ return {
 	},
 	[21] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 6,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -737,7 +737,7 @@ return {
 	},
 	[24] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 6,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -769,7 +769,7 @@ return {
 	},
 	[25] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 7,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -865,7 +865,7 @@ return {
 	},
 	[28] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 7,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -897,7 +897,7 @@ return {
 	},
 	[29] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 8,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -993,7 +993,7 @@ return {
 	},
 	[32] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 8,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1025,7 +1025,7 @@ return {
 	},
 	[33] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 9,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1121,7 +1121,7 @@ return {
 	},
 	[36] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 9,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1153,7 +1153,7 @@ return {
 	},
 	[37] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 10,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1249,7 +1249,7 @@ return {
 	},
 	[40] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 10,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1281,7 +1281,7 @@ return {
 	},
 	[41] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 11,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1377,7 +1377,7 @@ return {
 	},
 	[44] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 11,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1409,7 +1409,7 @@ return {
 	},
 	[45] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 12,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1505,7 +1505,7 @@ return {
 	},
 	[48] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 12,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1537,7 +1537,7 @@ return {
 	},
 	[49] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 13,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1633,7 +1633,7 @@ return {
 	},
 	[52] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 13,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1665,7 +1665,7 @@ return {
 	},
 	[53] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 14,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1761,7 +1761,7 @@ return {
 	},
 	[56] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 14,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1793,7 +1793,7 @@ return {
 	},
 	[57] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 15,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1889,7 +1889,7 @@ return {
 	},
 	[60] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 15,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -1921,7 +1921,7 @@ return {
 	},
 	[61] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 16,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2017,7 +2017,7 @@ return {
 	},
 	[64] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 16,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2049,7 +2049,7 @@ return {
 	},
 	[65] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 17,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2145,7 +2145,7 @@ return {
 	},
 	[68] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 17,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2177,7 +2177,7 @@ return {
 	},
 	[69] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 18,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2273,7 +2273,7 @@ return {
 	},
 	[72] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 18,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2305,7 +2305,7 @@ return {
 	},
 	[73] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 19,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2401,7 +2401,7 @@ return {
 	},
 	[76] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 19,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2433,7 +2433,7 @@ return {
 	},
 	[77] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 20,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2529,7 +2529,7 @@ return {
 	},
 	[80] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 20,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2561,7 +2561,7 @@ return {
 	},
 	[81] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 21,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2657,7 +2657,7 @@ return {
 	},
 	[84] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 21,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2689,7 +2689,7 @@ return {
 	},
 	[85] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 22,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2785,7 +2785,7 @@ return {
 	},
 	[88] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 22,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2817,7 +2817,7 @@ return {
 	},
 	[89] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 23,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2913,7 +2913,7 @@ return {
 	},
 	[92] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 23,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -2945,7 +2945,7 @@ return {
 	},
 	[93] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 24,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3041,7 +3041,7 @@ return {
 	},
 	[96] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 24,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3073,7 +3073,7 @@ return {
 	},
 	[97] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 25,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3169,7 +3169,7 @@ return {
 	},
 	[100] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 25,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3201,7 +3201,7 @@ return {
 	},
 	[101] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 26,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3297,7 +3297,7 @@ return {
 	},
 	[104] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 26,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3329,7 +3329,7 @@ return {
 	},
 	[105] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 27,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3425,7 +3425,7 @@ return {
 	},
 	[108] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 27,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3457,7 +3457,7 @@ return {
 	},
 	[109] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 28,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3553,7 +3553,7 @@ return {
 	},
 	[112] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 28,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3585,7 +3585,7 @@ return {
 	},
 	[113] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 29,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3681,7 +3681,7 @@ return {
 	},
 	[116] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 29,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3713,7 +3713,7 @@ return {
 	},
 	[117] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 30,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3809,7 +3809,7 @@ return {
 	},
 	[120] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 30,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3841,7 +3841,7 @@ return {
 	},
 	[121] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 31,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3937,7 +3937,7 @@ return {
 	},
 	[124] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 31,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -3969,7 +3969,7 @@ return {
 	},
 	[125] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 32,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4065,7 +4065,7 @@ return {
 	},
 	[128] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 32,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4097,7 +4097,7 @@ return {
 	},
 	[129] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 33,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4193,7 +4193,7 @@ return {
 	},
 	[132] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 33,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4225,7 +4225,7 @@ return {
 	},
 	[133] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 34,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4321,7 +4321,7 @@ return {
 	},
 	[136] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 34,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4353,7 +4353,7 @@ return {
 	},
 	[137] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 35,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4449,7 +4449,7 @@ return {
 	},
 	[140] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 35,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4481,7 +4481,7 @@ return {
 	},
 	[141] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 36,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4577,7 +4577,7 @@ return {
 	},
 	[144] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 36,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4609,7 +4609,7 @@ return {
 	},
 	[145] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 37,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4705,7 +4705,7 @@ return {
 	},
 	[148] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 37,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4737,7 +4737,7 @@ return {
 	},
 	[149] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 38,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4833,7 +4833,7 @@ return {
 	},
 	[152] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 38,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4865,7 +4865,7 @@ return {
 	},
 	[153] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 39,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4961,7 +4961,7 @@ return {
 	},
 	[156] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 39,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -4993,7 +4993,7 @@ return {
 	},
 	[157] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 40,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5089,7 +5089,7 @@ return {
 	},
 	[160] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 40,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5121,7 +5121,7 @@ return {
 	},
 	[161] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 41,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5217,7 +5217,7 @@ return {
 	},
 	[164] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 41,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5249,7 +5249,7 @@ return {
 	},
 	[165] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 42,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5345,7 +5345,7 @@ return {
 	},
 	[168] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 42,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5377,7 +5377,7 @@ return {
 	},
 	[169] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 43,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5473,7 +5473,7 @@ return {
 	},
 	[172] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 43,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5505,7 +5505,7 @@ return {
 	},
 	[173] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 44,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5601,7 +5601,7 @@ return {
 	},
 	[176] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 44,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5633,7 +5633,7 @@ return {
 	},
 	[177] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 45,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5729,7 +5729,7 @@ return {
 	},
 	[180] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 45,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5761,7 +5761,7 @@ return {
 	},
 	[181] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 46,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5857,7 +5857,7 @@ return {
 	},
 	[184] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 46,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5889,7 +5889,7 @@ return {
 	},
 	[185] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 47,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -5985,7 +5985,7 @@ return {
 	},
 	[188] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 47,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6017,7 +6017,7 @@ return {
 	},
 	[189] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 48,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6113,7 +6113,7 @@ return {
 	},
 	[192] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 48,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6145,7 +6145,7 @@ return {
 	},
 	[193] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 49,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6241,7 +6241,7 @@ return {
 	},
 	[196] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 49,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6273,7 +6273,7 @@ return {
 	},
 	[197] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 50,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6369,7 +6369,7 @@ return {
 	},
 	[200] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 50,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6401,7 +6401,7 @@ return {
 	},
 	[201] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 51,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6497,7 +6497,7 @@ return {
 	},
 	[204] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 51,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6529,7 +6529,7 @@ return {
 	},
 	[205] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 52,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6625,7 +6625,7 @@ return {
 	},
 	[208] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 52,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6657,7 +6657,7 @@ return {
 	},
 	[209] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 53,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6753,7 +6753,7 @@ return {
 	},
 	[212] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 53,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6785,7 +6785,7 @@ return {
 	},
 	[213] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 54,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6881,7 +6881,7 @@ return {
 	},
 	[216] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 54,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -6913,7 +6913,7 @@ return {
 	},
 	[217] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 55,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7009,7 +7009,7 @@ return {
 	},
 	[220] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 55,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7041,7 +7041,7 @@ return {
 	},
 	[221] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 56,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7137,7 +7137,7 @@ return {
 	},
 	[224] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 56,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7169,7 +7169,7 @@ return {
 	},
 	[225] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 57,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7265,7 +7265,7 @@ return {
 	},
 	[228] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 57,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7297,7 +7297,7 @@ return {
 	},
 	[229] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 58,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7393,7 +7393,7 @@ return {
 	},
 	[232] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 58,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7425,7 +7425,7 @@ return {
 	},
 	[233] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 59,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7521,7 +7521,7 @@ return {
 	},
 	[236] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 59,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7553,7 +7553,7 @@ return {
 	},
 	[237] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 60,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7649,7 +7649,7 @@ return {
 	},
 	[240] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 60,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7681,7 +7681,7 @@ return {
 	},
 	[241] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 61,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7777,7 +7777,7 @@ return {
 	},
 	[244] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 61,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7809,7 +7809,7 @@ return {
 	},
 	[245] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 62,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7905,7 +7905,7 @@ return {
 	},
 	[248] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 62,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -7937,7 +7937,7 @@ return {
 	},
 	[249] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 63,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8033,7 +8033,7 @@ return {
 	},
 	[252] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 63,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8065,7 +8065,7 @@ return {
 	},
 	[253] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 64,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8161,7 +8161,7 @@ return {
 	},
 	[256] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 64,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8193,7 +8193,7 @@ return {
 	},
 	[257] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 65,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8289,7 +8289,7 @@ return {
 	},
 	[260] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 65,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8321,7 +8321,7 @@ return {
 	},
 	[261] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 66,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8417,7 +8417,7 @@ return {
 	},
 	[264] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 66,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8449,7 +8449,7 @@ return {
 	},
 	[265] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 67,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8545,7 +8545,7 @@ return {
 	},
 	[268] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 67,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8577,7 +8577,7 @@ return {
 	},
 	[269] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 68,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8673,7 +8673,7 @@ return {
 	},
 	[272] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 68,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8705,7 +8705,7 @@ return {
 	},
 	[273] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 69,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8801,7 +8801,7 @@ return {
 	},
 	[276] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 69,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8833,7 +8833,7 @@ return {
 	},
 	[277] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 70,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8929,7 +8929,7 @@ return {
 	},
 	[280] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 70,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -8961,7 +8961,7 @@ return {
 	},
 	[281] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 71,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -9057,7 +9057,7 @@ return {
 	},
 	[284] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 71,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -9089,7 +9089,7 @@ return {
 	},
 	[285] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 72,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -9185,7 +9185,7 @@ return {
 	},
 	[288] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 72,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -9217,7 +9217,7 @@ return {
 	},
 	[289] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 73,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -9313,7 +9313,7 @@ return {
 	},
 	[292] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 73,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -9345,7 +9345,7 @@ return {
 	},
 	[293] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 74,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -9441,7 +9441,7 @@ return {
 	},
 	[296] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 74,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -9473,7 +9473,7 @@ return {
 	},
 	[297] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 75,
 		["variantWeight"] = {
 			[1] = 4096,
@@ -9569,7 +9569,7 @@ return {
 	},
 	[300] = {
 		["itemType"] = 1,
-		["weight"] = 3000,
+		["weight"] = 10000,
 		["id"] = 75,
 		["variantWeight"] = {
 			[1] = 4096,
