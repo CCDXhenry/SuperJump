@@ -506,16 +506,32 @@ function NetMsg.FireRequestOpenChest(uid: string)
 	requestOpenChestEvent:FireServer(uid)
 end
 
-function NetMsg.ConnectRequestOpenChest(callback: (player: Player, uid: string) -> ())
-	requestOpenChestEvent.OnServerEvent:Connect(callback)
+function NetMsg.FireRequestOpenChestGrant(uid: string)
+	requestOpenChestEvent:FireServer(uid, "grant")
+end
+
+function NetMsg.ConnectRequestOpenChest(callback: (player: Player, uid: string, action: string?) -> ())
+	requestOpenChestEvent.OnServerEvent:Connect(function(player: Player, uid: any, action: any)
+		if type(uid) ~= "string" then
+			return
+		end
+		callback(player, uid, if type(action) == "string" then action else nil)
+	end)
 end
 
 -- 服务端通知客户端宝箱开箱结果（权威结果）
-function NetMsg.FireNotifyChestOpenResult(player: Player, uid: string, chestConfigId: number, chestLevel: number, finalBrainrotId: number)
-	notifyChestOpenResultEvent:FireClient(player, uid, chestConfigId, chestLevel, finalBrainrotId)
+function NetMsg.FireNotifyChestOpenResult(
+	player: Player,
+	uid: string,
+	chestConfigId: number,
+	chestLevel: number,
+	finalBrainrotId: number,
+	finalVariantId: number?
+)
+	notifyChestOpenResultEvent:FireClient(player, uid, chestConfigId, chestLevel, finalBrainrotId, finalVariantId)
 end
 
-function NetMsg.ConnectNotifyChestOpenResult(callback: (uid: string, chestConfigId: number, chestLevel: number, finalBrainrotId: number) -> ())
+function NetMsg.ConnectNotifyChestOpenResult(callback: (uid: string, chestConfigId: number, chestLevel: number, finalBrainrotId: number, finalVariantId: number?) -> ())
 	notifyChestOpenResultEvent.OnClientEvent:Connect(callback)
 end
 

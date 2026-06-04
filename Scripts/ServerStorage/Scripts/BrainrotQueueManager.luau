@@ -25,7 +25,18 @@ if not actualChests then
 	actualChests = modelsFolder:WaitForChild("LittleElfChests")
 end
 local actualCoils = replicatedStorage:WaitForChild("Tools")
-local OpenChestRevealDelay = 5.7
+
+type PendingOpenChestReward = {
+	rewardType: number,
+	rewardId: number,
+	quality: number,
+	chestConfigId: number,
+	chestLevel: number,
+	rewardName: string,
+	variantId: number,
+}
+
+local pendingOpenChestRewardMap: { [number]: { [string]: PendingOpenChestReward } } = {}
 
 -- 生成 Tool 并放入玩家 Backpack
 local function CreateToolForItem(player: Player, item: GameConfig.BrainrotQueueItem): Tool?
@@ -369,9 +380,76 @@ function BrainrotQueueManager.LoadPlayerQueue(player: Player)
 end
 
 -- 玩家开启宝箱
-function BrainrotQueueManager.OpenChest(player: Player, uid: string)
+local function GrantOpenChestReward(player: Player, uid: string)
+	local pendingByUid = pendingOpenChestRewardMap[player.UserId]
+	local pending = if pendingByUid then pendingByUid[uid] else nil
+	if pending == nil then
+		return
+	end
+
+	local latestPlayerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if not latestPlayerInfo then
+		return
+	end
+
+	local success = BrainrotQueueManager.AddItem(
+		player,
+		pending.rewardId,
+		pending.quality,
+		pending.chestLevel,
+		true,
+		pending.rewardType,
+		false,
+		nil,
+		nil,
+		nil,
+		if pending.rewardType == GameConfig.ItemType.Brainrot then GameConfig.ModelGetSource.Chest else nil,
+		if pending.rewardType == GameConfig.ItemType.Brainrot then pending.chestConfigId else nil,
+		nil,
+		if pending.rewardType == GameConfig.ItemType.Brainrot then pending.variantId else nil
+	)
+	if not success then
+		return
+	end
+
+	if pendingByUid then
+		pendingByUid[uid] = nil
+		if next(pendingByUid) == nil then
+			pendingOpenChestRewardMap[player.UserId] = nil
+		end
+	end
+
+	NetMsg.FireNotifyShowGameTip(
+		player,
+		GameTexts.ReceivedReward.source,
+		GameConfig.GameTipTweenType.FlyUp,
+		GameTexts.ReceivedReward.key,
+		{ pending.rewardName }
+	)
+end
+
+function BrainrotQueueManager.OpenChest(player: Player, uid: string, action: string?)
+	if action == "grant" then
+		GrantOpenChestReward(player, uid)
+		return
+	end
+
 	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
 	if not playerInfo then return end
+
+	local existingPendingByUid = pendingOpenChestRewardMap[player.UserId]
+	local existingPending = if existingPendingByUid then existingPendingByUid[uid] else nil
+	if existingPending then
+		NetMsg.FireNotifyChestOpenResult(
+			player,
+			uid,
+			existingPending.chestConfigId,
+			existingPending.chestLevel,
+			existingPending.rewardId,
+			existingPending.variantId
+		)
+		return
+	end
 
 	-- 1. 验证宝箱是否存在
 	local chestItem: GameConfig.BrainrotQueueItem? = nil
@@ -393,7 +471,7 @@ function BrainrotQueueManager.OpenChest(player: Player, uid: string)
 	if not chestConfig then return end
 
 	-- 2. 随机获得掉落
-	local rewardPool = GameConfig.ChestRewardPoolMap[chestItem.configId]
+	local rewardPool = GameConfig.LittleElfChestRewardPoolMap[chestItem.configId]
 	if not rewardPool or #rewardPool == 0 then
 		warn("[BrainrotQueueManager] OpenChest error: rewardPool is empty for chest", chestItem.configId)
 		return
@@ -420,7 +498,19 @@ function BrainrotQueueManager.OpenChest(player: Player, uid: string)
 
 	-- 2.5 先把权威结果通知给客户端，用于播放开箱动画
 	local chestLevel = chestItem.level or 1
-	NetMsg.FireNotifyChestOpenResult(player, uid, chestItem.configId, chestLevel, rewardId)
+	local variantId = if rewardType == GameConfig.ItemType.Brainrot then GameConfig.RollVariantIdFromEntry(rewardEntry) else 0
+	if pendingOpenChestRewardMap[player.UserId] == nil then
+		pendingOpenChestRewardMap[player.UserId] = {}
+	end
+	pendingOpenChestRewardMap[player.UserId][uid] = {
+		rewardType = rewardType,
+		rewardId = rewardId,
+		quality = rewardConfig.quality,
+		chestConfigId = chestItem.configId,
+		chestLevel = chestLevel,
+		rewardName = rewardConfig.name_t,
+		variantId = variantId,
+	}
 
 	-- 3. 移除宝箱，添加新宠物
 	-- 先移除 Tool
@@ -442,31 +532,7 @@ function BrainrotQueueManager.OpenChest(player: Player, uid: string)
 	table.remove(playerInfo.brainrotQueue, itemIndex)
 	playerInfo.playerInfoChanged = true
 	NotifyQueueUpdate(player, playerInfo.brainrotQueue)
-
-	-- 动画播放期间先不显示最终 brainrotTool，延迟后再发放并展示
-	local chestConfigIdForAnalytics = chestItem.configId
-	task.delay(OpenChestRevealDelay, function()
-		local latestPlayerInfo = ServerGameInfo.GetPlayerInfo(player)
-		if not latestPlayerInfo then
-			return
-		end
-		BrainrotQueueManager.AddItem(
-			player,
-			rewardId,
-			rewardConfig.quality,
-			chestLevel,
-			true,
-			rewardType,
-			false,
-			nil,
-			nil,
-			nil,
-			if rewardType == GameConfig.ItemType.Brainrot then GameConfig.ModelGetSource.Chest else nil,
-			if rewardType == GameConfig.ItemType.Brainrot then chestConfigIdForAnalytics else nil
-		)
-		-- 提示
-	NetMsg.FireNotifyShowGameTip(player, GameTexts.ReceivedReward.source, GameConfig.GameTipTweenType.FlyUp, GameTexts.ReceivedReward.key, {rewardConfig.name_t})
-	end)
+	NetMsg.FireNotifyChestOpenResult(player, uid, chestItem.configId, chestLevel, rewardId, variantId)
 end
 
 -- 模块初始化 (服务端监听)

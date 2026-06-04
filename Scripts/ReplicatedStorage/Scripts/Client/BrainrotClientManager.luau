@@ -60,6 +60,7 @@ end
 local AttachInfoUIToModel -- 向前声明
 local pendingOpenChestToolMap: { [string]: Tool } = {}
 local pendingOpenChestCFrameMap: { [string]: CFrame } = {}
+local pendingOpenChestResultMap: { [string]: { brainrotId: number, variantId: number } } = {}
 
 local function ResolveTargetVariantId(targetPart: BasePart, overrideVariantId: number?): number
 	if overrideVariantId ~= nil and overrideVariantId > 0 then
@@ -495,6 +496,7 @@ local function SetupLocalPlayerToolTracking(character: Model)
 				local activatedConn: RBXScriptConnection? = nil
 				activatedConn = (child :: Tool).Activated:Connect(function()
 					pendingOpenChestToolMap[uid] = child :: Tool
+					pendingOpenChestResultMap[uid] = nil
 					local visualModel = child:FindFirstChild("VisualModel")
 					if visualModel and visualModel:IsA("Model") then
 						pendingOpenChestCFrameMap[uid] = visualModel:GetPivot()
@@ -504,10 +506,49 @@ local function SetupLocalPlayerToolTracking(character: Model)
 							pendingOpenChestCFrameMap[uid] = handle.CFrame
 						end
 					end
+					local chestConfigId = (child:GetAttribute("ConfigId") :: number?) or 0
+					local chestLevel = (child:GetAttribute("Level") :: number?) or 1
+					local fallbackCFrame = pendingOpenChestCFrameMap[uid]
+					if not fallbackCFrame then
+						local hrp = character:FindFirstChild("HumanoidRootPart")
+						if hrp and hrp:IsA("BasePart") then
+							fallbackCFrame = hrp.CFrame * CFrame.new(0, 0, -4)
+						end
+					end
+					if not fallbackCFrame then
+						warn("[BrainrotClientManager] Open chest failed: no fallback cframe, uid:", uid)
+						return
+					end
 					if activatedConn then
 						activatedConn:Disconnect()
 						activatedConn = nil
 					end
+					task.spawn(function()
+						ChestOpenAnimationManager.PlayInWorldAndWait(
+							uid,
+							chestConfigId,
+							chestLevel,
+							0,
+							fallbackCFrame,
+							{
+								maxPlayTimeSec = 15,
+								resolveFinalBrainrotId = function()
+									local result = pendingOpenChestResultMap[uid]
+									return if result then result.brainrotId else nil
+								end,
+								resolveFinalVariantId = function()
+									local result = pendingOpenChestResultMap[uid]
+									return if result then result.variantId else nil
+								end,
+							}
+						)
+						if pendingOpenChestResultMap[uid] then
+							NetMsg.FireRequestOpenChestGrant(uid)
+						end
+						pendingOpenChestToolMap[uid] = nil
+						pendingOpenChestCFrameMap[uid] = nil
+						pendingOpenChestResultMap[uid] = nil
+					end)
 					NetMsg.FireRequestOpenChest(uid)
 				end)
 			end
@@ -520,24 +561,11 @@ local function SetupLocalPlayerToolTracking(character: Model)
 	end)
 end
 
-local function OnNotifyChestOpenResult(uid: string, chestConfigId: number, chestLevel: number, finalBrainrotId: number)
-	local fallbackCFrame = pendingOpenChestCFrameMap[uid]
-	if not fallbackCFrame then
-		local character = localPlayer.Character
-		local hrp = character and character:FindFirstChild("HumanoidRootPart")
-		if hrp and hrp:IsA("BasePart") then
-			fallbackCFrame = hrp.CFrame * CFrame.new(0, 0, -4)
-		else
-			warn("[BrainrotClientManager] OnNotifyChestOpenResult no fallback cframe, uid:", uid)
-			return
-		end
-	end
-	task.spawn(function()
-		-- 开箱动画固定在世界中播放，不在手上变形
-		ChestOpenAnimationManager.Play(nil, uid, chestConfigId, chestLevel, finalBrainrotId, fallbackCFrame)
-	end)
-	pendingOpenChestToolMap[uid] = nil
-	pendingOpenChestCFrameMap[uid] = nil
+local function OnNotifyChestOpenResult(uid: string, _chestConfigId: number, _chestLevel: number, finalBrainrotId: number, finalVariantId: number?)
+	pendingOpenChestResultMap[uid] = {
+		brainrotId = finalBrainrotId,
+		variantId = finalVariantId or 0,
+	}
 end
 
 function BrainrotClientManager.Init()

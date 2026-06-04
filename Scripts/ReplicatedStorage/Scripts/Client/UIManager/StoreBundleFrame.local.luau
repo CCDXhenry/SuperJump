@@ -574,11 +574,21 @@ local function detachTemplatesFromLayout()
 	end
 end
 
+local function clearShopBundleFrames()
+	for bundleId, frame in pairs(bundleFramesById) do
+		if frame.Parent ~= nil then
+			frame:Destroy()
+		end
+		bundleFramesById[bundleId] = nil
+	end
+end
+
 local function buildShopBundleFrames(): boolean
 	local playerInfo = ClientGameInfo.GetLocalPlayerInfo()
 	if not playerInfo then
 		return false
 	end
+	clearShopBundleFrames()
 	local visibleIndex = 0
 	for _, bundleId in ipairs(GameConfig.ShopBundleList) do
 		local bundleData = GameConfig.ShopBundleById[bundleId]
@@ -601,8 +611,8 @@ local function buildShopBundleFrames(): boolean
 	return true
 end
 
-local function tryFinalizeShopBundleFrames(): boolean
-	if shopBundleFramesBuilt then
+local function tryFinalizeShopBundleFrames(forceRebuild: boolean?): boolean
+	if shopBundleFramesBuilt and not forceRebuild then
 		return true
 	end
 	if not buildShopBundleFrames() then
@@ -615,18 +625,20 @@ local function tryFinalizeShopBundleFrames(): boolean
 	return true
 end
 
-if not tryFinalizeShopBundleFrames() then
-	local conn: RBXScriptConnection?
-	conn = NetMsg.ConnectNotifyPlayerInfoInit(function()
-		if conn then
-			conn:Disconnect()
-		end
-		tryFinalizeShopBundleFrames()
-	end)
-	task.defer(function()
-		tryFinalizeShopBundleFrames()
-	end)
-end
+local playerInfoInitConn: RBXScriptConnection?
+playerInfoInitConn = NetMsg.ConnectNotifyPlayerInfoInit(function()
+	if playerInfoInitConn then
+		playerInfoInitConn:Disconnect()
+		playerInfoInitConn = nil
+	end
+	if isWindowClosed then
+		return
+	end
+	tryFinalizeShopBundleFrames(true)
+end)
+task.defer(function()
+	tryFinalizeShopBundleFrames()
+end)
 
 ClientMsg.ConnectBrainrotQueueUpdate(function(_queue: { GameConfig.BrainrotQueueItem })
 	if isWindowClosed then

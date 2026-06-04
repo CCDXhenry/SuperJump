@@ -17,6 +17,8 @@ local ExStatsDataModule = require(script:WaitForChild("ExStatsData"))
 local JetpackDataModule = require(script:WaitForChild("JetpackData"))
 local MonsterDataModule = require(script:WaitForChild("MonsterData"))
 local RebirthDataModule = require(script:WaitForChild("RebirthData"))
+local ShopBundleConfigurationDataModule = require(script:WaitForChild("ShopBundleConfigurationData"))
+local ShopBundleDataModule = require(script:WaitForChild("ShopBundleData"))
 
 GameConfig.GameVersion = "1.0.0"
 GameConfig.ABTestVersion = "1.0.0"
@@ -120,6 +122,7 @@ GameConfig.GuidePlacementBoothPath = {
 GameConfig.SixcubeGroupId = 33977495
 
 export type RewardInfo = {
+	id: number?,
 	rewardType: number,
 	rewardId: number,
 	rewardCount: number,
@@ -482,6 +485,7 @@ for _, poolRow in pairs(LittleElfChestRewardPoolDataModule) do
 	end
 	table.insert(GameConfig.LittleElfChestRewardPoolMap[chestTier], entry)
 end
+GameConfig.ChestRewardPoolMap = GameConfig.LittleElfChestRewardPoolMap
 
 export type LittleElfChestRewardPoolEntry = {
 	id: number,
@@ -1610,6 +1614,43 @@ export type ShopBundleData = {
 
 GameConfig.ShopBundleById = {} :: { [number]: ShopBundleData }
 GameConfig.ShopBundleList = {} :: { number }
+
+local shopBundleRewardsById: { [number]: { RewardInfo } } = {}
+for _, rewardRow in pairs(ShopBundleDataModule) do
+	if type(rewardRow) ~= "table" or type(rewardRow.id) ~= "number" then
+		continue
+	end
+	local bundleId = rewardRow.id
+	local reward = rewardRow :: RewardInfo
+	if shopBundleRewardsById[bundleId] == nil then
+		shopBundleRewardsById[bundleId] = {}
+	end
+	table.insert(shopBundleRewardsById[bundleId], reward)
+end
+
+local sortedShopBundleConfigs: { ShopBundleConfigurationData } = {}
+for _, configRow in pairs(ShopBundleConfigurationDataModule) do
+	if type(configRow) ~= "table" or type(configRow.id) ~= "number" then
+		continue
+	end
+	local bundleConfig = configRow :: ShopBundleConfigurationData
+	GameConfig.ShopBundleById[bundleConfig.id] = {
+		config = bundleConfig,
+		rewards = shopBundleRewardsById[bundleConfig.id] or {},
+	}
+	table.insert(sortedShopBundleConfigs, bundleConfig)
+end
+
+table.sort(sortedShopBundleConfigs, function(a: ShopBundleConfigurationData, b: ShopBundleConfigurationData): boolean
+	if a.sortId == b.sortId then
+		return a.id < b.id
+	end
+	return a.sortId < b.sortId
+end)
+
+for _, bundleConfig in ipairs(sortedShopBundleConfigs) do
+	table.insert(GameConfig.ShopBundleList, bundleConfig.id)
+end
 
 export type ShopPaidConfig = {
 	WalkSpeed10ProductId: number,
