@@ -23,11 +23,11 @@ local ShopBundleDataModule = require(script:WaitForChild("ShopBundleData"))
 GameConfig.GameVersion = "1.0.0"
 GameConfig.ABTestVersion = "1.0.0"
 GameConfig.PlayerSaveInfoDataVersion = 1
-GameConfig.GameId = 10267989410
+GameConfig.GameId = 10269142148
 
 if game.GameId == GameConfig.GameId then
-	GameConfig.GamePlaceId = 126732540395913
-	GameConfig.ClearDataStorePlaceId = 105928082970230
+	GameConfig.GamePlaceId = 112238403443830
+	GameConfig.ClearDataStorePlaceId = 100721633507021
 else
 	GameConfig.GamePlaceId = 17432470623
 	GameConfig.ClearDataStorePlaceId = 18733054561
