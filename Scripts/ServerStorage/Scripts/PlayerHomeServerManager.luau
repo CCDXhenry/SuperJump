@@ -260,13 +260,9 @@ local function onRequestUpgradeModel(player: Player, pointIndex: number, levelAd
 	local currentGold = playerInfo.currencies["1"] or 0
 
 	if isPaidIntent == true then
-		if currentGold >= cost then
-			-- gold sufficient: fall through to normal upgrade
-		else
-			ServerGameInfo.SetPendingBrainrotPaidUpgrade(player, pointIndex, levelAdd or 3)
-			print(LogPrefix, "Recorded pending paid brainrot upgrade for", player.Name, "at point", pointIndex, "levelAdd", levelAdd or 3)
-			return
-		end
+		ServerGameInfo.SetPendingBrainrotPaidUpgrade(player, pointIndex, levelAdd or 3)
+		print(LogPrefix, "Recorded pending paid brainrot upgrade for", player.Name, "at point", pointIndex, "levelAdd", levelAdd or 3)
+		return
 	end
 
 	if currentGold >= cost then
