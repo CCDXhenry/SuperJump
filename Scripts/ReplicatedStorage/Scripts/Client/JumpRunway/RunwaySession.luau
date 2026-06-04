@@ -2017,6 +2017,7 @@ function RunwaySession.EnterObstacleBounceFromTree(
 	if localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindObstacleBounce then
 		return
 	end
+	GameSoundManager.PlayImpactSound()
 	RunwaySession.TransitionDistanceLogStage("ObstacleBounce", reason, hrp, string.format("takeoffCount=%d", localState.takeoffCount))
 	local v = hrp.AssemblyLinearVelocity
 	local velocityH = HorizontalVelocity(v)
@@ -2085,6 +2086,7 @@ function RunwaySession.ProcessJumpRunwayTreeHit(humanoid: Humanoid, hrp: BasePar
 		RunwaySession.EnterObstacleBounceFromTree(humanoid, hrp, nowClock, normalH, moveDir, "tree_bounce")
 		return
 	end
+	GameSoundManager.PlayImpactSound()
 	local slowScale = RunwaySession.ResolveTreeHitNumber(cfg.RUNWAY_TREE_HIT_SLOW_SPEED_SCALE, 0.65, 0, 1)
 	if localState.phase == Ph.Slide then
 		if localState.finalLandSubPhase == 1 then
@@ -2268,6 +2270,7 @@ function RunwaySession.ApplyFinalLandPhaseAPop(hrp: BasePart, fwdH: Vector3, now
 	local minVyRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_MIN_POP_VY
 	local minVy = (typeof(minVyRaw) == "number" and minVyRaw == minVyRaw and minVyRaw >= 0) and minVyRaw or 3
 	local vyPop = math.max(minVy, math.abs(landingVy) * retainVy)
+	GameSoundManager.PlayImpactSound()
 	RunwaySession.DebugFinalLandPhaseAPop("apply", popIndex, landingAlong, landingVy, vySource, alongPop, vyPop, nowClock)
 	localState.finalLandPhaseAPopCount = popIndex
 	if not localState.finalLandTumbleImpulseApplied then
@@ -2371,6 +2374,7 @@ function RunwaySession.StartFinalLandPronePhase(nowClock: number, hrp: BasePart?
 	end
 	local _, humanoidDbg, _ = RunwaySession.GetCharacterParts()
 	RunwaySession.DebugFinalLandPhaseA("enter_phase_b", humanoidDbg, hrp, nowClock)
+	GameSoundManager.PlayImpactSound()
 	localState.finalLandSubPhase = 2
 	localState.finalLandPronePhaseStartClock = nowClock
 	localState.finalLandTumbleAirAccumSec = math.max(
@@ -2757,6 +2761,7 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 			RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoidOpt)
 		end
 	elseif slideKind == SlideKindMiss then
+		GameSoundManager.PlayImpactSound()
 		RunwaySession.DestroyRunwayRing()
 		localState.jumpBoostVy = nil
 		localState.jumpBoostUntilClock = 0
@@ -3141,6 +3146,7 @@ end
 
 function RunwaySession.UpdateJetpackFlameDashFx(nowClock: number)
 	if not RunwaySession.IsRunwayActivePhase(localState.phase) then
+		GameSoundManager.StopJettingSound()
 		RunwaySession.SetJetpackDashParticlesEnabled(false)
 		RunwaySession.RestoreJetpackFlameIdleColors()
 		return
@@ -3148,6 +3154,7 @@ function RunwaySession.UpdateJetpackFlameDashFx(nowClock: number)
 	local f1 = Refs.jetpackFlame1Part
 	local f2 = Refs.jetpackFlame2Part
 	if f1 == nil or f2 == nil or f1.Parent == nil or f2.Parent == nil then
+		GameSoundManager.StopJettingSound()
 		RunwaySession.SetJetpackDashParticlesEnabled(false)
 		RunwaySession.RestoreJetpackFlameIdleColors()
 		return
@@ -3156,10 +3163,12 @@ function RunwaySession.UpdateJetpackFlameDashFx(nowClock: number)
 		and localState.takeoffCount >= cfg.N_TOTAL_JUMPS
 		and RunwaySession.IsFinalDashThrustActive()
 	if not dashFxActive then
+		GameSoundManager.StopJettingSound()
 		RunwaySession.SetJetpackDashParticlesEnabled(false)
 		RunwaySession.RestoreJetpackFlameIdleColors()
 		return
 	end
+	GameSoundManager.PlayJettingSound()
 	RunwaySession.SetJetpackDashParticlesEnabled(true)
 	local interval = cfg.RUNWAY_JETPACK_FLAME_COLOR_INTERVAL_SEC
 	if interval <= 0 then

@@ -9,13 +9,19 @@ local coreSharedScripts = coreScripts:WaitForChild("Shared")
 local SoundTool = require(coreSharedScripts:FindFirstChild("SoundTool"))
 
 local soundsFolder: Folder = replicatedStorage:WaitForChild("Sounds") :: Folder
+local openChestStartSound: Sound? = nil
+local jettingSound: Sound? = nil
+local missingSoundWarnedMap: { [string]: boolean } = {}
 
 local function getTemplateSound(name: string): Sound?
 	local inst = soundsFolder:FindFirstChild(name)
 	if inst and inst:IsA("Sound") then
 		return inst
 	end
-	warn("[GameSoundManager] Missing Sound in ReplicatedStorage.Sounds:", name)
+	if missingSoundWarnedMap[name] ~= true then
+		missingSoundWarnedMap[name] = true
+		warn("[GameSoundManager] Missing Sound in ReplicatedStorage.Sounds:", name)
+	end
 	return nil
 end
 
@@ -48,10 +54,59 @@ end
 
 function GameSoundManager.PlayJumpRunwayTakeoffSound()
 	playGlobalFromName("JumpSound1")
+	playGlobalFromName("JumpSound11")
 end
 
 function GameSoundManager.PlayJumpRunwayFinalTakeoffSound()
 	playGlobalFromName("JumpSound2")
+	playGlobalFromName("JumpSound21")
+end
+
+function GameSoundManager.PlayOpenChestStartSound()
+	if openChestStartSound ~= nil and openChestStartSound.Parent ~= nil then
+		return
+	end
+	local template = getTemplateSound("OpenChestSound1")
+	if template == nil then
+		return
+	end
+	openChestStartSound = SoundTool.PlayGlobalSoundEffect(template, true)
+end
+
+function GameSoundManager.StopOpenChestStartSound()
+	if openChestStartSound == nil then
+		return
+	end
+	SoundTool.StopDesignatedSoundEffect(openChestStartSound)
+	openChestStartSound = nil
+end
+
+function GameSoundManager.PlayOpenChestRewardSound()
+	GameSoundManager.StopOpenChestStartSound()
+	playGlobalFromName("OpenChestSound2")
+end
+
+function GameSoundManager.PlayImpactSound()
+	playGlobalFromName("ImpactSound")
+end
+
+function GameSoundManager.PlayJettingSound()
+	if jettingSound ~= nil and jettingSound.Parent ~= nil then
+		return
+	end
+	local template = getTemplateSound("JettingSound")
+	if template == nil then
+		return
+	end
+	jettingSound = SoundTool.PlayGlobalSoundEffect(template, true)
+end
+
+function GameSoundManager.StopJettingSound()
+	if jettingSound == nil then
+		return
+	end
+	SoundTool.StopDesignatedSoundEffect(jettingSound)
+	jettingSound = nil
 end
 
 return GameSoundManager

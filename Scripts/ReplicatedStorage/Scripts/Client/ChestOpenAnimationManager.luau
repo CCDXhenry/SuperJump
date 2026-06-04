@@ -20,6 +20,7 @@ local TranslationTool = require(coreClientScripts:WaitForChild("TranslationTool"
 local BillboardManager = require(clientScripts:WaitForChild("BillboardManager"))
 local ModelBillboardOffsetTool = require(clientScripts:WaitForChild("ModelBillboardOffsetTool"))
 local BrainrotVariantVisualTool = require(clientScripts:WaitForChild("BrainrotVariantVisualTool"))
+local GameSoundManager = require(clientScripts:WaitForChild("GameSoundManager"))
 
 local actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
 local modelsFolderForChests = replicatedStorage:WaitForChild("Models")
@@ -430,6 +431,7 @@ local function PlayInWorld(
 	local yawConn = yawDriver:GetPropertyChangedSignal("Value"):Connect(UpdateChestPivot)
 	UpdateChestPivot()
 
+	GameSoundManager.PlayOpenChestStartSound()
 	if not lockFacing then
 		TweenPropertyNoWait(yawDriver, TweenInfo.new(GetChestShakeDuration(0.2), Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Value = yawDriver.Value + math.rad(math.random(-120, 120)),
@@ -606,6 +608,7 @@ local function PlayInWorld(
 				resolvedFinalVariantId = GameConfig.RollVariantIdFromEntry(finalEntry)
 			end
 		end
+		GameSoundManager.PlayOpenChestRewardSound()
 		ShowOne(resolvedFinalBrainrotId, resolvedFinalVariantId, true)
 	end
 	if chestModel and chestModel.Parent then
@@ -633,6 +636,7 @@ function ChestOpenAnimationManager.PlayInWorldAndWait(
 	if not ok then
 		warn(LogPrefix, "PlayInWorldAndWait failed:", err)
 	end
+	GameSoundManager.StopOpenChestStartSound()
 	playingUidMap[uid] = nil
 	return selectedBrainrotId
 end
@@ -664,6 +668,7 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 			return
 		end
 
+		GameSoundManager.PlayOpenChestStartSound()
 		TweenProperty(visualMotor, TweenInfo.new(GetChestShakeDuration(0.2), Enum.EasingStyle.Quad, Enum.EasingDirection.In), { C0 = CFrame.new(0, 0.2, 0) })
 		TweenModelScale(chestModel, 1, 0.85, GetChestShakeDuration(0.08), Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 		TweenModelScale(chestModel, 0.85, 1, GetChestShakeDuration(0.08), Enum.EasingStyle.Back, Enum.EasingDirection.Out)
@@ -720,6 +725,7 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 
 		local finalModel, finalRoot = CreateDisplayModel(tool, finalBrainrotId)
 		if finalModel and finalRoot then
+			GameSoundManager.PlayOpenChestRewardSound()
 			local finalEntry = GameConfig.FindLittleElfChestRewardEntry(chestConfigId, finalBrainrotId)
 			local finalVariantId = if finalEntry then GameConfig.RollVariantIdFromEntry(finalEntry) else 0
 			BrainrotVariantVisualTool.AttachVariantEffect(finalModel, finalVariantId)
@@ -752,6 +758,7 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 		warn(LogPrefix, "Play failed")
 	end
 
+	GameSoundManager.StopOpenChestStartSound()
 	playingUidMap[uid] = nil
 end
 
