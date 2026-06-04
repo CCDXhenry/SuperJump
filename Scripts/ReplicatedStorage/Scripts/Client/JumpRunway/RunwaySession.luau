@@ -7099,6 +7099,15 @@ function RunwaySession.ResolveAutoBeforeLineRating(jumpIndex: number, hrp: BaseP
 	if typeof(perfectDistance) ~= "number" or perfectDistance ~= perfectDistance or perfectDistance < 0 then
 		perfectDistance = 3
 	end
+	print(
+		string.format(
+			"[JumpRunwayBeginLineDistance] jump=%d distToBegin=%.2f perfectDistance=%.2f maxDist=%.2f",
+			jumpIndex,
+			distToBegin,
+			perfectDistance,
+			maxDist
+		)
+	)
 	if distToBegin <= perfectDistance then
 		local progress = math.clamp((perfectDistance - distToBegin) / math.max(perfectDistance, 1e-4), 0, 1)
 		return 1, RunwaySession.LerpNumber(okRatio, perfectRatio, progress), "AutoBeforeLine"
