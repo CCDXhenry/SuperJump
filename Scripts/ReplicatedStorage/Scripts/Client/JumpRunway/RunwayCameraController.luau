@@ -93,6 +93,24 @@ local function RestoreCameraControl(
 	end
 end
 
+local function HasRestoreSnapshot(): boolean
+	return state.cameraTypeBeforeRunway ~= nil
+		or state.cameraSubjectBeforeRunway ~= nil
+		or state.cameraFovBeforeRunway ~= nil
+end
+
+local function ClearRestoreSnapshot(transitionToken: number?)
+	if transitionToken ~= nil and state.releaseTransitionToken ~= transitionToken then
+		return
+	end
+	if state.active then
+		return
+	end
+	state.cameraTypeBeforeRunway = nil
+	state.cameraSubjectBeforeRunway = nil
+	state.cameraFovBeforeRunway = nil
+end
+
 local function PlayCameraTransition(
 	camera: Camera,
 	transitionToken: number,
@@ -163,6 +181,7 @@ local function PlayReleaseTransition(
 	if onComplete ~= nil then
 		onComplete()
 	end
+	ClearRestoreSnapshot(transitionToken)
 end
 
 local function InvokeOnCompleteOnce(onComplete: (() -> ())?, invoked: { boolean })
@@ -240,7 +259,7 @@ function RunwayCameraController.Enable(workspaceRef: Workspace, cfg: any, hrp: B
 		return
 	end
 	state.releaseTransitionToken += 1
-	if not state.active then
+	if not state.active and not HasRestoreSnapshot() then
 		state.cameraTypeBeforeRunway = camera.CameraType
 		state.cameraSubjectBeforeRunway = camera.CameraSubject
 		state.cameraFovBeforeRunway = camera.FieldOfView
@@ -309,18 +328,20 @@ function RunwayCameraController.Disable(
 				camera.CFrame = CFrame.lookAt(targetPosition, targetLookAt, Vector3.yAxis)
 				RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
 				InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
+				ClearRestoreSnapshot(transitionToken)
 			else
 				RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
 				InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
+				ClearRestoreSnapshot(transitionToken)
 			end
 		else
 			RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
 			InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
+			ClearRestoreSnapshot(transitionToken)
 		end
+	else
+		ClearRestoreSnapshot(nil)
 	end
-	state.cameraTypeBeforeRunway = nil
-	state.cameraSubjectBeforeRunway = nil
-	state.cameraFovBeforeRunway = nil
 end
 
 function RunwayCameraController.FocusChaserThenDisable(
@@ -411,15 +432,14 @@ function RunwayCameraController.FocusChaserThenDisable(
 				camera.FieldOfView = targetFov
 				RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
 				InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
+				ClearRestoreSnapshot(transitionToken)
 			end
 		else
 			RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
 			InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
+			ClearRestoreSnapshot(transitionToken)
 		end
 	end)
-	state.cameraTypeBeforeRunway = nil
-	state.cameraSubjectBeforeRunway = nil
-	state.cameraFovBeforeRunway = nil
 end
 
 function RunwayCameraController.Update(
