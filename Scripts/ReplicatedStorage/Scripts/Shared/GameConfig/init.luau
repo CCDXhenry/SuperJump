@@ -624,7 +624,7 @@ export type JetpackData = {
 	productId: number,
 	costRb: number,
 	fuel: number,
-	ThrustValue: number?,
+	thrust: number,
 	costType: number,
 	quality: number,
 }
@@ -643,7 +643,7 @@ function GameConfig.GetJetpackThrustPercent(jetpackData: JetpackData?): number
 	if jetpackData == nil then
 		return 100
 	end
-	local thrustValue = jetpackData.ThrustValue
+	local thrustValue = jetpackData.thrust
 	if typeof(thrustValue) ~= "number" or thrustValue ~= thrustValue then
 		return 100
 	end

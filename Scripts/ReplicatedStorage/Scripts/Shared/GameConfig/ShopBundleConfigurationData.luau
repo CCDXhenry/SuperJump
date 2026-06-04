@@ -19,7 +19,7 @@ return {
 		["productId3"] = 0,
 		["sortId"] = 1,
 		["arePaidRandomItemsRestricted"] = 0,
-		["productId1"] = 3602509411,
+		["productId1"] = 3602583418,
 	},
 	[2] = {
 		["bgIconId"] = "rbxassetid://83983663285653",
@@ -41,6 +41,6 @@ return {
 		["productId3"] = 0,
 		["sortId"] = 2,
 		["arePaidRandomItemsRestricted"] = 0,
-		["productId1"] = 3602509374,
+		["productId1"] = 3602583447,
 	},
 }
