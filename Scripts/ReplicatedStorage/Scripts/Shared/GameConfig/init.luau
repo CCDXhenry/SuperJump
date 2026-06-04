@@ -843,7 +843,7 @@ GameConfig.Paving = {
 	StationaryRenewalThreshold = 0.9,
 	StationaryRenewalMaxRemainingTime = 1,
 	StationaryRenewalInterval = 0.2,
-	RebirthProductId = 3602509243,
+	RebirthProductId = 3602583476,
 	StartTriggerRefillCooldown = 0.15,
 	GroundTouchRefillCooldown = 0.15,
 	GroundPollRefillInterval = 2,
@@ -1658,8 +1658,8 @@ export type ShopPaidConfig = {
 }
 
 GameConfig.ShopPaid = {
-	WalkSpeed10ProductId = 3602509462,
-	BrainrotUpgrade3ProductId = 3602509203,
+	WalkSpeed10ProductId = 3602583384,
+	BrainrotUpgrade3ProductId = 3602583510,
 } :: ShopPaidConfig
 
 export type ModelRarity = "Common" | "Rare" | "Epic" | "Legend"
