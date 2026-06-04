@@ -21,11 +21,11 @@ local RebirthDataModule = require(script:WaitForChild("RebirthData"))
 GameConfig.GameVersion = "1.0.0"
 GameConfig.ABTestVersion = "1.0.0"
 GameConfig.PlayerSaveInfoDataVersion = 1
-GameConfig.GameId = 9971505831
+GameConfig.GameId = 10267989410
 
 if game.GameId == GameConfig.GameId then
-	GameConfig.GamePlaceId = 106064553761864
-	GameConfig.ClearDataStorePlaceId = 73637948383969
+	GameConfig.GamePlaceId = 126732540395913
+	GameConfig.ClearDataStorePlaceId = 105928082970230
 else
 	GameConfig.GamePlaceId = 17432470623
 	GameConfig.ClearDataStorePlaceId = 18733054561
@@ -859,9 +859,9 @@ GameConfig.JumpRunwayDesigner = {
 	-- 窗内 Ok 时间占比上限；↑ Ok 窗口更宽
 	JUMP_WINDOW_RATING_OK_MAX_FRAC = 2 / 3,
 	-- BeginLine 前固定 Perfect 距离（stud）；距起跳线 ≤ 此值时线前起跳直接 Perfect
-	RUNWAY_BEGIN_LINE_PERFECT_DISTANCE_STUDS = 3,
+	RUNWAY_BEGIN_LINE_PERFECT_DISTANCE_STUDS = 10,
 	-- 起跳窗/链式 HUD 武装距离带（stud）；距地 ≤ 此值进入 Ok 预备区
-	RUNWAY_PRELAND_MAX_DIST_STUDS = 10,
+	RUNWAY_PRELAND_MAX_DIST_STUDS = 20,
 	-- 链式 Perfect 近地区起点高度（stud）；PRELAND 到此为 Ok 插值，此高度到贴地为 Perfect 插值
 	RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS = 3.5,
 	-- 起跳窗慢漂 WalkSpeed；↑ 窗内更易微调站位

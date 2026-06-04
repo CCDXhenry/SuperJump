@@ -286,8 +286,8 @@ function AnalyticsTool.Init()
 	--初始化GA埋点
 	--GameAnalytics:setEnabledInfoLog(true)
 	--GameAnalytics:setEnabledVerboseLog(true)
-	--GameAnalytics:configureBuild(GameConfig.GameVersion)
-	--GameAnalytics:initServer(ServerConfig.GoogleAnalyticsGameKey, ServerConfig.GoogleAnalyticsSecretKey)
+	GameAnalytics:configureBuild(GameConfig.GameVersion)
+	GameAnalytics:initServer(ServerConfig.GoogleAnalyticsGameKey, ServerConfig.GoogleAnalyticsSecretKey)
 	--报错信息直接在Roblox后台看，GA不需要采集
 	--GameAnalytics.setEnabledReportErrors(false)
 
