@@ -23,6 +23,7 @@ local LOG_PREFIX = "[ExEquipManager]"
 
 -- 锻炼 JumpPower 递增
 local EXERCISE_JUMP_POWER_INTERVAL = GameConfig.JumpPowerExerciseInterval
+local ClickRewardConfig = GameConfig.ExerciseClickReward
 -- 人物躯干高度（HumanoidRootPart 到脚底的参考偏移）
 local CHARACTER_TORSO_HEIGHT: number = 3
 local ACTIVE_EXERCISE_EQUIP_NAME = "ActiveExerciseEquip"
@@ -31,6 +32,7 @@ local EXERCISING_ATTR = "Exercising"
 
 local exerciseRunningMap: { [number]: boolean } = {}
 local exerciseSessionMap: { [number]: number } = {}
+local exerciseClickRewardNextAllowedAtMap: { [number]: number } = {}
 local activeExerciseModelMap: { [number]: Model } = {}
 local activeExerciseWorldPivotMap: { [number]: CFrame } = {}
 local exerciseModelPivotLockConnection: RBXScriptConnection? = nil
@@ -187,6 +189,7 @@ local function StopExerciseForPlayer(player: Player, logReason: string)
 	local wasExercising = exerciseRunningMap[userId] == true
 	exerciseSessionMap[userId] = (exerciseSessionMap[userId] or 0) + 1
 	exerciseRunningMap[userId] = nil
+	exerciseClickRewardNextAllowedAtMap[userId] = nil
 	player:SetAttribute(EXERCISING_ATTR, false)
 	DestroyExerciseModel(userId)
 	if wasExercising then
@@ -399,6 +402,7 @@ function ExEquipManager.OnRequestStartExercise(player: Player, equipId: number)
 	activeExerciseModelMap[userId] = equipmentModel
 	activeExerciseWorldPivotMap[userId] = equipmentModel:GetPivot()
 	exerciseRunningMap[userId] = true
+	exerciseClickRewardNextAllowedAtMap[userId] = os.clock() + ClickRewardConfig.ServerMinInterval
 	player:SetAttribute(EXERCISING_ATTR, true)
 
 	local sessionId = (exerciseSessionMap[userId] or 0) + 1
@@ -431,6 +435,41 @@ function ExEquipManager.OnRequestStopExercise(player: Player)
 	StopExerciseForPlayer(player, "request")
 end
 
+function ExEquipManager.OnRequestExerciseClickReward(player: Player)
+	local userId = player.UserId
+	if exerciseRunningMap[userId] ~= true then
+		LogInfo(string.format("ClickRewardRejected userId=%d reason=not_exercising", userId))
+		return
+	end
+
+	local now = os.clock()
+	local nextAllowedAt = exerciseClickRewardNextAllowedAtMap[userId] or math.huge
+	if now < nextAllowedAt then
+		LogInfo(string.format("ClickRewardRejected userId=%d reason=cooldown", userId))
+		return
+	end
+
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return
+	end
+
+	local equipId = tonumber(playerInfo.exEquipInventory.currentId)
+	if equipId == nil then
+		LogInfo(string.format("ClickRewardRejected userId=%d reason=no_current_equip", userId))
+		return
+	end
+
+	local equipData = GameConfig.ExEquipDataMap[equipId]
+	if equipData == nil then
+		LogInfo(string.format("ClickRewardRejected userId=%d reason=equip_not_found equipId=%d", userId, equipId))
+		return
+	end
+
+	ServerGameInfo.UpdatePlayerJumpPower(player, equipData.ability * ClickRewardConfig.RewardMultiplier)
+	exerciseClickRewardNextAllowedAtMap[userId] = now + ClickRewardConfig.ServerMinInterval
+end
+
 function ExEquipManager.Init()
 	NetMsg.ConnectRequestBuyExEquip(ExEquipManager.OnRequestBuyExEquip)
 	NetMsg.ConnectRequestBuyExEquipPaid(ExEquipManager.OnRequestBuyExEquipPaid)
@@ -438,6 +477,7 @@ function ExEquipManager.Init()
 	NetMsg.ConnectRequestClaimGroupReward(ExEquipManager.OnRequestClaimGroupReward)
 	NetMsg.ConnectRequestStartExercise(ExEquipManager.OnRequestStartExercise)
 	NetMsg.ConnectRequestStopExercise(ExEquipManager.OnRequestStopExercise)
+	NetMsg.ConnectRequestExerciseClickReward(ExEquipManager.OnRequestExerciseClickReward)
 
 	players.PlayerRemoving:Connect(function(player: Player)
 		StopExerciseForPlayer(player, "player_leaving")

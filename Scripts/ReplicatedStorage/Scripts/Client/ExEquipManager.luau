@@ -78,6 +78,7 @@ local EXERCISE_POPUP_RANDOM_ANGLE_DEGREES: number = 360
 local EXERCISE_POPUP_FADE_START_RATIO: number = 0.45
 local EXERCISE_RUN_R15_ANIMATION_ID = "rbxassetid://507767968"
 local EXERCISE_RUN_R6_ANIMATION_ID = "rbxassetid://180426354"
+local ClickRewardConfig = GameConfig.ExerciseClickReward
 
 -- 锻炼模式状态
 local isExercising: boolean = false
@@ -99,6 +100,18 @@ local exerciseScaleBarRatioValue: NumberValue? = nil
 local exerciseScaleBarRatioConnection: RBXScriptConnection? = nil
 local exerciseScaleBarSequenceId: number = 0
 local exerciseDisplayLv: number? = nil
+local clickRewardRandom = Random.new()
+local clickRewardSequenceId: number = 0
+local clickRewardButtonConnection: RBXScriptConnection? = nil
+local clickRewardSwingTween: Tween? = nil
+local clickRewardPopupMoveTween: Tween? = nil
+local clickRewardPopupTextTween: Tween? = nil
+local clickRewardPopupStrokeTween: Tween? = nil
+local clickRewardPopupImageTween: Tween? = nil
+local clickRewardPendingPopupPosition: UDim2? = nil
+local clickRewardPendingMinAddExp: number = 0
+local clickRewardExpectedServerAddExp: number = 0
+local clickRewardButtonVisible: boolean = false
 
 type ExercisePopupItem = {
 	gui: BillboardGui,
@@ -529,6 +542,292 @@ local function ShowExerciseJumpPowerPopup(addAmount: number)
 	end)
 end
 
+local QueueNextExerciseClickReward: ((number) -> ())? = nil
+local ShowExerciseClickRewardPopup: ((number) -> ())? = nil
+
+local function GetExerciseClickRewardFrame(): Frame?
+	local equipFrame = GetExerciseEquipFrame()
+	if equipFrame == nil then
+		return nil
+	end
+
+	local clickRewardFrame = equipFrame:FindFirstChild("ClickRewardFrame")
+	if clickRewardFrame == nil or not clickRewardFrame:IsA("Frame") then
+		return nil
+	end
+	return clickRewardFrame
+end
+
+local function GetExerciseClickRewardButton(): ImageButton?
+	local clickRewardFrame = GetExerciseClickRewardFrame()
+	if clickRewardFrame == nil then
+		return nil
+	end
+
+	local imageButton = clickRewardFrame:FindFirstChild("ImageButton")
+	if imageButton == nil or not imageButton:IsA("ImageButton") then
+		return nil
+	end
+	return imageButton
+end
+
+local function GetExerciseClickRewardPopupText(): TextLabel?
+	local clickRewardFrame = GetExerciseClickRewardFrame()
+	if clickRewardFrame == nil then
+		return nil
+	end
+
+	local popupText = clickRewardFrame:FindFirstChild("JumpPowerPopupText")
+	if popupText == nil or not popupText:IsA("TextLabel") then
+		return nil
+	end
+	return popupText
+end
+
+local function StopExerciseClickRewardSwing()
+	if clickRewardSwingTween ~= nil then
+		clickRewardSwingTween:Cancel()
+		clickRewardSwingTween = nil
+	end
+end
+
+local function StopExerciseClickRewardPopupTweens()
+	if clickRewardPopupMoveTween ~= nil then
+		clickRewardPopupMoveTween:Cancel()
+		clickRewardPopupMoveTween = nil
+	end
+	if clickRewardPopupTextTween ~= nil then
+		clickRewardPopupTextTween:Cancel()
+		clickRewardPopupTextTween = nil
+	end
+	if clickRewardPopupStrokeTween ~= nil then
+		clickRewardPopupStrokeTween:Cancel()
+		clickRewardPopupStrokeTween = nil
+	end
+	if clickRewardPopupImageTween ~= nil then
+		clickRewardPopupImageTween:Cancel()
+		clickRewardPopupImageTween = nil
+	end
+end
+
+local function HideExerciseClickRewardButton()
+	StopExerciseClickRewardSwing()
+	if clickRewardButtonConnection ~= nil then
+		clickRewardButtonConnection:Disconnect()
+		clickRewardButtonConnection = nil
+	end
+
+	local imageButton = GetExerciseClickRewardButton()
+	if imageButton ~= nil then
+		imageButton.Visible = false
+		imageButton.Active = false
+		imageButton.Rotation = 0
+	end
+	clickRewardButtonVisible = false
+end
+
+local function HideExerciseClickRewardPopup()
+	StopExerciseClickRewardPopupTweens()
+
+	local popupText = GetExerciseClickRewardPopupText()
+	if popupText ~= nil then
+		popupText.Visible = false
+		popupText.TextTransparency = 0
+		local stroke = popupText:FindFirstChild("PopupStroke") :: UIStroke?
+		if stroke ~= nil then
+			stroke.Transparency = 0
+		end
+		local imageLabel = popupText:FindFirstChild("ImageLabel") :: ImageLabel?
+		if imageLabel ~= nil then
+			imageLabel.ImageTransparency = 0
+		end
+	end
+end
+
+local function CleanupExerciseClickReward()
+	clickRewardSequenceId += 1
+	HideExerciseClickRewardButton()
+	HideExerciseClickRewardPopup()
+	clickRewardPendingPopupPosition = nil
+	clickRewardPendingMinAddExp = 0
+	clickRewardExpectedServerAddExp = 0
+end
+
+local function OnExerciseClickRewardButtonActivated()
+	if not isExercising then
+		return
+	end
+
+	local imageButton = GetExerciseClickRewardButton()
+	if imageButton == nil or not clickRewardButtonVisible then
+		return
+	end
+
+	local equipData = if exerciseEquipId ~= nil then GameConfig.ExEquipDataMap[exerciseEquipId] else nil
+	if equipData == nil then
+		return
+	end
+
+	clickRewardPendingPopupPosition = imageButton.Position
+	local rewardAddExp = equipData.ability * ClickRewardConfig.RewardMultiplier
+	clickRewardPendingMinAddExp = rewardAddExp
+	clickRewardExpectedServerAddExp = rewardAddExp
+	local showExerciseClickRewardPopup = ShowExerciseClickRewardPopup
+	if showExerciseClickRewardPopup ~= nil then
+		showExerciseClickRewardPopup(rewardAddExp)
+	end
+	HideExerciseClickRewardButton()
+	NetMsg.FireRequestExerciseClickReward()
+	local queueNextExerciseClickReward = QueueNextExerciseClickReward
+	if queueNextExerciseClickReward ~= nil then
+		queueNextExerciseClickReward(exerciseClientSessionId)
+	end
+end
+
+local function PlayExerciseClickRewardSwing(imageButton: ImageButton)
+	StopExerciseClickRewardSwing()
+	imageButton.Rotation = -ClickRewardConfig.SwingRotation
+	local swingTweenInfo = TweenInfo.new(
+		ClickRewardConfig.SwingDuration,
+		Enum.EasingStyle.Sine,
+		Enum.EasingDirection.InOut,
+		-1,
+		true
+	)
+	local swingTween = tweenService:Create(imageButton, swingTweenInfo, { Rotation = ClickRewardConfig.SwingRotation })
+	clickRewardSwingTween = swingTween
+	swingTween:Play()
+end
+
+local function ShowExerciseClickRewardButton()
+	local imageButton = GetExerciseClickRewardButton()
+	if imageButton == nil then
+		return
+	end
+
+	HideExerciseClickRewardButton()
+	local randomX = clickRewardRandom:NextNumber(ClickRewardConfig.EdgePaddingScale, 1 - ClickRewardConfig.EdgePaddingScale)
+	local randomY = clickRewardRandom:NextNumber(ClickRewardConfig.EdgePaddingScale, 1 - ClickRewardConfig.EdgePaddingScale)
+	imageButton.AnchorPoint = Vector2.new(0.5, 0.5)
+	imageButton.Position = UDim2.fromScale(randomX, randomY)
+	imageButton.Visible = true
+	imageButton.Active = true
+	clickRewardButtonVisible = true
+	clickRewardButtonConnection = imageButton.Activated:Connect(OnExerciseClickRewardButtonActivated)
+	PlayExerciseClickRewardSwing(imageButton)
+end
+
+ShowExerciseClickRewardPopup = function(addExp: number)
+	local popupPosition = clickRewardPendingPopupPosition
+	if popupPosition == nil then
+		return
+	end
+
+	local popupText = GetExerciseClickRewardPopupText()
+	if popupText == nil then
+		return
+	end
+
+	StopExerciseClickRewardPopupTweens()
+	local imageButton = GetExerciseClickRewardButton()
+	local stroke = popupText:FindFirstChild("PopupStroke") :: UIStroke?
+	local imageLabel = popupText:FindFirstChild("ImageLabel") :: ImageLabel?
+	local targetPosition = UDim2.new(
+		popupPosition.X.Scale,
+		popupPosition.X.Offset,
+		popupPosition.Y.Scale,
+		popupPosition.Y.Offset + ClickRewardConfig.PopupFloatOffsetY
+	)
+
+	popupText.AnchorPoint = Vector2.new(0.5, 0.5)
+	popupText.Position = popupPosition
+	if imageButton ~= nil and popupText.ZIndex <= imageButton.ZIndex then
+		popupText.ZIndex = imageButton.ZIndex + 1
+	end
+	popupText.Text = string.format("+%s", NumberExtension.FormatBigNumberAA(addExp))
+	popupText.TextTransparency = 0
+	popupText.Visible = true
+	if stroke ~= nil then
+		stroke.Transparency = 0
+	end
+	if imageLabel ~= nil then
+		imageLabel.ImageTransparency = 0
+	end
+
+	local moveTweenInfo = TweenInfo.new(ClickRewardConfig.PopupLifetime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local fadeTweenInfo = TweenInfo.new(
+		ClickRewardConfig.PopupLifetime * (1 - ClickRewardConfig.PopupFadeStartRatio),
+		Enum.EasingStyle.Quad,
+		Enum.EasingDirection.Out
+	)
+	clickRewardPopupMoveTween = tweenService:Create(popupText, moveTweenInfo, { Position = targetPosition })
+	clickRewardPopupTextTween = tweenService:Create(popupText, fadeTweenInfo, { TextTransparency = 1 })
+	if stroke ~= nil then
+		clickRewardPopupStrokeTween = tweenService:Create(stroke, fadeTweenInfo, { Transparency = 1 })
+	end
+	if imageLabel ~= nil then
+		clickRewardPopupImageTween = tweenService:Create(imageLabel, fadeTweenInfo, { ImageTransparency = 1 })
+	end
+
+	local moveTween = clickRewardPopupMoveTween :: Tween
+	moveTween.Completed:Connect(function(playbackState: Enum.PlaybackState)
+		if playbackState == Enum.PlaybackState.Completed and clickRewardPopupMoveTween == moveTween then
+			HideExerciseClickRewardPopup()
+		end
+	end)
+
+	moveTween:Play()
+	task.delay(ClickRewardConfig.PopupLifetime * ClickRewardConfig.PopupFadeStartRatio, function()
+		if clickRewardPopupMoveTween ~= moveTween then
+			return
+		end
+		if clickRewardPopupTextTween ~= nil then
+			clickRewardPopupTextTween:Play()
+		end
+		if clickRewardPopupStrokeTween ~= nil then
+			clickRewardPopupStrokeTween:Play()
+		end
+		if clickRewardPopupImageTween ~= nil then
+			clickRewardPopupImageTween:Play()
+		end
+	end)
+	clickRewardPendingPopupPosition = nil
+	clickRewardPendingMinAddExp = 0
+end
+
+local function TryShowExerciseClickRewardPopup(addExp: number): boolean
+	if clickRewardExpectedServerAddExp > 0 and addExp >= clickRewardExpectedServerAddExp then
+		clickRewardExpectedServerAddExp = 0
+		return true
+	end
+	if clickRewardPendingPopupPosition == nil or addExp < clickRewardPendingMinAddExp then
+		return false
+	end
+	local showExerciseClickRewardPopup = ShowExerciseClickRewardPopup
+	if showExerciseClickRewardPopup ~= nil then
+		showExerciseClickRewardPopup(addExp)
+	end
+	return true
+end
+
+QueueNextExerciseClickReward = function(clientSessionId: number)
+	clickRewardSequenceId += 1
+	local sequenceId = clickRewardSequenceId
+	local delaySeconds = clickRewardRandom:NextNumber(ClickRewardConfig.DelayMin, ClickRewardConfig.DelayMax)
+	task.delay(delaySeconds, function()
+		if sequenceId ~= clickRewardSequenceId then
+			return
+		end
+		if not isExercising or exerciseClientSessionId ~= clientSessionId then
+			return
+		end
+		if clickRewardButtonVisible then
+			return
+		end
+		ShowExerciseClickRewardButton()
+	end)
+end
+
 local function ReleaseExerciseCharacterPhysics()
 	local humanoid = exerciseHumanoid
 	local hrp = exerciseHrp
@@ -596,6 +895,7 @@ local function StopExerciseInternal()
 
 	-- 关闭锻炼 UI
 	CleanupExerciseScaleBar()
+	CleanupExerciseClickReward()
 	UIManager.CloseWindow(UIManager.WindowId.ExEquipFrame)
 	CleanupExercisePopups()
 
@@ -910,7 +1210,12 @@ local function StartExercise(equipId: number)
 
 	-- 打开锻炼 UI
 	UIManager.OpenWindow(UIManager.WindowId.ExEquipFrame)
+	CleanupExerciseClickReward()
 	UpdateExerciseInfoView()
+	local queueNextExerciseClickReward = QueueNextExerciseClickReward
+	if queueNextExerciseClickReward ~= nil then
+		queueNextExerciseClickReward(clientSessionId)
+	end
 
 	-- 站立稳定：前几帧保持 CFrame 精确定位，防止物理引擎推开人物
 	local settleFrames: number = 0
@@ -1011,7 +1316,9 @@ function ExEquipManager.Init()
 		local previousLv = if localPlayerInfo ~= nil then localPlayerInfo.jumpPower.lv else jumpPowerInfo.lv
 		ClientGameInfo.UpdateJumpPower(jumpPowerInfo, addExp)
 		UpdateExerciseInfoView()
-		ShowExerciseJumpPowerPopup(addExp)
+		if not TryShowExerciseClickRewardPopup(addExp) then
+			ShowExerciseJumpPowerPopup(addExp)
+		end
 		if jumpPowerInfo.lv > previousLv then
 			NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.ExEquipUseFinished)
 		end

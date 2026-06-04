@@ -134,6 +134,8 @@ local requestClaimGroupRewardEvent: RemoteEvent? = remoteEventsFolder:FindFirstC
 -- 锻炼模式
 local requestStartExerciseEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestStartExercise") :: RemoteEvent?
 local requestStopExerciseEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestStopExercise") :: RemoteEvent?
+local requestExerciseClickRewardEvent: RemoteEvent? =
+	remoteEventsFolder:FindFirstChild("RequestExerciseClickReward") :: RemoteEvent?
 local notifyExerciseStartEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyExerciseStart") :: RemoteEvent?
 local notifyExerciseEndEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyExerciseEnd") :: RemoteEvent?
 
@@ -961,6 +963,21 @@ function NetMsg.ConnectRequestStopExercise(callback: (player: Player) -> ())
 		return
 	end
 	requestStopExerciseEvent.OnServerEvent:Connect(callback)
+end
+
+-- 锻炼模式：客户端请求点击奖励
+function NetMsg.FireRequestExerciseClickReward()
+	if requestExerciseClickRewardEvent == nil then
+		return
+	end
+	requestExerciseClickRewardEvent:FireServer()
+end
+
+function NetMsg.ConnectRequestExerciseClickReward(callback: (player: Player) -> ())
+	if requestExerciseClickRewardEvent == nil then
+		return
+	end
+	requestExerciseClickRewardEvent.OnServerEvent:Connect(callback)
 end
 
 -- 锻炼模式：服务端通知开始锻炼
