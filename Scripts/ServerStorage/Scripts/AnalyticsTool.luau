@@ -8,6 +8,7 @@ local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
 local GameAnalytics = require(replicatedStorage:FindFirstChild("GameAnalytics"))
 local httpService: HttpService = game:GetService("HttpService")
 local runService: RunService = game:GetService("RunService")
+local ServerConfig = require(script.Parent:WaitForChild("ServerConfig"))
 
 local PostCustomEventsInterval: number = 8
 local PostCustomEventsUrl: string = "https://cloudapi.sixcubeapis.com/log_event"
