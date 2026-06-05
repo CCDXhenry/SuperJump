@@ -73,6 +73,7 @@ function ClientGameInfo.InitPlayerInfo(
 			currentId = "",
 			ownedList = {},
 		},
+		buffInfo = localPlayerSaveInfo.buffInfo or GameConfig.CreateDefaultBuffInfo(),
 		homeSlot = localPlayerSaveInfo.homeSlot,
 		guideProgressInfo = guideProgressInfo,
 		currentGuideType = GameConfig.GuideType.None,
@@ -419,6 +420,25 @@ function ClientGameInfo.UpdateJetpackInventory(jetpackInventory: GameConfig.Jetp
 	if localPlayerInfo then
 		localPlayerInfo.jetpackInventory = jetpackInventory
 		ClientMsg.FireLocalPlayerJetpackInventoryUpdate(jetpackInventory)
+	end
+end
+
+function ClientGameInfo.UpdateBuffInfo(buffInfo: GameConfig.BuffInfo, grantBuffId: number?, shopBundleId: number?)
+	if localPlayerInfo then
+		localPlayerInfo.buffInfo = buffInfo
+		if shopBundleId ~= nil then
+			localPlayerInfo.ownedShopBundleMap[shopBundleId] = true
+		end
+		ClientMsg.FireLocalPlayerBuffInfoUpdate(buffInfo, grantBuffId, shopBundleId)
+		if grantBuffId ~= nil then
+			ClientMsg.FireShowAddRewardsTip({
+				{
+					rewardType = GameConfig.RewardType.Buff,
+					rewardId = grantBuffId,
+					rewardCount = 1,
+				},
+			})
+		end
 	end
 end
 

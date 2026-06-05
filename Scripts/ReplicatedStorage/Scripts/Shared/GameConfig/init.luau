@@ -17,6 +17,7 @@ local ExStatsDataModule = require(script:WaitForChild("ExStatsData"))
 local JetpackDataModule = require(script:WaitForChild("JetpackData"))
 local MonsterDataModule = require(script:WaitForChild("MonsterData"))
 local RebirthDataModule = require(script:WaitForChild("RebirthData"))
+local BuffDataModule = require(script:WaitForChild("BuffData"))
 local ShopBundleConfigurationDataModule = require(script:WaitForChild("ShopBundleConfigurationData"))
 local ShopBundleDataModule = require(script:WaitForChild("ShopBundleData"))
 
@@ -136,6 +137,7 @@ GameConfig.RewardType = {
 	Brainrot = 2,
 	Coil = 3,
 	LittleElfChest = 4,
+	Buff = 5,
 }
 
 GameConfig.CurrencyType = {
@@ -188,6 +190,16 @@ GameConfig.ItemType = {
 	LittleElfChest = 3,
 	ExEquip = 4,
 	Jetpack = 5,
+}
+
+GameConfig.BuffType = {
+	ExerciseEfficiency = 1,
+	CoinEfficiency = 2,
+}
+
+GameConfig.BuffMethod = {
+	Multiplier = 1,
+	ExtraValue = 2,
 }
 
 GameConfig.ModelGetSource = {
@@ -563,6 +575,52 @@ end
 
 export type LittleElfChestRewardPoolData = LittleElfChestRewardPoolEntry
 
+export type BuffData = {
+	id: number,
+	buffType: number,
+	buffMethod: number,
+	buffValue: number,
+	name_t: string,
+	describe_t: string,
+	iconImageId: string,
+}
+
+export type BuffInfo = {
+	ownedBuffMap: { [number]: boolean },
+}
+
+GameConfig.Buffs = BuffDataModule
+GameConfig.BuffIdMap = {} :: { [number]: BuffData }
+for _, buffRow in pairs(BuffDataModule) do
+	if type(buffRow) == "table" and type(buffRow.id) == "number" then
+		local buffData = buffRow :: BuffData
+		GameConfig.BuffIdMap[buffData.id] = buffData
+	end
+end
+
+function GameConfig.CreateDefaultBuffInfo(): BuffInfo
+	return {
+		ownedBuffMap = {},
+	}
+end
+
+function GameConfig.GetBuffMultiplier(buffInfo: BuffInfo?, buffType: number): number
+	if buffInfo == nil then
+		return 1
+	end
+	local multiplier = 1
+	for buffId, owned in pairs(buffInfo.ownedBuffMap) do
+		if owned ~= true then
+			continue
+		end
+		local buffData = GameConfig.BuffIdMap[buffId]
+		if buffData ~= nil and buffData.buffType == buffType and buffData.buffMethod == GameConfig.BuffMethod.Multiplier then
+			multiplier *= math.max(buffData.buffValue, 1)
+		end
+	end
+	return multiplier
+end
+
 export type ExEquipData = {
 	id: number,
 	resourceName: string,
@@ -886,13 +944,13 @@ GameConfig.JumpRunwayDesigner = {
 	-- 总局可跳次数；↑ 跑道更长、终局冲刺更晚；↓ 更短局
 	N_TOTAL_JUMPS = 3,
 	-- 单次起跳窗时长(s)；↑ 更容易踩线、节奏更松；↓ 更苛刻
-	T_WINDOW = 1.35,
+	T_WINDOW = 1.5,
 	-- 起跳输入最小间隔(s)；↑ 更防连点误触，↓ 响应更快
 	JUMP_INPUT_COOLDOWN_SEC = 0.5,
 	-- 窗内 Perfect 时间占比上限；↑ Perfect 窗口更宽
-	JUMP_WINDOW_RATING_PERFECT_MAX_FRAC = 1 / 3,
+	JUMP_WINDOW_RATING_PERFECT_MAX_FRAC = 2 / 3,
 	-- 窗内 Ok 时间占比上限；↑ Ok 窗口更宽
-	JUMP_WINDOW_RATING_OK_MAX_FRAC = 2 / 3,
+	JUMP_WINDOW_RATING_OK_MAX_FRAC = 4 / 5,
 	-- BeginLine 前固定 Perfect 距离（stud）；距起跳线 ≤ 此值时线前起跳直接 Perfect
 	RUNWAY_BEGIN_LINE_PERFECT_DISTANCE_STUDS = 10,
 	-- 起跳窗/链式 HUD 武装距离带（stud）；距地 ≤ 此值进入 Ok 预备区
@@ -1752,6 +1810,7 @@ export type PlayerSaveInfo = {
 	brainrotQueue: { BrainrotQueueItem },
 	exEquipInventory: ExEquipInventory,
 	jetpackInventory: JetpackInventory,
+	buffInfo: BuffInfo,
 	guideProgressInfo: GuideProgressSaveInfo,
 	discoveredIslandIds: { [string]: boolean }?,
 }
@@ -1825,6 +1884,7 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 			currentId = "",
 			ownedList = {},
 		},
+		buffInfo = GameConfig.CreateDefaultBuffInfo(),
 		guideProgressInfo = {
 			guideStepDoneMap = {},
 			appearedGuideTypeInfo = {},
@@ -1851,6 +1911,7 @@ export type ClientLocalPlayerSaveInfo = {
 	brainrotQueue: { BrainrotQueueItem },
 	exEquipInventory: ExEquipInventory,
 	jetpackInventory: JetpackInventory,
+	buffInfo: BuffInfo,
 	homeSlot: string,
 	guideProgressInfo: GuideProgressSaveInfo,
 }

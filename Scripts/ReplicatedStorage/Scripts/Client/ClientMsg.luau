@@ -47,6 +47,7 @@ local function EnsureBindableEvent(eventName: string): BindableEvent
 	return created
 end
 
+local localPlayerBuffInfoUpdateEvent: BindableEvent = EnsureBindableEvent("LocalPlayerBuffInfoUpdate")
 local jumpRunWayEnterEscapeHudModeEvent: BindableEvent =
 	EnsureBindableEvent("JumpRunWayEnterEscapeHudMode")
 local jumpRunWayStartEscapeRedScreenEvent: BindableEvent =
@@ -255,6 +256,14 @@ function ClientMsg.ConnectLocalPlayerJetpackInventoryUpdate(callback: (inventory
 	if localPlayerJetpackInventoryUpdateEvent then
 		localPlayerJetpackInventoryUpdateEvent.Event:Connect(callback)
 	end
+end
+
+function ClientMsg.FireLocalPlayerBuffInfoUpdate(buffInfo: GameConfig.BuffInfo, grantBuffId: number?, shopBundleId: number?)
+	localPlayerBuffInfoUpdateEvent:Fire(buffInfo, grantBuffId, shopBundleId)
+end
+
+function ClientMsg.ConnectLocalPlayerBuffInfoUpdate(callback: (buffInfo: GameConfig.BuffInfo, grantBuffId: number?, shopBundleId: number?) -> ())
+	localPlayerBuffInfoUpdateEvent.Event:Connect(callback)
 end
 
 function ClientMsg.ConnectShowRescuePopup(callback: () -> ())

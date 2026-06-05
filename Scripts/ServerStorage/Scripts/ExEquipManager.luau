@@ -232,6 +232,11 @@ local function GetMoneyCount(playerInfo: GameConfig.PlayerInfo): number
 	return playerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
 end
 
+local function GetExerciseJumpPowerInterval(playerInfo: GameConfig.PlayerInfo): number
+	local multiplier = GameConfig.GetBuffMultiplier(playerInfo.buffInfo, GameConfig.BuffType.ExerciseEfficiency)
+	return EXERCISE_JUMP_POWER_INTERVAL / multiplier
+end
+
 -- 处理客户端购买器材请求
 function ExEquipManager.OnRequestBuyExEquip(player: Player, equipId: number)
 	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
@@ -418,7 +423,7 @@ function ExEquipManager.OnRequestStartExercise(player: Player, equipId: number)
 	task.spawn(function()
 		local capturedSessionId = sessionId
 		while exerciseSessionMap[userId] == capturedSessionId do
-			task.wait(EXERCISE_JUMP_POWER_INTERVAL)
+			task.wait(GetExerciseJumpPowerInterval(playerInfo))
 			if exerciseSessionMap[userId] ~= capturedSessionId then
 				break
 			end

@@ -34,6 +34,11 @@ local function GrantShopBundleReward(
 		return
 	end
 
+	if reward.rewardType == GameConfig.RewardType.Buff then
+		ServerGameInfo.GrantBuff(player, reward.rewardId, shopBundleId)
+		return
+	end
+
 	local rewardCount = reward.rewardCount or 1
 	if rewardCount <= 0 then
 		return

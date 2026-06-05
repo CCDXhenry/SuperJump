@@ -317,6 +317,11 @@ local function OnRenderStepped(deltaTime: number)
 				if chestData and chestData.iconImageId and chestData.iconImageId ~= "" then
 					ShowAddRewardsTip(chestData.iconImageId, rewardInfo.rewardCount)
 				end
+			elseif rewardInfo.rewardType == GameConfig.RewardType.Buff then
+				local buffData = GameConfig.BuffIdMap[rewardInfo.rewardId]
+				if buffData and buffData.iconImageId and buffData.iconImageId ~= "" then
+					ShowAddRewardsTip(buffData.iconImageId, rewardInfo.rewardCount)
+				end
 			end
 		end
 		lastShowedAddRewardsTipTime = nowTime

@@ -93,6 +93,7 @@ local notifyPlayerCarriedUpdateEvent: RemoteEvent = remoteEventsFolder:FindFirst
 local notifyPlayerCurrencyUpdateEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("NotifyPlayerCurrencyUpdate") :: RemoteEvent
 local requestClaimOfflineRewardEvent: RemoteEvent? = GetOrCreateRemoteEvent("RequestClaimOfflineReward")
 local notifyOfflineRewardInfoEvent: RemoteEvent? = GetOrCreateRemoteEvent("NotifyOfflineRewardInfo")
+local notifyPlayerBuffInfoUpdateEvent: RemoteEvent? = GetOrCreateRemoteEvent("NotifyPlayerBuffInfoUpdate")
 
 -- Gifting
 local requestSendGiftEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestSendGift") :: RemoteEvent
@@ -382,6 +383,20 @@ function NetMsg.ConnectNotifyOfflineRewardInfo(callback: (offlineRewardInfo: Gam
 		return
 	end
 	notifyOfflineRewardInfoEvent.OnClientEvent:Connect(callback)
+end
+
+function NetMsg.FireNotifyPlayerBuffInfoUpdate(player: Player, buffInfo: GameConfig.BuffInfo, grantBuffId: number?, shopBundleId: number?)
+	if notifyPlayerBuffInfoUpdateEvent == nil then
+		return
+	end
+	notifyPlayerBuffInfoUpdateEvent:FireClient(player, buffInfo, grantBuffId, shopBundleId)
+end
+
+function NetMsg.ConnectNotifyPlayerBuffInfoUpdate(callback: (buffInfo: GameConfig.BuffInfo, grantBuffId: number?, shopBundleId: number?) -> ())
+	if notifyPlayerBuffInfoUpdateEvent == nil then
+		return
+	end
+	notifyPlayerBuffInfoUpdateEvent.OnClientEvent:Connect(callback)
 end
 
 -- 客户端请求从家园展台拾取模型

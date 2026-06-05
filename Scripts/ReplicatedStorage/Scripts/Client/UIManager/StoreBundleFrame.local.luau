@@ -24,6 +24,8 @@ local MAX_CHEST_POOL_SHOW_COUNT = 7
 local SHOP_BUNDLE_TYPE_MIX = 1
 local SHOP_BUNDLE_TYPE_CHEST_BUNDLE = 2
 local SHOP_BUNDLE_TYPE_SINGLE = 3
+local SHOP_BUNDLE_TYPE_BUFF = 4
+local BUFF_BUNDLE_PAGE_SIZE = 2
 
 local thisFrame = script.Parent :: Frame
 local windowId = thisFrame:GetAttribute("WindowId") :: string
@@ -33,8 +35,10 @@ local uiListLayout = scrollingFrame:FindFirstChildOfClass("UIListLayout") :: UIL
 local mixBundleTemplate = scrollingFrame:WaitForChild("MixBundleFrame1") :: Frame
 local chestBundleTemplate = (scrollingFrame:FindFirstChild("ChestBundleFrame1") or scrollingFrame:WaitForChild("LittleElfChestBundleFrame1")) :: Frame
 local singleBundleTemplate = scrollingFrame:WaitForChild("SingleBundleFrame1") :: Frame
+local buffBundleTemplate = scrollingFrame:WaitForChild("BuffBundleFrame1") :: Frame
 
 local bundleFramesById: { [number]: Frame } = {}
+local buffBundleFrames: { Frame } = {}
 local isWindowClosed = false
 
 if closeButton then
@@ -113,11 +117,7 @@ local function getBundleBeforeDiscountPrice(bundleConfig: GameConfig.ShopBundleC
 	return 0
 end
 
-local function shouldHideBundleForPaidRandomPolicy(
-	bundleData: GameConfig.ShopBundleData,
-	playerInfo: GameConfig.ClientLocalPlayerInfo
-): boolean
-	
+local function shouldHideBundleForPaidRandomPolicy(bundleData: GameConfig.ShopBundleData, playerInfo: GameConfig.ClientLocalPlayerInfo): boolean
 	if bundleData.config.arePaidRandomItemsRestricted == 0 then
 		return false
 	end
@@ -168,6 +168,14 @@ local function setRewardText(textLabel: TextLabel, reward: GameConfig.RewardInfo
 		end
 	end
 
+	if reward.rewardType == GameConfig.RewardType.Buff then
+		local buffData = GameConfig.BuffIdMap[reward.rewardId]
+		if buffData then
+			localizeText(textLabel, buffData.name_t)
+			return
+		end
+	end
+
 	localizeText(textLabel, NumberExtension.FormatBigNumberAA(reward.rewardCount))
 end
 
@@ -189,6 +197,11 @@ local function setRewardIcon(iconLabel: ImageLabel, reward: GameConfig.RewardInf
 	if reward.rewardType == GameConfig.RewardType.LittleElfChest then
 		local chestData = GameConfig.LittleElfChestIdMap[reward.rewardId]
 		iconLabel.Image = if chestData then chestData.iconImageId else ""
+		return
+	end
+	if reward.rewardType == GameConfig.RewardType.Buff then
+		local buffData = GameConfig.BuffIdMap[reward.rewardId]
+		iconLabel.Image = if buffData then buffData.iconImageId else ""
 		return
 	end
 	iconLabel.Image = ""
@@ -214,10 +227,21 @@ local function getRewardDisplayName(reward: GameConfig.RewardInfo): string
 		return if chestData then chestData.name_t else "Chest"
 	end
 
+	if reward.rewardType == GameConfig.RewardType.Buff then
+		local buffData = GameConfig.BuffIdMap[reward.rewardId]
+		return if buffData then buffData.name_t else "Buff"
+	end
+
 	return NumberExtension.FormatBigNumberAA(reward.rewardCount)
 end
 
 local function getRewardDescription(reward: GameConfig.RewardInfo): string
+	if reward.rewardType == GameConfig.RewardType.Buff then
+		local buffData = GameConfig.BuffIdMap[reward.rewardId]
+		if buffData and buffData.describe_t and buffData.describe_t ~= "" then
+			return buffData.describe_t
+		end
+	end
 	if reward.rewardType == GameConfig.RewardType.Coil then
 		local coilData = GameConfig.CoilIdMap[reward.rewardId]
 		if coilData and coilData.description_t and coilData.description_t ~= "" then
@@ -392,6 +416,76 @@ local function createSingleBundleFrame(bundleData: GameConfig.ShopBundleData, in
 	bindProductPurchase(buyButton, bundleConfig.productId1)
 end
 
+local function setupBuffBundleSlot(bundleData: GameConfig.ShopBundleData, buffFrame: Frame)
+	local bundleConfig = bundleData.config
+	bundleFramesById[bundleConfig.id] = buffFrame
+	buffFrame.Visible = true
+
+	local rewards = getBundleRewardsByProductIndex(bundleData, 1)
+	local buffReward = rewards[1]
+	for _, reward in ipairs(rewards) do
+		if reward.rewardType == GameConfig.RewardType.Buff then
+			buffReward = reward
+			break
+		end
+	end
+
+	local bundleNameLabel = buffFrame:WaitForChild("BundleNameLabel") :: TextLabel
+	localizeText(bundleNameLabel, bundleConfig.name_t)
+	bundleNameLabel.TextColor3 = getBundleNameColor(bundleConfig)
+
+	local bundleDescribeLabel = buffFrame:WaitForChild("BundleDescribeLabel") :: TextLabel
+	localizeText(bundleDescribeLabel, if buffReward then getRewardDescription(buffReward) else "")
+
+	local bgImageLabel = buffFrame:FindFirstChild("BgImageLabel") :: ImageLabel?
+	if bgImageLabel then
+		bgImageLabel.Image = bundleConfig.bgIconId
+	end
+
+	local imageLabel = buffFrame:FindFirstChild("ImageLabel") :: ImageLabel?
+	if imageLabel then
+		if buffReward then
+			setRewardIcon(imageLabel, buffReward)
+		else
+			imageLabel.Image = ""
+		end
+	end
+
+	local buyButton = buffFrame:WaitForChild("BuyButton") :: ImageButton
+	local buyTextLabel = buyButton:WaitForChild("TextLabel") :: TextLabel
+	localizeText(buyTextLabel, tostring(bundleConfig.price1))
+	bindProductPurchase(buyButton, bundleConfig.productId1)
+end
+
+local function createBuffBundleFrames(buffBundleDataList: { GameConfig.ShopBundleData }, layoutStartIndex: number): number
+	local createdCount = 0
+	for listIndex, bundleData in ipairs(buffBundleDataList) do
+		local pageIndex = math.ceil(listIndex / BUFF_BUNDLE_PAGE_SIZE)
+		local slotIndex = ((listIndex - 1) % BUFF_BUNDLE_PAGE_SIZE) + 1
+		local pageFrame = buffBundleFrames[pageIndex]
+		if pageFrame == nil then
+			pageFrame = buffBundleTemplate:Clone()
+			pageFrame.Name = `BuffBundleFrame{pageIndex}`
+			pageFrame.LayoutOrder = layoutStartIndex + pageIndex - 1
+			pageFrame.Visible = true
+			pageFrame.Parent = scrollingFrame
+			buffBundleFrames[pageIndex] = pageFrame
+			createdCount += 1
+
+			for hiddenSlotIndex = 1, BUFF_BUNDLE_PAGE_SIZE do
+				local hiddenBuffFrame = pageFrame:FindFirstChild(`BuffFrame{hiddenSlotIndex}`) :: Frame?
+				if hiddenBuffFrame then
+					hiddenBuffFrame.Visible = false
+				end
+			end
+		end
+
+		local buffFrame = pageFrame:WaitForChild(`BuffFrame{slotIndex}`) :: Frame
+		setupBuffBundleSlot(bundleData, buffFrame)
+	end
+	return createdCount
+end
+
 local function createChestBundleFrame(bundleData: GameConfig.ShopBundleData, index: number)
 	local frame = chestBundleTemplate:Clone()
 	frame.Name = `ChestBundleFrame{index}`
@@ -557,6 +651,7 @@ end
 mixBundleTemplate.Visible = false
 chestBundleTemplate.Visible = false
 singleBundleTemplate.Visible = false
+buffBundleTemplate.Visible = false
 
 local shopBundleFramesBuilt = false
 
@@ -572,6 +667,9 @@ local function detachTemplatesFromLayout()
 	if singleBundleTemplate.Parent == scrollingFrame then
 		singleBundleTemplate.Parent = nil
 	end
+	if buffBundleTemplate.Parent == scrollingFrame then
+		buffBundleTemplate.Parent = nil
+	end
 end
 
 local function clearShopBundleFrames()
@@ -581,6 +679,12 @@ local function clearShopBundleFrames()
 		end
 		bundleFramesById[bundleId] = nil
 	end
+	for _, frame in ipairs(buffBundleFrames) do
+		if frame.Parent ~= nil then
+			frame:Destroy()
+		end
+	end
+	table.clear(buffBundleFrames)
 end
 
 local function buildShopBundleFrames(): boolean
@@ -590,6 +694,8 @@ local function buildShopBundleFrames(): boolean
 	end
 	clearShopBundleFrames()
 	local visibleIndex = 0
+	local buffBundleDataList: { GameConfig.ShopBundleData } = {}
+	local buffLayoutStartIndex = 0
 	for _, bundleId in ipairs(GameConfig.ShopBundleList) do
 		local bundleData = GameConfig.ShopBundleById[bundleId]
 		if not bundleData then
@@ -606,7 +712,15 @@ local function buildShopBundleFrames(): boolean
 			createChestBundleFrame(bundleData, visibleIndex)
 		elseif bundleType == SHOP_BUNDLE_TYPE_SINGLE then
 			createSingleBundleFrame(bundleData, visibleIndex)
+		elseif bundleType == SHOP_BUNDLE_TYPE_BUFF then
+			if buffLayoutStartIndex == 0 then
+				buffLayoutStartIndex = visibleIndex
+			end
+			table.insert(buffBundleDataList, bundleData)
 		end
+	end
+	if #buffBundleDataList > 0 then
+		createBuffBundleFrames(buffBundleDataList, buffLayoutStartIndex)
 	end
 	return true
 end
@@ -641,6 +755,13 @@ task.defer(function()
 end)
 
 ClientMsg.ConnectBrainrotQueueUpdate(function(_queue: { GameConfig.BrainrotQueueItem })
+	if isWindowClosed then
+		return
+	end
+	updateRepurchaseMask()
+end)
+
+ClientMsg.ConnectLocalPlayerBuffInfoUpdate(function(_buffInfo: GameConfig.BuffInfo, _grantBuffId: number?, _shopBundleId: number?)
 	if isWindowClosed then
 		return
 	end

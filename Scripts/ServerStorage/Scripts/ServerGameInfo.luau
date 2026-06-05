@@ -104,6 +104,10 @@ local function HasUniquePaidProductForItem(itemType: number, itemId: number, pro
 	return false
 end
 
+local function ShouldApplyCoinEfficiencyBuff(reason: number): boolean
+	return reason ~= GameConfig.ItemCountChangeReason.GainFromPurchase and reason ~= GameConfig.ItemCountChangeReason.GainFromGMCommand
+end
+
 local analyticsToolModule: any = nil
 local function analyticsTool(): any
 	if analyticsToolModule == nil then
@@ -182,6 +186,7 @@ function ServerGameInfo.InitPlayerInfo(
 			currentId = "",
 			ownedList = {},
 		},
+		buffInfo = playerSaveInfo.buffInfo or GameConfig.CreateDefaultBuffInfo(),
 		guideProgressInfo = playerSaveInfo.guideProgressInfo or {
 			guideStepDoneMap = {},
 			appearedGuideTypeInfo = {},
@@ -218,6 +223,7 @@ function ServerGameInfo.InitPlayerInfo(
 		brainrotQueue = playerInfo.brainrotQueue,
 		exEquipInventory = playerInfo.exEquipInventory,
 		jetpackInventory = playerInfo.jetpackInventory,
+		buffInfo = playerInfo.buffInfo,
 		homeSlot = playerInfo.homeSlot,
 		guideProgressInfo = playerInfo.guideProgressInfo,
 	}
@@ -323,6 +329,7 @@ function ServerGameInfo.CreatePlayerSaveInfoByPlayerInfo(playerInfo: GameConfig.
 		discoveredIslandIds = playerInfo.discoveredIslandIds,
 		exEquipInventory = playerInfo.exEquipInventory,
 		jetpackInventory = playerInfo.jetpackInventory,
+		buffInfo = playerInfo.buffInfo,
 	}
 end
 
@@ -720,6 +727,11 @@ function ServerGameInfo.UpdatePlayerCurrency(player: Player, currencyType: numbe
 		return
 	end
 
+	if currencyType == GameConfig.CurrencyType.Coin and addAmount > 0 and ShouldApplyCoinEfficiencyBuff(reason) then
+		local multiplier = GameConfig.GetBuffMultiplier(playerInfo.buffInfo, GameConfig.BuffType.CoinEfficiency)
+		addAmount = math.ceil(addAmount * multiplier)
+	end
+
 	local currencyKey: string = tostring(currencyType)
 	local currentAmount: number = playerInfo.currencies[currencyKey] or 0
 	local newAmount: number = math.max(0, currentAmount + addAmount)
@@ -728,6 +740,21 @@ function ServerGameInfo.UpdatePlayerCurrency(player: Player, currencyType: numbe
 
 	--通知客户端
 	NetMsg.FireNotifyPlayerCurrencyUpdate(player, currencyType, newAmount, addAmount, reason)
+end
+
+function ServerGameInfo.GrantBuff(player: Player, buffId: number, shopBundleId: number?): boolean
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return false
+	end
+	local buffData = GameConfig.BuffIdMap[buffId]
+	if buffData == nil then
+		return false
+	end
+	playerInfo.buffInfo.ownedBuffMap[buffId] = true
+	playerInfo.playerInfoChanged = true
+	NetMsg.FireNotifyPlayerBuffInfoUpdate(player, playerInfo.buffInfo, buffId, shopBundleId)
+	return true
 end
 
 --更新/设置玩家家园模型未领取收益

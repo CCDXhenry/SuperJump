@@ -221,6 +221,9 @@ PreloadAssets = function()
 	table.insert(otherImageList, GameConfig.RbImage)
 	table.insert(otherImageList, GameConfig.DecelerationOnImage)
 	table.insert(otherImageList, GameConfig.DecelerationOffImage)
+	for _, buffData in pairs(GameConfig.Buffs) do
+		AddImage(buffData.iconImageId)
+	end
 
 	for _, otherImage: string in otherImageList do
 		AddImage(otherImage)
@@ -312,6 +315,10 @@ NetMsg.ConnectNotifyOfflineRewardInfo(function(offlineRewardInfo: GameConfig.Off
 	elseif UIManager.GetGameScreenGui() ~= nil then
 		UIManager.CloseWindow(UIManager.WindowId.OfflineRewards)
 	end
+end)
+
+NetMsg.ConnectNotifyPlayerBuffInfoUpdate(function(buffInfo: GameConfig.BuffInfo, grantBuffId: number?, shopBundleId: number?)
+	ClientGameInfo.UpdateBuffInfo(buffInfo, grantBuffId, shopBundleId)
 end)
 
 -- 监听网络层出的游戏提示
