@@ -322,6 +322,11 @@ local function OnRenderStepped(deltaTime: number)
 				if buffData and buffData.iconImageId and buffData.iconImageId ~= "" then
 					ShowAddRewardsTip(buffData.iconImageId, rewardInfo.rewardCount)
 				end
+			elseif rewardInfo.rewardType == GameConfig.RewardType.Jetpack then
+				local jetpackData = GameConfig.JetpackDataMap[rewardInfo.rewardId]
+				if jetpackData and jetpackData.iconImageId and jetpackData.iconImageId ~= "" then
+					ShowAddRewardsTip(jetpackData.iconImageId, rewardInfo.rewardCount)
+				end
 			end
 		end
 		lastShowedAddRewardsTipTime = nowTime

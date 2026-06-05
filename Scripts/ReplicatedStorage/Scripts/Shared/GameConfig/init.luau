@@ -152,6 +152,7 @@ GameConfig.RewardType = {
 	Coil = 3,
 	LittleElfChest = 4,
 	Buff = 5,
+	Jetpack = 6,
 }
 
 GameConfig.CurrencyType = {
@@ -163,7 +164,7 @@ GameConfig.CostType = {
 	Rb = 2,
 	CoinOrRb = 3,
 	GroupReward = 4,
-	
+	StorePurchase = 5,
 }
 
 GameConfig.SkillType = {

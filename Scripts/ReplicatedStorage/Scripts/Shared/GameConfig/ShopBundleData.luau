@@ -24,7 +24,7 @@ return {
 		["productIndex"] = 1,
 	},
 	[4] = {
-		["rewardType"] = 4,
+		["rewardType"] = 6,
 		["rewardLv"] = 1,
 		["id"] = 2,
 		["rewardCount"] = 1,

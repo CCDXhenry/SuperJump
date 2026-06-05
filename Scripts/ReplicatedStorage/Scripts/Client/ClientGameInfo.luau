@@ -419,8 +419,28 @@ end
 -- 火箭背包库存更新
 function ClientGameInfo.UpdateJetpackInventory(jetpackInventory: GameConfig.JetpackInventory)
 	if localPlayerInfo then
+		local newlyOwnedJetpackIds: { number } = {}
+		for jetpackId, isOwned in pairs(jetpackInventory.ownedList) do
+			if isOwned and not localPlayerInfo.jetpackInventory.ownedList[jetpackId] then
+				local jetpackIdNumber = tonumber(jetpackId)
+				if jetpackIdNumber ~= nil then
+					table.insert(newlyOwnedJetpackIds, jetpackIdNumber)
+				end
+			end
+		end
+
 		localPlayerInfo.jetpackInventory = jetpackInventory
 		ClientMsg.FireLocalPlayerJetpackInventoryUpdate(jetpackInventory)
+
+		for _, jetpackId in ipairs(newlyOwnedJetpackIds) do
+			ClientMsg.FireShowAddRewardsTip({
+				{
+					rewardType = GameConfig.RewardType.Jetpack,
+					rewardId = jetpackId,
+					rewardCount = 1,
+				},
+			})
+		end
 	end
 end
 

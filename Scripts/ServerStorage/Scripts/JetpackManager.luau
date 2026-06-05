@@ -85,6 +85,8 @@ function JetpackManager.OnRequestBuyJetpack(player: Player, jetpackId: number)
 			rejectReason = "rb_purchase_only"
 		elseif jetpackData.costType == GameConfig.CostType.GroupReward then
 			rejectReason = "group_reward_only"
+		elseif jetpackData.costType == GameConfig.CostType.StorePurchase then
+			rejectReason = "store_purchase_only"
 		end
 		LogInfo(string.format("BuyRejected userId=%d reason=%s jetpackId=%d", player.UserId, rejectReason, jetpackId))
 	end

@@ -53,6 +53,8 @@ local function IsJetpackAffordable(jetpackData: GameConfig.JetpackData): boolean
 		return coinCount >= jetpackData.costCoin
 	elseif jetpackData.costType == GameConfig.CostType.GroupReward then
 		return false -- 群组奖励由服务器端验证
+	elseif jetpackData.costType == GameConfig.CostType.StorePurchase then
+		return false -- 商城购买通过 StoreBundleFrame 处理
 	end
 
 	return false
@@ -96,8 +98,9 @@ local function RefreshInfoFrame()
 	local buyBtn: ImageButton = infoFrame:FindFirstChild("BuyBtn") :: ImageButton
 	local buyBtn31: ImageButton = infoFrame:FindFirstChild("BuyBtn3-1") :: ImageButton
 	local buyBtn32: ImageButton = infoFrame:FindFirstChild("BuyBtn3-2") :: ImageButton
-	local groupRewardText: TextLabel = infoFrame:FindFirstChild("GroupRewardText") :: TextLabel
-	local groupRewardBtn: ImageButton = infoFrame:FindFirstChild("GroupRewardBtn") :: ImageButton
+	local rewardText: TextLabel = infoFrame:FindFirstChild("RewardText") :: TextLabel
+	local rewardBtn: ImageButton = infoFrame:FindFirstChild("RewardBtn") :: ImageButton
+	local rewardBtnText: TextLabel = rewardBtn:FindFirstChild("Text") :: TextLabel
 	local equipBtn: ImageButton = infoFrame:FindFirstChild("EquipBtn") :: ImageButton
 	local equip: ImageLabel = equipBtn:FindFirstChild("Equip") :: ImageLabel
 	local equipped: ImageLabel = equipBtn:FindFirstChild("Equipped") :: ImageLabel
@@ -109,14 +112,40 @@ local function RefreshInfoFrame()
 			buyBtn.Visible = false
 			buyBtn31.Visible = false
 			buyBtn32.Visible = false
-			groupRewardText.Visible = true
-			groupRewardBtn.Visible = true
+			rewardText.Visible = true
+			rewardBtn.Visible = true
+			TranslationTool.CustomAutoLocalizeTextLabel(
+				rewardText,
+				GameTexts.JetpackShopGroupRewardHint.source,
+				GameTexts.JetpackShopGroupRewardHint.key
+			)
+			TranslationTool.CustomAutoLocalizeTextLabel(
+				rewardBtnText,
+				GameTexts.JetpackShopRewardReceive.source,
+				GameTexts.JetpackShopRewardReceive.key
+			)
+		elseif jetpackData.costType == GameConfig.CostType.StorePurchase then
+			buyBtn.Visible = false
+			buyBtn31.Visible = false
+			buyBtn32.Visible = false
+			rewardText.Visible = true
+			rewardBtn.Visible = true
+			TranslationTool.CustomAutoLocalizeTextLabel(
+				rewardText,
+				GameTexts.JetpackShopStorePurchaseHint.source,
+				GameTexts.JetpackShopStorePurchaseHint.key
+			)
+			TranslationTool.CustomAutoLocalizeTextLabel(
+				rewardBtnText,
+				GameTexts.JetpackShopRewardShop.source,
+				GameTexts.JetpackShopRewardShop.key
+			)
 		elseif jetpackData.costType == GameConfig.CostType.CoinOrRb then
 			buyBtn.Visible = false
 			buyBtn31.Visible = true
 			buyBtn32.Visible = true
-			groupRewardText.Visible = false
-			groupRewardBtn.Visible = false
+			rewardText.Visible = false
+			rewardBtn.Visible = false
 
 			local priceText31: TextLabel = buyBtn31:FindFirstChild("Price") :: TextLabel
 			local priceText32: TextLabel = buyBtn32:FindFirstChild("Price") :: TextLabel
@@ -129,8 +158,8 @@ local function RefreshInfoFrame()
 			buyBtn.Visible = true
 			buyBtn31.Visible = false
 			buyBtn32.Visible = false
-			groupRewardText.Visible = false
-			groupRewardBtn.Visible = false
+			rewardText.Visible = false
+			rewardBtn.Visible = false
 
 			local rb: ImageLabel = buyBtn:FindFirstChild("Rb") :: ImageLabel
 			local coin: ImageLabel = buyBtn:FindFirstChild("Coin") :: ImageLabel
@@ -152,8 +181,8 @@ local function RefreshInfoFrame()
 		buyBtn.Visible = false
 		buyBtn31.Visible = false
 		buyBtn32.Visible = false
-		groupRewardText.Visible = false
-		groupRewardBtn.Visible = false
+		rewardText.Visible = false
+		rewardBtn.Visible = false
 		buyBtn:SetAttribute("IntroPlayed", false)
 		if buyBtn31 then buyBtn31:SetAttribute("IntroPlayed", false) end
 		if buyBtn32 then buyBtn32:SetAttribute("IntroPlayed", false) end
@@ -262,6 +291,13 @@ local function CreateSelectEquipBtn(jetpackId: number, jetpackData: GameConfig.J
 				price.Text = NumberExtension.FormatBigNumberAA(jetpackData.costRb)
 			elseif jetpackData.costType == GameConfig.CostType.GroupReward then
 				groupReward.Visible = true
+			elseif jetpackData.costType == GameConfig.CostType.StorePurchase then
+				groupReward.Visible = true
+				TranslationTool.CustomAutoLocalizeTextLabel(
+					groupReward,
+					GameTexts.JetpackShopRewardShop.source,
+					GameTexts.JetpackShopRewardShop.key
+				)
 			else
 				coin.Visible = true
 				price.Visible = true
@@ -346,7 +382,7 @@ local function InitFrame()
 	local buyBtn: ImageButton = infoFrame:FindFirstChild("BuyBtn") :: ImageButton
 	local buyBtn31: ImageButton = infoFrame:FindFirstChild("BuyBtn3-1") :: ImageButton
 	local buyBtn32: ImageButton = infoFrame:FindFirstChild("BuyBtn3-2") :: ImageButton
-	local groupRewardBtn: ImageButton = infoFrame:FindFirstChild("GroupRewardBtn") :: ImageButton
+	local rewardBtn: ImageButton = infoFrame:FindFirstChild("RewardBtn") :: ImageButton
 	local equipBtn: ImageButton = infoFrame:FindFirstChild("EquipBtn") :: ImageButton
 
 	-- 请求改变当前火箭背包
@@ -405,13 +441,22 @@ local function InitFrame()
 		end)
 	end
 
-	if groupRewardBtn then
-		groupRewardBtn.Activated:Connect(function()
+	if rewardBtn then
+		rewardBtn.Activated:Connect(function()
 			if equipIdLookAt == nil then
 				return
 			end
 			local jetpackData = GameConfig.JetpackDataMap[equipIdLookAt]
-			if not jetpackData or jetpackData.costType ~= GameConfig.CostType.GroupReward then
+			if not jetpackData then
+				return
+			end
+
+			if jetpackData.costType == GameConfig.CostType.StorePurchase then
+				UIManager.OpenWindow(UIManager.WindowId.StoreBundle)
+				return
+			end
+
+			if jetpackData.costType ~= GameConfig.CostType.GroupReward then
 				return
 			end
 
@@ -422,7 +467,7 @@ local function InitFrame()
 				local canClaim = success and isInGroup
 				NetMsg.FireRequestClaimJetpackGroupReward(canClaim)
 				if not canClaim then
-					ClientMsg.FireShowGameTip("Join the group to get the exclusive jetpack for free!", GameConfig.GameTipTweenType.FlyUp)
+					ClientMsg.FireShowGameTip(GameTexts.JetpackGroupRewardJoinHint.source, GameConfig.GameTipTweenType.FlyUp)
 				end
 			end)
 		end)

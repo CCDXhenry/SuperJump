@@ -22,7 +22,7 @@ return {
 		["productId"] = 0,
 		["costRb"] = 0,
 		["thrust"] = 5,
-		["costType"] = 4,
+		["costType"] = 5,
 		["quality"] = 2,
 	},
 	[3] = {
@@ -35,7 +35,7 @@ return {
 		["productId"] = 0,
 		["costRb"] = 0,
 		["thrust"] = 15,
-		["costType"] = 4,
+		["costType"] = 5,
 		["quality"] = 3,
 	},
 	[4] = {

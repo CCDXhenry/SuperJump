@@ -176,6 +176,15 @@ local function setRewardText(textLabel: TextLabel, reward: GameConfig.RewardInfo
 		end
 	end
 
+	if reward.rewardType == GameConfig.RewardType.Jetpack then
+		local jetpackData = GameConfig.JetpackDataMap[reward.rewardId]
+		if jetpackData then
+			localizeText(textLabel, jetpackData.name_t)
+			textLabel.TextColor3 = getQualityColor(jetpackData.quality)
+			return
+		end
+	end
+
 	localizeText(textLabel, NumberExtension.FormatBigNumberAA(reward.rewardCount))
 end
 
@@ -204,6 +213,11 @@ local function setRewardIcon(iconLabel: ImageLabel, reward: GameConfig.RewardInf
 		iconLabel.Image = if buffData then buffData.iconImageId else ""
 		return
 	end
+	if reward.rewardType == GameConfig.RewardType.Jetpack then
+		local jetpackData = GameConfig.JetpackDataMap[reward.rewardId]
+		iconLabel.Image = if jetpackData then jetpackData.iconImageId else ""
+		return
+	end
 	iconLabel.Image = ""
 end
 
@@ -230,6 +244,11 @@ local function getRewardDisplayName(reward: GameConfig.RewardInfo): string
 	if reward.rewardType == GameConfig.RewardType.Buff then
 		local buffData = GameConfig.BuffIdMap[reward.rewardId]
 		return if buffData then buffData.name_t else "Buff"
+	end
+
+	if reward.rewardType == GameConfig.RewardType.Jetpack then
+		local jetpackData = GameConfig.JetpackDataMap[reward.rewardId]
+		return if jetpackData then jetpackData.name_t else "Jetpack"
 	end
 
 	return NumberExtension.FormatBigNumberAA(reward.rewardCount)

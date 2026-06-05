@@ -39,6 +39,23 @@ local function GrantShopBundleReward(
 		return
 	end
 
+	if reward.rewardType == GameConfig.RewardType.Jetpack then
+		local jetpackData = GameConfig.JetpackDataMap[reward.rewardId]
+		local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+		if jetpackData and playerInfo then
+			local jetpackId = tostring(reward.rewardId)
+			if not playerInfo.jetpackInventory.ownedList[jetpackId] then
+				ServerGameInfo.AddJetpackToInventory(player, jetpackId)
+				if playerInfo.jetpackInventory.currentId == "" then
+					ServerGameInfo.SetCurrentJetpack(player, jetpackId)
+				end
+				local moneyCount = playerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
+				AnalyticsTool.LogJetpackGet(player, reward.rewardId, moneyCount, 1)
+			end
+		end
+		return
+	end
+
 	local rewardCount = reward.rewardCount or 1
 	if rewardCount <= 0 then
 		return
