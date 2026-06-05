@@ -26,6 +26,7 @@ local ExEquipManager = require(clientScripts:WaitForChild("ExEquipManager"))
 local JetpackClientManager = require(clientScripts:WaitForChild("JetpackClientManager"))
 local GroupRewardClientManager = require(clientScripts:WaitForChild("GroupRewardClientManager"))
 local PlayerInfoClientManager = require(clientScripts:WaitForChild("PlayerInfoClientManager"))
+local IdleInputClientManager = require(clientScripts:FindFirstChild("IdleInputClientManager"))
 -- JumpRunway：尽早绑定 NotifyJumpRunwayState，避免服务端开局 FireClient 时客户端尚未 OnClientEvent 导致队列耗尽
 
 local starterGui: StarterGui = game:GetService("StarterGui")
@@ -334,3 +335,5 @@ end)
 task.spawn(function()
 	PreloadAssets()
 end)
+
+IdleInputClientManager.Init()

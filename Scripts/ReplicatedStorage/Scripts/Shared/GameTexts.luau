@@ -126,5 +126,7 @@ local GameTexts = {
 	GroupRewardTip1 = { key = "GroupRewardTip1", source = "1. Like our game 👍" },
 	GroupRewardTip2 = { key = "GroupRewardTip2", source = "2. Join our group!" },
 	GroupRewardTip3 = { key = "GroupRewardTip3", source = "3. Claim group brainrot!" },
+	IdleTeleportWarning = { key = "IdleTeleportWarning", source = "No input detected. Auto-reconnecting to this server in {1}s." },
+	IdleTeleporting = { key = "IdleTeleporting", source = "Reconnecting you to this server..." },
 }
 return GameTexts

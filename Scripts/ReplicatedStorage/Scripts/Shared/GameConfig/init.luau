@@ -228,6 +228,11 @@ GameConfig.ModelGetSource = {
 GameConfig.EnablePlayerGift = false
 GameConfig.PlayerRespawnTime = 1
 
+-- 无操作自动重连当前服务器
+GameConfig.IdleWarnSec = 14 * 60
+GameConfig.IdleTeleportSec = 15 * 60
+GameConfig.IdleTeleportCooldownSec = 20
+
 GameConfig.CoilType = {
 	Speed = 1,
 	DoubleJump = 2,

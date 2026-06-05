@@ -66,6 +66,7 @@ local requestSetVibrationsOnOffStateEvent: RemoteEvent = remoteEventsFolder:Find
 local requestSetDecelerationOnEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestSetDecelerationOn") :: RemoteEvent
 local requestTeleportToHomeEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestTeleportToHome") :: RemoteEvent
 local requestTeleportToShopEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestTeleportToShop") :: RemoteEvent
+local requestIdleServerTeleportEvent: RemoteEvent? = GetOrCreateRemoteEvent("RequestIdleServerTeleport")
 local notifyPlayerInfoInitEvent = remoteEventsFolder:FindFirstChild("NotifyPlayerInfoInit") :: RemoteEvent
 local notifyPlayersOtherPlayerInfoInitEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("NotifyPlayersOtherPlayerInfoInit") :: RemoteEvent
 local notifyPlayerAcquiredGamePassEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("NotifyPlayerAcquiredGamePass") :: RemoteEvent
@@ -210,6 +211,21 @@ end
 
 function NetMsg.ConnectRequestTeleportToShop(callback: (player: Player) -> ())
 	requestTeleportToShopEvent.OnServerEvent:Connect(callback)
+end
+
+-- 客户端请求无操作重连当前服务器
+function NetMsg.FireRequestIdleServerTeleport()
+	if requestIdleServerTeleportEvent == nil then
+		return
+	end
+	requestIdleServerTeleportEvent:FireServer()
+end
+
+function NetMsg.ConnectRequestIdleServerTeleport(callback: (player: Player) -> ())
+	if requestIdleServerTeleportEvent == nil then
+		return
+	end
+	requestIdleServerTeleportEvent.OnServerEvent:Connect(callback)
 end
 
 --通知客户端玩家信息初始化完成
@@ -906,7 +922,7 @@ function NetMsg.ConnectRequestJumpRunwayLittleElfChestStartCarry(callback: (play
 	end)
 end
 
--- 客户端跑回 StartTrigger 后请求服务端将 pending brainrot 入背包
+-- 客户端跑回 EndTrigger 后请求服务端将 pending brainrot 入背包
 function NetMsg.FireRequestJumpRunwayLittleElfChestGrant()
 	if requestJumpRunwayLittleElfChestGrantEvent == nil then
 		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
