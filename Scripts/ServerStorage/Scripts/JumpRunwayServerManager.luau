@@ -60,7 +60,7 @@ local pendingLittleElfChestRewardMap: { [number]: PendingLittleElfChestReward } 
 
 local JumpRunwayLittleElfChestCarryAttr = "JumpRunwayLittleElfChestCarry"
 local ExercisingAttr = "Exercising"
-local StartTriggerCloseEnoughMinStuds = 24
+local EndTriggerCloseEnoughMinStuds = 24
 
 local function EnsureCollisionGroup(groupName: string)
 	pcall(function()
@@ -505,24 +505,24 @@ local function ClearLittleElfChestPending(player: Player)
 	pendingLittleElfChestRewardMap[player.UserId] = nil
 end
 
-local function ResolveStartTrigger(): Part?
+local function ResolveEndTrigger(): Part?
 	local startPoint = workspaceInst:FindFirstChild("StartPoint")
 	local startModel = if startPoint then startPoint:FindFirstChild("StartPointModel") else nil
-	return if startModel then startModel:FindFirstChild("StartTrigger") :: Part? else nil
+	return if startModel then startModel:FindFirstChild("EndTrigger") :: Part? else nil
 end
 
-local function IsPlayerNearStartTrigger(player: Player): boolean
+local function IsPlayerNearEndTrigger(player: Player): boolean
 	local character = player.Character
 	if character == nil then
 		return false
 	end
 	local hrp = character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	local startTrigger = ResolveStartTrigger()
-	if hrp == nil or startTrigger == nil then
+	local endTrigger = ResolveEndTrigger()
+	if hrp == nil or endTrigger == nil then
 		return false
 	end
-	local closeEnough = (hrp.Position - startTrigger.Position).Magnitude
-		< math.max(startTrigger.Size.Magnitude * 2, StartTriggerCloseEnoughMinStuds)
+	local closeEnough = (hrp.Position - endTrigger.Position).Magnitude
+		< math.max(endTrigger.Size.Magnitude * 2, EndTriggerCloseEnoughMinStuds)
 	return closeEnough
 end
 
@@ -768,7 +768,7 @@ local function HandleLittleElfChestGrant(player: Player)
 	if GetRunwayLittleElfChestCarrying(player) == nil then
 		return
 	end
-	if not IsPlayerNearStartTrigger(player) then
+	if not IsPlayerNearEndTrigger(player) then
 		return
 	end
 	local success = GrantLittleElfChestPendingToPlayer(player)

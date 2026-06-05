@@ -101,6 +101,7 @@ local PlayerSlideCollisionGroupName = "PlayerSlideState"
 local ChestCollisionGroupName = "Chest"
 local JumpRunwayLittleElfChestCarryAttr = "JumpRunwayLittleElfChestCarry"
 local StartTriggerCloseEnoughMinStuds = 24
+local EndTriggerCloseEnoughMinStuds = 24
 local JumpRunwayJetpackModelName = "JumpRunwayJetpackClone"
 local JumpRunwayRocketBackpackPartName = "JumpRunwayRocketBackpack"
 local JumpRunwayJetpackServerCreatedAttr = "JumpRunwayJetpackServerCreated"
@@ -168,6 +169,7 @@ local Refs: {
 	runwayGravityAttachment: Attachment?,
 	runwayGravityVectorForce: VectorForce?,
 	startTriggerConn: RBXScriptConnection?,
+	endTriggerConn: RBXScriptConnection?,
 	beginLineConn: RBXScriptConnection?,
 	runwayRingPart: Part?,
 	ringBaseSizeX: number,
@@ -243,6 +245,7 @@ local Refs: {
 	startTriggerStartArmed: boolean?,
 	startTriggerPlayerWasInsideVolume: boolean?,
 	startTriggerOutsideVolumeClock: number?,
+	endTriggerPlayerWasInsideVolume: boolean?,
 	forwardBlockedStartClock: number?,
 	forwardBlockedStartAlong: number?,
 	treeHitLastProcessClock: number,
@@ -325,6 +328,7 @@ local Refs: {
 	startTriggerStartArmed = true,
 	startTriggerPlayerWasInsideVolume = false,
 	startTriggerOutsideVolumeClock = nil,
+	endTriggerPlayerWasInsideVolume = false,
 	missAbortSentForThisRun = nil,
 	forwardBlockedStartClock = nil,
 	forwardBlockedStartAlong = nil,
@@ -367,6 +371,12 @@ function RunwaySession.ResolveSceneParts(): (Part?, Part?)
 	local jumpRunway = workspace:FindFirstChild("JumpRunway")
 	local beginLine = if jumpRunway then jumpRunway:FindFirstChild("BeginLine") :: Part? else nil
 	return startTrigger, beginLine
+end
+
+function RunwaySession.ResolveEndTrigger(): Part?
+	local startPoint = workspace:FindFirstChild("StartPoint")
+	local startModel = if startPoint then startPoint:FindFirstChild("StartPointModel") else nil
+	return if startModel then startModel:FindFirstChild("EndTrigger") :: Part? else nil
 end
 
 function RunwaySession.GetCharacterParts(): (Model?, Humanoid?, BasePart?)
@@ -5844,17 +5854,29 @@ function RunwaySession.IsLittleElfChestCreatedOrPending(): boolean
 	return chestModel ~= nil and chestModel.Parent ~= nil
 end
 
-function RunwaySession.IsPlayerInsideStartTriggerVolume(startTrigger: Part, hrp: BasePart): boolean
-	local localPos = startTrigger.CFrame:PointToObjectSpace(hrp.Position)
-	local halfSize = startTrigger.Size * 0.5
+function RunwaySession.IsPlayerInsideTriggerVolume(trigger: Part, hrp: BasePart): boolean
+	local localPos = trigger.CFrame:PointToObjectSpace(hrp.Position)
+	local halfSize = trigger.Size * 0.5
 	return math.abs(localPos.X) <= halfSize.X
 		and math.abs(localPos.Y) <= halfSize.Y + 3
 		and math.abs(localPos.Z) <= halfSize.Z
 end
 
+function RunwaySession.IsPlayerInsideStartTriggerVolume(startTrigger: Part, hrp: BasePart): boolean
+	return RunwaySession.IsPlayerInsideTriggerVolume(startTrigger, hrp)
+end
+
+function RunwaySession.IsPlayerCloseEnoughToTrigger(trigger: Part, hrp: BasePart, closeEnoughMinStuds: number): boolean
+	return (hrp.Position - trigger.Position).Magnitude
+		< math.max(trigger.Size.Magnitude * 2, closeEnoughMinStuds)
+end
+
 function RunwaySession.IsPlayerCloseEnoughToStartTrigger(startTrigger: Part, hrp: BasePart): boolean
-	return (hrp.Position - startTrigger.Position).Magnitude
-		< math.max(startTrigger.Size.Magnitude * 2, StartTriggerCloseEnoughMinStuds)
+	return RunwaySession.IsPlayerCloseEnoughToTrigger(startTrigger, hrp, StartTriggerCloseEnoughMinStuds)
+end
+
+function RunwaySession.IsPlayerCloseEnoughToEndTrigger(endTrigger: Part, hrp: BasePart): boolean
+	return RunwaySession.IsPlayerCloseEnoughToTrigger(endTrigger, hrp, EndTriggerCloseEnoughMinStuds)
 end
 
 function RunwaySession.UpdateStartTriggerReentryState()
@@ -5885,24 +5907,45 @@ function RunwaySession.UpdateStartTriggerReentryState()
 
 	local enteredNow = insideNow and not wasInside
 	if enteredNow then
-		if character and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
-			RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger)
-		elseif Refs.chestCarryReturnActive == true then
-			RunwaySession.TryExitEscapePhaseAtStartTrigger(startTrigger)
-		elseif Refs.chestCarryReturnActive ~= true and not RunwaySession.ShouldBlockJumpRunwayStartAtStartTrigger() then
+		if Refs.chestCarryReturnActive ~= true and not RunwaySession.ShouldBlockJumpRunwayStartAtStartTrigger() then
 			if humanoid and not RunwaySession.IsRunwayActivePhase(localState.phase) then
 				if RunwaySession.SnapLocalPlayerToRunwayGroundIfAirborne(startTrigger, humanoid, hrp) then
 					RunwaySession.TryStartLocalRun(startTrigger)
 				end
 			end
 		end
-	elseif insideNow and character and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
-		RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger)
-	elseif insideNow and Refs.chestCarryReturnActive == true then
-		RunwaySession.TryExitEscapePhaseAtStartTrigger(startTrigger)
 	end
 
 	Refs.startTriggerPlayerWasInsideVolume = insideNow
+end
+
+function RunwaySession.UpdateEndTriggerReentryState()
+	local endTrigger = RunwaySession.ResolveEndTrigger()
+	if endTrigger == nil then
+		return
+	end
+	local character, _humanoid, hrp = RunwaySession.GetCharacterParts()
+	if hrp == nil then
+		return
+	end
+
+	local insideNow = RunwaySession.IsPlayerInsideTriggerVolume(endTrigger, hrp)
+	local wasInside = Refs.endTriggerPlayerWasInsideVolume == true
+	local enteredNow = insideNow and not wasInside
+
+	if enteredNow then
+		if character and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
+			RunwaySession.TryDeliverLittleElfChestAtEndTrigger(endTrigger)
+		elseif Refs.chestCarryReturnActive == true then
+			RunwaySession.TryExitEscapePhaseAtEndTrigger(endTrigger)
+		end
+	elseif insideNow and character and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
+		RunwaySession.TryDeliverLittleElfChestAtEndTrigger(endTrigger)
+	elseif insideNow and Refs.chestCarryReturnActive == true then
+		RunwaySession.TryExitEscapePhaseAtEndTrigger(endTrigger)
+	end
+
+	Refs.endTriggerPlayerWasInsideVolume = insideNow
 end
 
 function RunwaySession.ShouldBlockJumpRunwayStartAtStartTrigger(): boolean
@@ -6045,7 +6088,7 @@ function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chest
 	ClientMsg.FireJumpRunWayEnterEscapeHudMode()
 end
 
-function RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger: Part)
+function RunwaySession.TryDeliverLittleElfChestAtEndTrigger(endTrigger: Part)
 	if Refs.chestBackpackDeliverRequested == true then
 		return
 	end
@@ -6056,13 +6099,12 @@ function RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger: Part
 	if not RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
 		return
 	end
-	if not RunwaySession.IsPlayerCloseEnoughToStartTrigger(startTrigger, hrp) then
+	if not RunwaySession.IsPlayerCloseEnoughToEndTrigger(endTrigger, hrp) then
 		return
 	end
 	Refs.chestBackpackDeliverRequested = true
 	Refs.startTriggerStartArmed = false
-	Refs.startTriggerPlayerWasInsideVolume = true
-	Refs.startTriggerOutsideVolumeClock = nil
+	Refs.endTriggerPlayerWasInsideVolume = true
 	Refs.chestCarryReturnActive = false
 	ChaserClientManager.StopAndFadeChaser()
 	ClientMsg.FireJumpRunWayStopEscapeRedScreen()
@@ -6082,7 +6124,7 @@ function RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger: Part
 	end)
 end
 
-function RunwaySession.TryExitEscapePhaseAtStartTrigger(startTrigger: Part)
+function RunwaySession.TryExitEscapePhaseAtEndTrigger(endTrigger: Part)
 	if Refs.chestCarryReturnActive ~= true then
 		return
 	end
@@ -6091,14 +6133,13 @@ function RunwaySession.TryExitEscapePhaseAtStartTrigger(startTrigger: Part)
 	if hrp == nil then
 		return
 	end
-	if not RunwaySession.IsPlayerCloseEnoughToStartTrigger(startTrigger, hrp) then
+	if not RunwaySession.IsPlayerCloseEnoughToEndTrigger(endTrigger, hrp) then
 		return
 	end
 
 	Refs.chestCarryReturnActive = false
 	Refs.startTriggerStartArmed = false
-	Refs.startTriggerPlayerWasInsideVolume = true
-	Refs.startTriggerOutsideVolumeClock = nil
+	Refs.endTriggerPlayerWasInsideVolume = true
 	ChaserClientManager.StopAndFadeChaser()
 	RunwaySession.ResetLocalRunToIdle()
 end
@@ -7597,25 +7638,22 @@ function RunwaySession.BindSceneTriggers()
 		Refs.startTriggerConn:Disconnect()
 		Refs.startTriggerConn = nil
 	end
+	if Refs.endTriggerConn then
+		Refs.endTriggerConn:Disconnect()
+		Refs.endTriggerConn = nil
+	end
 	if Refs.beginLineConn then
 		Refs.beginLineConn:Disconnect()
 		Refs.beginLineConn = nil
 	end
 	local startTrigger, beginLine = RunwaySession.ResolveSceneParts()
+	local endTrigger = RunwaySession.ResolveEndTrigger()
 	if startTrigger then
 		Refs.startTriggerConn = startTrigger.Touched:Connect(function(hit)
 			local ch = hit:FindFirstAncestorOfClass("Model")
 			if ch ~= nil and ch == localPlayer.Character then
 				local _character, humanoid, hrp = RunwaySession.GetCharacterParts()
 				if humanoid == nil or hrp == nil then
-					return
-				end
-				if RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(ch) then
-					RunwaySession.TryDeliverLittleElfChestAtStartTrigger(startTrigger)
-					return
-				end
-				if Refs.chestCarryReturnActive == true then
-					RunwaySession.TryExitEscapePhaseAtStartTrigger(startTrigger)
 					return
 				end
 				if RunwaySession.ShouldBlockJumpRunwayStartAtStartTrigger() then
@@ -7636,6 +7674,20 @@ function RunwaySession.BindSceneTriggers()
 			end
 		end)
 	end
+	if endTrigger then
+		Refs.endTriggerConn = endTrigger.Touched:Connect(function(hit)
+			local ch = hit:FindFirstAncestorOfClass("Model")
+			if ch ~= nil and ch == localPlayer.Character then
+				if RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(ch) then
+					RunwaySession.TryDeliverLittleElfChestAtEndTrigger(endTrigger)
+					return
+				end
+				if Refs.chestCarryReturnActive == true then
+					RunwaySession.TryExitEscapePhaseAtEndTrigger(endTrigger)
+				end
+			end
+		end)
+	end
 	if beginLine then
 		Refs.beginLineConn = beginLine.Touched:Connect(RunwaySession.OnBeginLineTouched)
 	end
@@ -7644,6 +7696,7 @@ end
 function RunwaySession.OnHeartbeat(dt: number)
 	RunwaySession.UpdateTick(dt)
 	RunwaySession.UpdateStartTriggerReentryState()
+	RunwaySession.UpdateEndTriggerReentryState()
 	RunwaySession.NetReportDashIfChanged()
 	RunwayFxController.UpdateHeartbeat(RunwaySession.UpdateJetpackFlameDashFx, os.clock())
 	RunwayUiController.Refresh(
