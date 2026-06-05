@@ -20,6 +20,7 @@ local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
 local serverScripts = serverStorage:WaitForChild("Scripts")
 local ServerGameInfo = require(serverScripts:FindFirstChild("ServerGameInfo"))
 local AnalyticsTool = require(serverScripts:FindFirstChild("AnalyticsTool"))
+local JetpackManager = require(serverScripts:FindFirstChild("JetpackManager"))
 
 type RunState = {
 	runwayForward: Vector3,
@@ -89,6 +90,7 @@ end
 
 local Ph = {
 	AutoRun = 1,
+	Airborne = 4,
 	ScoreLocked = 8,
 	Cleaning = 9,
 	Idle = 0,
@@ -249,6 +251,7 @@ local function ClearPlayerRunAttribute(player: Player)
 end
 
 local function DisconnectState(player: Player, st: RunState)
+	JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, false)
 	if st.diedConn then
 		st.diedConn:Disconnect()
 		st.diedConn = nil
@@ -796,6 +799,9 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 	if kind == Kind.Sample then
 		local ok = IngestSample(player, st, report, nowClock)
 		if ok then
+			if report.dashHeld ~= nil then
+				JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, report.dashHeld == true and report.clientPhase == Ph.Airborne)
+			end
 			NotifyJumpRunway(
 				player,
 				Ph.AutoRun,
@@ -808,12 +814,17 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 		end
 	elseif kind == Kind.Final then
 		print("[JumpRunwayServerManager] Final report for", player.Name, "distance", report.finalAlong or maxAlongByUserId[player.UserId])
+		JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, false)
 		LockScoreAndTeleport(player, st, nowClock, report.finalAlong)
 	elseif kind == Kind.Input then
 		if report.jumpPressed == true then
 			ServerGameInfo.IncrementJumpRunwayJumpCount(player)
 		end
+		if report.dashHeld ~= nil then
+			JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, report.dashHeld == true and report.clientPhase == Ph.Airborne)
+		end
 	elseif kind == Kind.Abort then
+		JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, false)
 		-- 验证 Abort 属于当前 run：需要 lastSampleClock 存在，且 Abort 的 clientClock 不应远大于最后一个 Sample 时钟
 		if st.lastSampleClock ~= nil and report.clientClock ~= nil then
 			if report.clientClock <= st.lastSampleClock + 1 then

@@ -207,6 +207,7 @@ function ServerGameInfo.InitPlayerInfo(
 	end
 	playerInfoMap[player.UserId] = playerInfo
 	player:SetAttribute("LastArrivedIslandId", playerInfo.lastArrivedIslandId)
+	player:SetAttribute("CurrentJetpackId", playerInfo.jetpackInventory.currentId)
 	ServerMsg.FirePlayerInfoInit(player)
 
 	local clientLocalPlayerSaveInfo: GameConfig.ClientLocalPlayerSaveInfo = {
@@ -1368,6 +1369,7 @@ function ServerGameInfo.SetCurrentJetpack(player: Player, jetpackId: string)
 		return
 	end
 	playerInfo.jetpackInventory.currentId = jetpackId
+	player:SetAttribute("CurrentJetpackId", jetpackId)
 	playerInfo.playerInfoChanged = true
 	print("[ServerGameInfo] SetCurrentJetpack", player.Name, jetpackId)
 	NetMsg.FireNotifyPlayerJetpackInventoryUpdate(player, playerInfo.jetpackInventory)
