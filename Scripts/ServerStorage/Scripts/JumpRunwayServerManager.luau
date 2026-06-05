@@ -624,6 +624,10 @@ local function TryCreateFallbackLittleElfChestPending(player: Player, brainrotId
 	if brainrotId == nil or chestConfigId == nil then
 		return false
 	end
+	local chestConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
+	if not GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig) then
+		return false
+	end
 	local rewardPool = GameConfig.LittleElfChestRewardPoolMap[chestConfigId]
 	if rewardPool == nil then
 		return false
@@ -660,6 +664,14 @@ local function HandleLittleElfChestReward(player: Player, chestConfigId: number)
 	-- 不检查 runMap：可能玩家跑道已结束但宝箱撞击滞后，仍应发放奖励
 	local character = player.Character
 	if character == nil then
+		return
+	end
+	local chestConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
+	if not GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig) then
+		warn(
+			"[JumpRunwayServerManager] HandleLittleElfChestReward: chestConfigId is not available for JumpRunway",
+			chestConfigId
+		)
 		return
 	end
 	local existingPending = pendingLittleElfChestRewardMap[player.UserId]

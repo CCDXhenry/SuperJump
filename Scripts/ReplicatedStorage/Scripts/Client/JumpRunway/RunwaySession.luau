@@ -839,27 +839,27 @@ function RunwaySession.DebugFinalLandPhaseA(reason: string, humanoid: Humanoid?,
 	local groundedAge = if localState.finalLandPhaseAGroundedStartClock ~= nil
 		then nowClock - (localState.finalLandPhaseAGroundedStartClock :: number)
 		else -1
-	print(
-		string.format(
-			"[RunwaySession][FinalA] reason=%s sub=%d pop=%d lockedAlong=%.2f velAlong=%.2f vy=%.2f useAir=%s leftGround=%s groundedAge=%.2f okFeet=%s distFeet=%.2f fullBody=%s looseGround=%s floor=%s hState=%s slideElapsed=%.2f",
-			reason,
-			localState.finalLandSubPhase,
-			localState.finalLandPhaseAPopCount,
-			localState.finalLandLockedTumbleAlong,
-			alongVelocity,
-			vy,
-			tostring(localState.finalLandTumbleUseAirClock),
-			tostring(localState.finalLandTumbleLeftGround),
-			groundedAge,
-			tostring(okFeet),
-			distFeet,
-			tostring(fullBody),
-			tostring(looseGround),
-			floorMaterial.Name,
-			humanoidState,
-			nowClock - localState.slideStartClock
-		)
-	)
+	--print(
+	--	string.format(
+	--		"[RunwaySession][FinalA] reason=%s sub=%d pop=%d lockedAlong=%.2f velAlong=%.2f vy=%.2f useAir=%s leftGround=%s groundedAge=%.2f okFeet=%s distFeet=%.2f fullBody=%s looseGround=%s floor=%s hState=%s slideElapsed=%.2f",
+	--		reason,
+	--		localState.finalLandSubPhase,
+	--		localState.finalLandPhaseAPopCount,
+	--		localState.finalLandLockedTumbleAlong,
+	--		alongVelocity,
+	--		vy,
+	--		tostring(localState.finalLandTumbleUseAirClock),
+	--		tostring(localState.finalLandTumbleLeftGround),
+	--		groundedAge,
+	--		tostring(okFeet),
+	--		distFeet,
+	--		tostring(fullBody),
+	--		tostring(looseGround),
+	--		floorMaterial.Name,
+	--		humanoidState,
+	--		nowClock - localState.slideStartClock
+	--	)
+	--)
 end
 
 function RunwaySession.DebugFinalLandPhaseAPop(
@@ -6363,7 +6363,11 @@ function RunwaySession.OpenLittleElfChestAfterObstacleBounceStop(humanoid: Human
 	Refs.chestSlideFwdH = faceFwdH
 	local chestConfigId = if Refs.chestDynamicConfigId ~= nil then Refs.chestDynamicConfigId else cfg.RUNWAY_CHEST_CONFIG_ID
 	local chestConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
-	if not chestConfig or actualChests == nil then
+	if
+		chestConfig == nil
+		or not GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig)
+		or actualChests == nil
+	then
 		return
 	end
 	local template = GameConfig.FindResourceTemplateByResourceName(actualChests, chestConfig.resourceName)
@@ -6429,14 +6433,14 @@ function RunwaySession.ProcessLittleElfChestHit(chestModel: Model, fwdH: Vector3
 	if not isNearChest then
 		local chestPos = chestModel:GetPivot().Position
 		local deltaH = Vector3.new(chestPos.X - hrpT.Position.X, 0, chestPos.Z - hrpT.Position.Z)
-		warn(
-			string.format(
-				"[RunwaySession] LittleElfChest terminal path hit accepted outside near radius. chestConfigId=%d chestDist=%.2f hitRadius=%.2f",
-				chestConfigId,
-				deltaH.Magnitude,
-				ResolveChestHitHorizontalMaxDistStuds()
-			)
-		)
+		--warn(
+		--	string.format(
+		--		"[RunwaySession] LittleElfChest terminal path hit accepted outside near radius. chestConfigId=%d chestDist=%.2f hitRadius=%.2f",
+		--		chestConfigId,
+		--		deltaH.Magnitude,
+		--		ResolveChestHitHorizontalMaxDistStuds()
+		--	)
+		--)
 	end
 	RunwaySession.TransitionDistanceLogStage(
 		"ChestBounce",
@@ -6531,7 +6535,7 @@ function RunwaySession.SpawnLittleElfChestAtPosition(fwdH: Vector3, spawnPos: Ve
 	end
 	local chestConfigId = if Refs.chestDynamicConfigId ~= nil then Refs.chestDynamicConfigId else cfg.RUNWAY_CHEST_CONFIG_ID
 	local chestConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
-	if not chestConfig then
+	if chestConfig == nil or not GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig) then
 		return
 	end
 	local template = GameConfig.FindResourceTemplateByResourceName(actualChests, chestConfig.resourceName)
@@ -7172,17 +7176,17 @@ function RunwaySession.JumpApplyRatingForTakeoff(
 		RunwaySession.ApplyJumpSpeedRatingForBonusRatio(bonusRatio, currentBaseSpeed)
 	localState.ratingTier = tier
 	ClientMsg.FireJumpRunWayShowRatingTier(tier)
-	RunwaySession.LogJumpRunwayRating(
-		jumpIndex,
-		contextName,
-		tier,
-		bonusRatio,
-		addedBonus,
-		currentBaseSpeed,
-		nextMaxSpeed,
-		cumulativeBonus,
-		reductionDelta
-	)
+	--RunwaySession.LogJumpRunwayRating(
+	--	jumpIndex,
+	--	contextName,
+	--	tier,
+	--	bonusRatio,
+	--	addedBonus,
+	--	currentBaseSpeed,
+	--	nextMaxSpeed,
+	--	cumulativeBonus,
+	--	reductionDelta
+	--)
 end
 
 function RunwaySession.JumpAdvancePhaseAfterImpulse(inAuto: boolean, inLineWindow: boolean, inChainWindow: boolean)
@@ -7257,15 +7261,15 @@ function RunwaySession.JumpApplyTakeoff(
 	localState.jumpBoostVy = vy
 	localState.jumpBoostUntilClock = nowClock + cfg.RUNWAY_JUMP_BOOST_HOLD_SEC
 	hrp.AssemblyLinearVelocity = forward * forwardSpd + Vector3.new(0, vy, 0) + perpTerm
-	print(
-		string.format(
-			"[JumpApplyTakeoff] takeoffCount=%d forwardSpd=%.1f vy=%.1f bonusPart=%.1f",
-			localState.takeoffCount,
-			forwardSpd,
-			vy,
-			bonusPart
-		)
-	)
+	--print(
+	--	string.format(
+	--		"[JumpApplyTakeoff] takeoffCount=%d forwardSpd=%.1f vy=%.1f bonusPart=%.1f",
+	--		localState.takeoffCount,
+	--		forwardSpd,
+	--		vy,
+	--		bonusPart
+	--	)
+	--)
 	localState.jumpHorizLerpStartClock = nowClock
 	localState.jumpHorizLerpDuration = RunwaySession.ComputeJumpHorizontalDecelerationDuration(vy, gGrav)
 	localState.jumpHorizLerpInitialVy = vy

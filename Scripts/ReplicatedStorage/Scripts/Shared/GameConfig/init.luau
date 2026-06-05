@@ -509,6 +509,7 @@ export type LittleElfChestConfigData = {
 	name_t: string,
 	quality: number,
 	distance: number,
+	onlyPay: number?,
 }
 
 export type LittleElfChestData = LittleElfChestConfigData
@@ -557,6 +558,10 @@ function GameConfig.FindLittleElfChestRewardEntry(chestConfigId: number, brainro
 		end
 	end
 	return nil
+end
+
+function GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig: LittleElfChestConfigData?): boolean
+	return chestConfig ~= nil and chestConfig.onlyPay ~= 1
 end
 
 function GameConfig.RollVariantIdFromEntry(entry: LittleElfChestRewardPoolEntry): number
@@ -1570,9 +1575,16 @@ function GameConfig.GetLittleElfChestByDistance(distance: number): LittleElfChes
 	end
 	local best: LittleElfChestConfigData? = nil
 	for _, row in pairs(chests) do
-		if type(row) == "table" and type(row.distance) == "number" and row.distance <= distance then
-			if best == nil or row.distance > best.distance then
-				best = row :: LittleElfChestConfigData
+		if type(row) == "table" then
+			local chestConfig = row :: LittleElfChestConfigData
+			if
+				type(chestConfig.distance) == "number"
+				and chestConfig.distance <= distance
+				and GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig)
+			then
+				if best == nil or chestConfig.distance > best.distance then
+					best = chestConfig
+				end
 			end
 		end
 	end
