@@ -30,6 +30,7 @@ UIManager.WindowId = {
 	ExEquipShop = "ExEquipShopFrame",
 	ExEquipFrame = "ExEquipFrame",
 	JetpackShop = "JetpackShopFrame",
+	OfflineRewards = "OfflineRewardsFrame",
 }
 
 type WindowConfig = {
@@ -78,6 +79,11 @@ local WindowConfigs: { [string]: WindowConfig } = {
 		scriptName = "JetpackShopFrame",
 		isModal = true,
 	},
+	[UIManager.WindowId.OfflineRewards] = {
+		FrameName = "OfflineRewardsFrame",
+		scriptName = "OfflineRewardsFrame",
+		isModal = true,
+	},
 }
 
 local addedWindows: { [string]: GuiBase2d? } = {}
@@ -87,7 +93,9 @@ local modalButton: ImageButton
 local function CheckModalButtonVisible()
 	local topModalWindow: GuiBase2d?
 	for windowId, window in addedWindows do
-		if not window then continue end
+		if not window then
+			continue
+		end
 		local config = WindowConfigs[windowId]
 		if config.isModal then
 			if topModalWindow == nil then

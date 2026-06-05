@@ -192,10 +192,9 @@ end
 local function OnPlayerRemoving(player: Player)
 	--埋点移除玩家
 	AnalyticsTool.RemovePlayer(player)
+	ServerGameInfo.MarkPlayerLastOnlineNow(player)
 	--离开前保存玩家数据
-	task.spawn(function()
-		SavePlayerInfo(player)
-	end)
+	SavePlayerInfo(player)
 	--移除玩家数据
 	ServerGameInfo.RemovePlayerInfo(player)
 	--停止自动保存玩家数据协程
@@ -247,6 +246,10 @@ NetMsg.ConnectRequestSetDecelerationOn(function(player: Player, decelerationOn: 
 		ServerGameInfo.UpdateDecelerationOn(player, decelerationOn)
 	end
 	ServerGameInfo.ApplyWalkSpeed(player)
+end)
+
+NetMsg.ConnectRequestClaimOfflineReward(function(player: Player)
+	ServerGameInfo.TryClaimOfflineReward(player, false)
 end)
 
 players.PlayerAdded:Connect(OnPlayerAdded)

@@ -39,6 +39,17 @@ local soundsFolder: Folder = workspace:FindFirstChild("Sounds")
 local bgmSound: Sound = soundsFolder:FindFirstChild("BGM") :: Sound
 local PreloadAssets: () -> ()
 
+local function TryOpenOfflineRewardsWindow()
+	local offlineRewardInfo = ClientGameInfo.GetOfflineRewardInfo()
+	if offlineRewardInfo == nil or offlineRewardInfo.baseReward <= 0 then
+		return
+	end
+	if UIManager.GetGameScreenGui() == nil then
+		return
+	end
+	UIManager.OpenWindow(UIManager.WindowId.OfflineRewards)
+end
+
 local function InitUI()
 	local playerGui: PlayerGui = players.LocalPlayer:WaitForChild("PlayerGui")
 	local gameScreenGui: ScreenGui = playerGui:WaitForChild("GameScreenGui") :: ScreenGui
@@ -53,7 +64,7 @@ local function InitUI()
 	UIManager.CreateFrame("GameTipFrame", "GameTipFrame", gameScreenGui, GameTipZIndex)
 	-- 引导手指层（低于 GameTip，高于 Lobby）
 	UIManager.CreateFrame(GameConfig.GuideAssetName.UiFrame, "GuideFrame", gameScreenGui, 1500)
-	
+
 	-- 创建背包界面 (逻辑已集成到 LobbyFrame.BottomButtonsFrame)
 	-- UIManager.CreateFrame("BackpackFrame", "BackpackFrame", gameScreenGui, 10)
 	local backpackScriptOrigin = scripts:WaitForChild("Client"):WaitForChild("UIManager"):FindFirstChild("BackpackFrame")
@@ -82,6 +93,7 @@ local function InitUI()
 	-- 初始化背包输入控制
 	local BackpackInputManager = require(clientScripts:WaitForChild("BackpackInputManager"))
 	BackpackInputManager.Init()
+	TryOpenOfflineRewardsWindow()
 end
 
 --通知客户端玩家信息初始化
@@ -245,7 +257,6 @@ PreloadAssets = function()
 	table.clear(failedAssetList)
 end
 
-
 local function OnNotifyPlayersOtherPlayerInfoInit(playerId: number, otherPlayerSaveInfo: GameConfig.ClientOtherPlayerSyncInfo)
 	if playerId ~= players.LocalPlayer.UserId then
 		ClientGameInfo.InitOtherPlayerInfo(playerId, otherPlayerSaveInfo)
@@ -292,6 +303,15 @@ end)
 --监听货币更新
 NetMsg.ConnectNotifyPlayerCurrencyUpdate(function(currencyType, totalAmount, lastChange, reason)
 	ClientGameInfo.UpdateCurrency(currencyType, totalAmount, lastChange, reason)
+end)
+
+NetMsg.ConnectNotifyOfflineRewardInfo(function(offlineRewardInfo: GameConfig.OfflineRewardInfo?)
+	ClientGameInfo.SetOfflineRewardInfo(offlineRewardInfo)
+	if offlineRewardInfo ~= nil and offlineRewardInfo.baseReward > 0 then
+		TryOpenOfflineRewardsWindow()
+	elseif UIManager.GetGameScreenGui() ~= nil then
+		UIManager.CloseWindow(UIManager.WindowId.OfflineRewards)
+	end
 end)
 
 -- 监听网络层出的游戏提示

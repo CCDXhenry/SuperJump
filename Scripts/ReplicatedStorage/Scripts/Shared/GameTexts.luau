@@ -29,7 +29,10 @@ local GameTexts = {
 	PlaceAction = { key = "", source = "Place" },
 	BackpackFull = { key = "", source = "Backpack is full!" },
 	WingsAssistanceTitle = { key = "WingsAssistanceTitle", source = "Wings Assistance" },
-	WingsAssistanceBody = { key = "WingsAssistanceBody", source = "Wings assistance can help you return to your nearest previous island. Do you want to purchase this assistance?" },
+	WingsAssistanceBody = {
+		key = "WingsAssistanceBody",
+		source = "Wings assistance can help you return to your nearest previous island. Do you want to purchase this assistance?",
+	},
 	RescueFlightBody = { key = "", source = "Resurrect at the place of your death?" },
 	ReceivedReward = { key = "ReceivedReward", source = "Received: {1}" },
 	RebirthMultiplierFormat = { key = "RebirthMultiplierFormat", source = "Rebirth {1} ({2}x Coin)" },
@@ -99,6 +102,7 @@ local GameTexts = {
 	ShopBundleAlreadyPurchased = { key = "", source = "This bundle has already been purchased." },
 	ShopBundlePurchaseRestrictedByPolicy = { key = "", source = "This purchase is not available for your account." },
 	ShopBundleBoxCount = { key = "ShopBundleBoxCount", source = "{1}x Box" },
+	OfflineRewardReceiveMultiplier = { key = "OfflineRewardReceiveMultiplier", source = "Receive X{1}" },
 	ChestWorkbenchExpProgress = { key = "ChestWorkbenchExpProgress", source = "{1}/{2} EXP" },
 	ChestWorkbenchExpAtMax = { key = "ChestWorkbenchExpAtMax", source = "{1} / MAX" },
 	-- JumpRunway 终局 DistanceRecorder：{1} 为取整后的显示距离（与跑道 HUD 同 stud 语义，后缀 m）

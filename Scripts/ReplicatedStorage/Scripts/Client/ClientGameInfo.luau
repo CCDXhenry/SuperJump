@@ -10,6 +10,7 @@ local clientScripts = scripts:WaitForChild("Client")
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
 
 local localPlayerInfo: GameConfig.ClientLocalPlayerInfo?
+local offlineRewardInfo: GameConfig.OfflineRewardInfo?
 local otherPlayerInfoMap: { [number]: GameConfig.ClientOtherPlayerInfo } = {}
 local isInJumpRunway = false
 local isInJumpRunwayEscapePhase = false
@@ -31,13 +32,7 @@ local function DebugModelYieldLog(eventName: string, playerIdStr: string, pointI
 			detailText ..= " " .. tostring(key) .. "=" .. tostring(value)
 		end
 	end
-	print(
-		"[ModelYieldDebug][ClientGameInfo]",
-		eventName,
-		"userId=" .. playerIdStr,
-		"point=" .. pointIndexStr,
-		detailText
-	)
+	print("[ModelYieldDebug][ClientGameInfo]", eventName, "userId=" .. playerIdStr, "point=" .. pointIndexStr, detailText)
 end
 
 --初始化玩家信息
@@ -131,6 +126,14 @@ end
 --获取自己的玩家信息
 function ClientGameInfo.GetLocalPlayerInfo(): GameConfig.ClientLocalPlayerInfo?
 	return localPlayerInfo
+end
+
+function ClientGameInfo.SetOfflineRewardInfo(newOfflineRewardInfo: GameConfig.OfflineRewardInfo?)
+	offlineRewardInfo = newOfflineRewardInfo
+end
+
+function ClientGameInfo.GetOfflineRewardInfo(): GameConfig.OfflineRewardInfo?
+	return offlineRewardInfo
 end
 
 --获取其他玩家的玩家信息
@@ -326,15 +329,17 @@ end
 function ClientGameInfo.UpdateBrainrotQueue(queue: { GameConfig.BrainrotQueueItem })
 	if localPlayerInfo then
 		-- 1) 统计每个 grantTipKey 对应的“总数”和“新增 uid 数”
-		local groupInfoByTipKey:
-			{ [string]: {
+		local groupInfoByTipKey: {
+			[string]: {
 				expectedCount: number,
 				itemType: number,
 				configId: number,
 				shopBundleId: number?,
 				totalCount: number,
 				newCount: number,
-			} } = {}
+			},
+		} =
+			{}
 
 		for _, item in ipairs(queue) do
 			local tipKey = item.grantTipKey
@@ -365,11 +370,7 @@ function ClientGameInfo.UpdateBrainrotQueue(queue: { GameConfig.BrainrotQueueIte
 
 		-- 3) 触发“获得奖励提示”（只对“新增 uid”触发）
 		for tipKey, g in pairs(groupInfoByTipKey) do
-			if not triggeredGrantTipKeySet[tipKey]
-				and g.expectedCount > 0
-				and g.totalCount >= g.expectedCount
-				and g.newCount > 0
-			then
+			if not triggeredGrantTipKeySet[tipKey] and g.expectedCount > 0 and g.totalCount >= g.expectedCount and g.newCount > 0 then
 				local rewardType: number?
 				if g.itemType == GameConfig.ItemType.Brainrot then
 					rewardType = GameConfig.RewardType.Brainrot

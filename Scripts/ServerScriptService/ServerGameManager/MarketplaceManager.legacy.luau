@@ -30,12 +30,7 @@ local function GrantShopBundleReward(
 	purchaseProductId: number?
 )
 	if reward.rewardType == GameConfig.RewardType.Currency then
-		ServerGameInfo.UpdatePlayerCurrency(
-			player,
-			GameConfig.CurrencyType.Coin,
-			reward.rewardCount,
-			GameConfig.ItemCountChangeReason.GainFromPurchase
-		)
+		ServerGameInfo.UpdatePlayerCurrency(player, GameConfig.CurrencyType.Coin, reward.rewardCount, GameConfig.ItemCountChangeReason.GainFromPurchase)
 		return
 	end
 
@@ -147,14 +142,7 @@ local function GrantShopBundleByProductId(player: Player, receiptInfo: GameConfi
 			end
 			for _, reward in ipairs(bundleData.rewards) do
 				if (reward.productIndex or 1) == productIndex then
-					GrantShopBundleReward(
-						player,
-						reward,
-						getGrantTipKey(reward),
-						reward.rewardCount,
-						shopBundleId,
-						productId
-					)
+					GrantShopBundleReward(player, reward, getGrantTipKey(reward), reward.rewardCount, shopBundleId, productId)
 				end
 			end
 			playerInfo.ownedShopBundleMap[shopBundleId] = true
@@ -196,7 +184,13 @@ local function ProcessReceipt(receiptInfo: GameConfig.ReceiptInfo): Enum.Product
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
 
-	if receiptInfo.ProductId == GameConfig.Paving.DeathRescueProductId then
+	if receiptInfo.ProductId == GameConfig.OfflineRewards.PaidReceiveProductId then
+		local claimed = ServerGameInfo.TryClaimOfflineReward(player, true)
+		if claimed then
+			AnalyticsTool.AddProductPurchaseEvent(player, receiptInfo)
+		end
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	elseif receiptInfo.ProductId == GameConfig.Paving.DeathRescueProductId then
 		-- 取消付款无收据，不会进入此处；客户端 GameTipFrame 中 PromptProductPurchaseFinished 会触发坠落恢复
 		NetMsg.FireNotifyRescueStart(player)
 		return Enum.ProductPurchaseDecision.PurchaseGranted

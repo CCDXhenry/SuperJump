@@ -63,13 +63,7 @@ local function DebugModelYieldLog(eventName: string, playerId: number, pointInde
 	for key, value in pairs(details) do
 		detailText ..= " " .. tostring(key) .. "=" .. tostring(value)
 	end
-	print(
-		"[ModelYieldDebug][Server]",
-		eventName,
-		"userId=" .. tostring(playerId),
-		"point=" .. pointIndexStr,
-		detailText
-	)
+	print("[ModelYieldDebug][Server]", eventName, "userId=" .. tostring(playerId), "point=" .. pointIndexStr, detailText)
 end
 
 -- 付费 Brainrot 升级的挂起记录：按玩家缓存一次性升级信息，由收据回调消费
@@ -82,6 +76,9 @@ type PendingPaidShopItem = {
 	productId: number,
 }
 local pendingPaidShopItemByUserId: { [number]: PendingPaidShopItem } = {}
+
+type PendingOfflineReward = GameConfig.OfflineRewardInfo
+local pendingOfflineRewardByUserId: { [number]: PendingOfflineReward } = {}
 
 local function HasUniquePaidProductForItem(itemType: number, itemId: number, productId: number): boolean
 	if productId <= 0 then
@@ -185,11 +182,10 @@ function ServerGameInfo.InitPlayerInfo(
 			currentId = "",
 			ownedList = {},
 		},
-		guideProgressInfo = playerSaveInfo.guideProgressInfo
-			or {
-				guideStepDoneMap = {},
-				appearedGuideTypeInfo = {},
-			},
+		guideProgressInfo = playerSaveInfo.guideProgressInfo or {
+			guideStepDoneMap = {},
+			appearedGuideTypeInfo = {},
+		},
 		discoveredIslandIds = playerSaveInfo.discoveredIslandIds or {},
 		homeSlot = "",
 
@@ -250,6 +246,7 @@ function ServerGameInfo.InitPlayerInfo(
 	NetMsg.FireNotifyPlayerInfoInit(player, clientLocalPlayerSaveInfo, clientOtherPlayerSyncInfoMap, playerConfigInfo)
 	NetMsg.FireNotifyPlayersOtherPlayerInfoInit(player.UserId, clientOtherPlayerSaveInfo)
 	NetMsg.FireNotifyPlayerCarriedUpdate(player, playerInfo.carriedInfo)
+	NetMsg.FireNotifyOfflineRewardInfo(player, ServerGameInfo.PrepareOfflineReward(player))
 
 	-- 应用行走速度
 	ServerGameInfo.ApplyWalkSpeed(player)
@@ -291,6 +288,7 @@ function ServerGameInfo.RemovePlayerInfo(player: Player)
 	playerInfoMap[player.UserId] = nil
 	lastBroadcastModelYieldMap[player.UserId] = nil
 	pendingPaidShopItemByUserId[player.UserId] = nil
+	pendingOfflineRewardByUserId[player.UserId] = nil
 	--print("[ServerGameInfo] RemovePlayerInfo for", player.Name)
 end
 
@@ -341,6 +339,89 @@ function ServerGameInfo.GetRebirthMultiplier(player: Player): number
 	-- rebirthLevel 语义改为 0-based “已重生次数”，1 次重生对应 RebirthMap[1]
 	local config = GameConfig.RebirthMap[rebirthLevel]
 	return if config then config.collectMultiple else 1
+end
+
+local function GetRebirthMultiplierByPlayerInfo(playerInfo: GameConfig.PlayerInfo): number
+	local rebirthLevel = playerInfo.shopInfo.rebirthLevel or 0
+	if rebirthLevel <= 0 then
+		return 1
+	end
+	local config = GameConfig.RebirthMap[rebirthLevel]
+	return if config then config.collectMultiple else 1
+end
+
+function ServerGameInfo.GetHomeCoinYieldPerSecond(playerInfo: GameConfig.PlayerInfo): number
+	local totalYield = 0
+	local multiplier = GetRebirthMultiplierByPlayerInfo(playerInfo)
+	for _, model in pairs(playerInfo.homeInfo.placedModels) do
+		local brainrotData = GameConfig.BrainrotIdMap[model.configId]
+		if brainrotData then
+			local baseYield = GameConfig.GetBrainrotAbilityWithVariant(brainrotData.baseAbility, model.level, model.variantId)
+			totalYield += math.ceil(baseYield * multiplier)
+		end
+	end
+	return totalYield
+end
+
+function ServerGameInfo.PrepareOfflineReward(player: Player): GameConfig.OfflineRewardInfo?
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return nil
+	end
+
+	local offlineSeconds = math.floor(math.max(0, playerInfo.timeOfThisLogin - (playerInfo.lastOnlineDateUTC or 0)))
+	if offlineSeconds <= GameConfig.OfflineRewards.MinOfflineSeconds then
+		pendingOfflineRewardByUserId[player.UserId] = nil
+		return nil
+	end
+
+	local rewardPerSecond = ServerGameInfo.GetHomeCoinYieldPerSecond(playerInfo)
+	local baseReward = math.floor(offlineSeconds * rewardPerSecond)
+	if baseReward <= 0 then
+		pendingOfflineRewardByUserId[player.UserId] = nil
+		return nil
+	end
+
+	local multiplier = GameConfig.OfflineRewards.PaidReceiveMultiplier
+	local offlineRewardInfo: GameConfig.OfflineRewardInfo = {
+		offlineSeconds = offlineSeconds,
+		rewardPerSecond = rewardPerSecond,
+		baseReward = baseReward,
+		paidReward = baseReward * multiplier,
+		paidReceiveMultiplier = multiplier,
+		paidReceiveProductId = GameConfig.OfflineRewards.PaidReceiveProductId,
+	}
+	pendingOfflineRewardByUserId[player.UserId] = offlineRewardInfo
+	return offlineRewardInfo
+end
+
+function ServerGameInfo.TryClaimOfflineReward(player: Player, isPaid: boolean): boolean
+	local pending = pendingOfflineRewardByUserId[player.UserId]
+	if pending == nil then
+		NetMsg.FireNotifyOfflineRewardInfo(player, nil)
+		return false
+	end
+
+	pendingOfflineRewardByUserId[player.UserId] = nil
+	local amount = if isPaid then pending.paidReward else pending.baseReward
+	if amount <= 0 then
+		NetMsg.FireNotifyOfflineRewardInfo(player, nil)
+		return false
+	end
+
+	ServerGameInfo.UpdatePlayerCurrency(player, GameConfig.CurrencyType.Coin, amount, GameConfig.ItemCountChangeReason.GainFromOfflineReward)
+	NetMsg.FireNotifyOfflineRewardInfo(player, nil)
+	return true
+end
+
+function ServerGameInfo.MarkPlayerLastOnlineNow(player: Player)
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return
+	end
+	local now = DateTime.now()
+	playerInfo.lastOnlineDateUTC = now.UnixTimestamp
+	playerInfo.playerInfoChanged = true
 end
 
 local function GetMoneyCount(playerInfo: GameConfig.PlayerInfo): number
@@ -421,12 +502,7 @@ function ServerGameInfo.ExecuteRebirth(player: Player, isPaid: boolean): boolean
 	NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.RebirthLevel, playerInfo.shopInfo.rebirthLevel)
 
 	--print("[ServerGameInfo] ExecuteRebirth success for", player.Name, "New Level:", playerInfo.shopInfo.rebirthLevel, "isPaid:", isPaid)
-	analyticsTool().LogPlayerRebirth(
-		player,
-		playerInfo.shopInfo.rebirthLevel,
-		jumpPowerLevelBeforeRebirth,
-		if isPaid then 1 else 0
-	)
+	analyticsTool().LogPlayerRebirth(player, playerInfo.shopInfo.rebirthLevel, jumpPowerLevelBeforeRebirth, if isPaid then 1 else 0)
 	return true
 end
 
@@ -451,7 +527,6 @@ function ServerGameInfo.ChangePlayerLoginDays(player: Player, loginDays: number,
 	playerInfo.loginDays = loginDays
 	--print("[ServerGameInfo] ChangePlayerLoginDays for", player.Name, "to", loginDays)
 	playerInfo.lastOnlineDate = lastOnlineDate
-	playerInfo.lastOnlineDateUTC = DateTime.fromUniversalTime(lastOnlineDate.Year, lastOnlineDate.Month, lastOnlineDate.Day).UnixTimestamp
 	playerInfo.playerInfoChanged = true
 end
 
@@ -478,14 +553,7 @@ function ServerGameInfo.SetPendingPaidShopItem(player: Player, itemType: number,
 		return false
 	end
 	if not HasUniquePaidProductForItem(itemType, itemId, productId) then
-		warn(
-			string.format(
-				"[ServerGameInfo] Rejecting pending paid item: ambiguous productId=%d for itemType=%d itemId=%d",
-				productId,
-				itemType,
-				itemId
-			)
-		)
+		warn(string.format("[ServerGameInfo] Rejecting pending paid item: ambiguous productId=%d for itemType=%d itemId=%d", productId, itemType, itemId))
 		return false
 	end
 	if itemType == GameConfig.ItemType.ExEquip then
@@ -881,16 +949,7 @@ function ServerGameInfo.UpgradePlacedModelByLevelAdd(player: Player, pointIndex:
 		analyticsTool().LogModelUpgrade(player, model.configId, model.level)
 	end
 
-	print(
-		"[ServerGameInfo] UpgradePlacedModelByLevelAdd for",
-		player.Name,
-		"at point",
-		pointIndex,
-		"levelAdd",
-		levelAdd,
-		"to level",
-		model.level
-	)
+	print("[ServerGameInfo] UpgradePlacedModelByLevelAdd for", player.Name, "at point", pointIndex, "levelAdd", levelAdd, "to level", model.level)
 end
 
 -- 标记一次待处理的付费 Brainrot 升级（由 PlayerHomeServerManager 写入，由收据回调消费）
@@ -906,14 +965,7 @@ function ServerGameInfo.SetPendingBrainrotPaidUpgrade(player: Player, pointIndex
 		createdAt = os.clock(),
 	}
 
-	print(
-		"[ServerGameInfo] SetPendingBrainrotPaidUpgrade for",
-		player.Name,
-		"pointIndex",
-		pointIndex,
-		"levelAdd",
-		levelAdd
-	)
+	print("[ServerGameInfo] SetPendingBrainrotPaidUpgrade for", player.Name, "pointIndex", pointIndex, "levelAdd", levelAdd)
 end
 
 -- 在收据回调中尝试消费付费 Brainrot 升级挂起记录
@@ -1346,7 +1398,6 @@ function ServerGameInfo.SetPlayerJumpPowerLevel(player: Player, level: number)
 	playerInfo.playerInfoChanged = true
 	NetMsg.FireNotifyPlayerJumpPowerUpdate(player, playerInfo.jumpPower, 0)
 end
-
 
 -- 更新玩家 JumpRunway 最远距离记录（仅当新距离更远时写入）
 function ServerGameInfo.UpdateJumpRunwayBestDistance(player: Player, distance: number)

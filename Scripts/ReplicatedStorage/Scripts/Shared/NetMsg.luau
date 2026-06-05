@@ -35,10 +35,31 @@ export type JumpRunwayInputReport = {
 local NetMsg = {}
 
 local replicatedStorage: ReplicatedStorage = game:GetService("ReplicatedStorage")
+local runService: RunService = game:GetService("RunService")
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
 local remoteEventsFolder: Folder = replicatedStorage:FindFirstChild("RemoteEvents") :: Folder
+
+local function GetOrCreateRemoteEvent(eventName: string): RemoteEvent?
+	local existing = remoteEventsFolder:FindFirstChild(eventName)
+	if existing and existing:IsA("RemoteEvent") then
+		return existing
+	end
+	if runService:IsServer() then
+		local created = Instance.new("RemoteEvent")
+		created.Name = eventName
+		created.Parent = remoteEventsFolder
+		return created
+	end
+	local waited = remoteEventsFolder:WaitForChild(eventName, 10)
+	if waited and waited:IsA("RemoteEvent") then
+		return waited
+	end
+	warn("[NetMsg] RemoteEvent missing:", eventName)
+	return nil
+end
+
 local requestSetBGMVolumeEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestSetBGMVolume") :: RemoteEvent
 local requestSetSoundEffectVolumeEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestSetSoundEffectVolume") :: RemoteEvent
 local requestSetVibrationsOnOffStateEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestSetVibrationsOnOffState") :: RemoteEvent
@@ -70,6 +91,8 @@ local notifyPlayerInventoryUpdateEvent: RemoteEvent = remoteEventsFolder:FindFir
 local notifyPlayerSkillLevelUpdateEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("NotifyPlayerSkillLevelUpdate") :: RemoteEvent
 local notifyPlayerCarriedUpdateEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("NotifyPlayerCarriedUpdate") :: RemoteEvent
 local notifyPlayerCurrencyUpdateEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("NotifyPlayerCurrencyUpdate") :: RemoteEvent
+local requestClaimOfflineRewardEvent: RemoteEvent? = GetOrCreateRemoteEvent("RequestClaimOfflineReward")
+local notifyOfflineRewardInfoEvent: RemoteEvent? = GetOrCreateRemoteEvent("NotifyOfflineRewardInfo")
 
 -- Gifting
 local requestSendGiftEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestSendGift") :: RemoteEvent
@@ -82,10 +105,8 @@ local notifyShowGameTipEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("N
 local notifyRescueStartEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("NotifyRescueStart") :: RemoteEvent
 local requestOpenChestEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestOpenChest") :: RemoteEvent
 local notifyChestOpenResultEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("NotifyChestOpenResult") :: RemoteEvent
-local notifyGuideProgressInfoEvent: RemoteEvent? =
-	remoteEventsFolder:FindFirstChild("NotifyGuideProgressInfo") :: RemoteEvent?
-local requestCompleteGuideStepEvent: RemoteEvent? =
-	remoteEventsFolder:FindFirstChild("RequestCompleteGuideStep") :: RemoteEvent?
+local notifyGuideProgressInfoEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyGuideProgressInfo") :: RemoteEvent?
+local requestCompleteGuideStepEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestCompleteGuideStep") :: RemoteEvent?
 
 -- Rebirth
 local requestRebirthEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestRebirth") :: RemoteEvent
@@ -99,12 +120,9 @@ local notifyEarthquakeWarningEvent: RemoteEvent = remoteEventsFolder:FindFirstCh
 
 -- Chest workbench (optional RemoteEvents — create under ReplicatedStorage.RemoteEvents in Studio)
 local requestWorkbenchManualEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestWorkbenchManual") :: RemoteEvent?
-local requestPurchaseWorkbenchUpgradeEvent: RemoteEvent? =
-	remoteEventsFolder:FindFirstChild("RequestPurchaseWorkbenchUpgrade") :: RemoteEvent?
-local requestPlaceChestOnWorkbenchSlotEvent: RemoteEvent? =
-	remoteEventsFolder:FindFirstChild("RequestPlaceChestOnWorkbenchSlot") :: RemoteEvent?
-local requestPickupChestFromWorkbenchSlotEvent: RemoteEvent? =
-	remoteEventsFolder:FindFirstChild("RequestPickupChestFromWorkbenchSlot") :: RemoteEvent?
+local requestPurchaseWorkbenchUpgradeEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestPurchaseWorkbenchUpgrade") :: RemoteEvent?
+local requestPlaceChestOnWorkbenchSlotEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestPlaceChestOnWorkbenchSlot") :: RemoteEvent?
+local requestPickupChestFromWorkbenchSlotEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestPickupChestFromWorkbenchSlot") :: RemoteEvent?
 local notifyWorkbenchSlotsUpdateEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyWorkbenchSlotsUpdate") :: RemoteEvent?
 
 -- JumpRunway：在 Studio 的 ReplicatedStorage.RemoteEvents 下创建 `NotifyJumpRunwayState`、`RequestJumpRunwayInput`
@@ -115,14 +133,11 @@ local requestJumpRunwayInputEvent: RemoteEvent? = remoteEventsFolder:FindFirstCh
 local requestJumpRunwayBestDistanceEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestJumpRunwayBestDistance") :: RemoteEvent?
 
 -- JumpRunway LittleElfChest：请求/通知小精灵宝箱奖励
-local requestJumpRunwayLittleElfChestRewardEvent: RemoteEvent? =
-	remoteEventsFolder:FindFirstChild("RequestJumpRunwayLittleElfChestReward") :: RemoteEvent?
-local requestJumpRunwayLittleElfChestGrantEvent: RemoteEvent? =
-	remoteEventsFolder:FindFirstChild("RequestJumpRunwayLittleElfChestGrant") :: RemoteEvent?
+local requestJumpRunwayLittleElfChestRewardEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestJumpRunwayLittleElfChestReward") :: RemoteEvent?
+local requestJumpRunwayLittleElfChestGrantEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestJumpRunwayLittleElfChestGrant") :: RemoteEvent?
 local requestJumpRunwayLittleElfChestStartCarryEvent: RemoteEvent? =
 	remoteEventsFolder:FindFirstChild("RequestJumpRunwayLittleElfChestStartCarry") :: RemoteEvent?
-local notifyJumpRunwayLittleElfChestRewardEvent: RemoteEvent? =
-	remoteEventsFolder:FindFirstChild("NotifyJumpRunwayLittleElfChestReward") :: RemoteEvent?
+local notifyJumpRunwayLittleElfChestRewardEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyJumpRunwayLittleElfChestReward") :: RemoteEvent?
 
 -- ExEquip 锻炼器材
 local requestBuyExEquipEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestBuyExEquip") :: RemoteEvent?
@@ -134,8 +149,7 @@ local requestClaimGroupRewardEvent: RemoteEvent? = remoteEventsFolder:FindFirstC
 -- 锻炼模式
 local requestStartExerciseEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestStartExercise") :: RemoteEvent?
 local requestStopExerciseEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestStopExercise") :: RemoteEvent?
-local requestExerciseClickRewardEvent: RemoteEvent? =
-	remoteEventsFolder:FindFirstChild("RequestExerciseClickReward") :: RemoteEvent?
+local requestExerciseClickRewardEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestExerciseClickReward") :: RemoteEvent?
 local notifyExerciseStartEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyExerciseStart") :: RemoteEvent?
 local notifyExerciseEndEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyExerciseEnd") :: RemoteEvent?
 
@@ -257,7 +271,13 @@ function NetMsg.FireRequestPlaceBrickBatch(positions: { Vector3 }, batchId: numb
 	--print("[NetMsg] FireRequestPlaceBrickBatch with", #positions, "points")
 	requestPlaceBrickBatchEvent:FireServer(positions, batchId, clientSentAt, isEarthquakeMarkActive)
 end
-function NetMsg.ConnectRequestPlaceBrickBatch(callback: (player: Player, positions: { Vector3 }, batchId: number?, clientSentAt: number?, isEarthquakeMarkActive: boolean?) -> ())
+function NetMsg.ConnectRequestPlaceBrickBatch(callback: (
+	player: Player,
+	positions: { Vector3 },
+	batchId: number?,
+	clientSentAt: number?,
+	isEarthquakeMarkActive: boolean?
+) -> ())
 	requestPlaceBrickBatchEvent.OnServerEvent:Connect(callback)
 end
 
@@ -272,9 +292,13 @@ function NetMsg.FireNotifyPlaceBrickBatchResult(
 	notifyPlaceBrickBatchResultEvent:FireClient(player, batchId, acceptedIndexes, rejectedList, serverBricks, serverNow or os.clock())
 end
 
-function NetMsg.ConnectNotifyPlaceBrickBatchResult(
-	callback: (batchId: number, acceptedIndexes: { number }, rejectedList: { { index: number, reason: string } }, serverBricks: number, serverNow: number) -> ()
-)
+function NetMsg.ConnectNotifyPlaceBrickBatchResult(callback: (
+	batchId: number,
+	acceptedIndexes: { number },
+	rejectedList: { { index: number, reason: string } },
+	serverBricks: number,
+	serverNow: number
+) -> ())
 	notifyPlaceBrickBatchResultEvent.OnClientEvent:Connect(callback)
 end
 
@@ -330,6 +354,34 @@ function NetMsg.FireRequestClaimYield(targetPlayerId: number, pointIndex: number
 end
 function NetMsg.ConnectRequestClaimYield(callback: (player: Player, targetPlayerId: number, pointIndex: number) -> ())
 	requestClaimYieldEvent.OnServerEvent:Connect(callback)
+end
+
+function NetMsg.FireRequestClaimOfflineReward()
+	if requestClaimOfflineRewardEvent == nil then
+		return
+	end
+	requestClaimOfflineRewardEvent:FireServer()
+end
+
+function NetMsg.ConnectRequestClaimOfflineReward(callback: (player: Player) -> ())
+	if requestClaimOfflineRewardEvent == nil then
+		return
+	end
+	requestClaimOfflineRewardEvent.OnServerEvent:Connect(callback)
+end
+
+function NetMsg.FireNotifyOfflineRewardInfo(player: Player, offlineRewardInfo: GameConfig.OfflineRewardInfo?)
+	if notifyOfflineRewardInfoEvent == nil then
+		return
+	end
+	notifyOfflineRewardInfoEvent:FireClient(player, offlineRewardInfo)
+end
+
+function NetMsg.ConnectNotifyOfflineRewardInfo(callback: (offlineRewardInfo: GameConfig.OfflineRewardInfo?) -> ())
+	if notifyOfflineRewardInfoEvent == nil then
+		return
+	end
+	notifyOfflineRewardInfoEvent.OnClientEvent:Connect(callback)
 end
 
 -- 客户端请求从家园展台拾取模型
@@ -483,11 +535,24 @@ function NetMsg.ConnectNotifyBrainrotQueueUpdate(callback: (queue: { GameConfig.
 end
 
 -- 服务端通知客户端显示游戏提示
-function NetMsg.FireNotifyShowGameTip(player: Player, tipContentSource: string, tweenType: number, tipContentKey: string?, tipContentArgs: {string}?, textColor: Color3?)
+function NetMsg.FireNotifyShowGameTip(
+	player: Player,
+	tipContentSource: string,
+	tweenType: number,
+	tipContentKey: string?,
+	tipContentArgs: { string }?,
+	textColor: Color3?
+)
 	notifyShowGameTipEvent:FireClient(player, tipContentSource, tweenType, tipContentKey, tipContentArgs, textColor)
 end
 
-function NetMsg.ConnectNotifyShowGameTip(callback: (tipContentSource: string, tweenType: number, tipContentKey: string?, tipContentArgs: {string}?, textColor: Color3?) -> ())
+function NetMsg.ConnectNotifyShowGameTip(callback: (
+	tipContentSource: string,
+	tweenType: number,
+	tipContentKey: string?,
+	tipContentArgs: { string }?,
+	textColor: Color3?
+) -> ())
 	notifyShowGameTipEvent.OnClientEvent:Connect(callback)
 end
 
@@ -531,7 +596,15 @@ function NetMsg.FireNotifyChestOpenResult(
 	notifyChestOpenResultEvent:FireClient(player, uid, chestConfigId, chestLevel, finalBrainrotId, finalVariantId)
 end
 
-function NetMsg.ConnectNotifyChestOpenResult(callback: (uid: string, chestConfigId: number, chestLevel: number, finalBrainrotId: number, finalVariantId: number?) -> ())
+function NetMsg.ConnectNotifyChestOpenResult(
+	callback: (
+		uid: string,
+		chestConfigId: number,
+		chestLevel: number,
+		finalBrainrotId: number,
+		finalVariantId: number?
+	) -> ()
+)
 	notifyChestOpenResultEvent.OnClientEvent:Connect(callback)
 end
 
@@ -560,13 +633,7 @@ function NetMsg.FireNotifyEarthquakeState(earthquakeId: number, isStart: boolean
 	notifyEarthquakeStateEvent:FireAllClients(earthquakeId, isStart, duration, judgeCount)
 end
 
-function NetMsg.FireNotifyEarthquakeStateToPlayer(
-	player: Player,
-	earthquakeId: number,
-	isStart: boolean,
-	duration: number,
-	judgeCount: number
-)
+function NetMsg.FireNotifyEarthquakeStateToPlayer(player: Player, earthquakeId: number, isStart: boolean, duration: number, judgeCount: number)
 	notifyEarthquakeStateEvent:FireClient(player, earthquakeId, isStart, duration, judgeCount)
 end
 
@@ -588,12 +655,7 @@ function NetMsg.ConnectNotifyEarthquakeWarning(callback: (earthquakeId: number, 
 end
 
 -- 服务端广播本轮判定掉落结果
-function NetMsg.FireNotifyEarthquakeJudgeDrop(
-	earthquakeId: number,
-	judgeIndex: number,
-	droppedFloatBlocks: { any },
-	droppedPavedBricks: { any }
-)
+function NetMsg.FireNotifyEarthquakeJudgeDrop(earthquakeId: number, judgeIndex: number, droppedFloatBlocks: { any }, droppedPavedBricks: { any })
 	notifyEarthquakeJudgeDropEvent:FireAllClients(earthquakeId, judgeIndex, droppedFloatBlocks, droppedPavedBricks)
 end
 
@@ -618,9 +680,7 @@ function NetMsg.FireNotifyEarthquakeRecover(earthquakeId: number, recoverFloatBl
 	notifyEarthquakeRecoverEvent:FireAllClients(earthquakeId, recoverFloatBlocks, recoverPavedBricks)
 end
 
-function NetMsg.ConnectNotifyEarthquakeRecover(
-	callback: (earthquakeId: number, recoverFloatBlocks: { any }, recoverPavedBricks: { any }) -> ()
-)
+function NetMsg.ConnectNotifyEarthquakeRecover(callback: (earthquakeId: number, recoverFloatBlocks: { any }, recoverPavedBricks: { any }) -> ())
 	notifyEarthquakeRecoverEvent.OnClientEvent:Connect(callback)
 end
 
@@ -705,9 +765,7 @@ function NetMsg.FireRequestPickupChestFromWorkbenchSlot(instanceKey: string, slo
 	end
 end
 
-function NetMsg.ConnectNotifyWorkbenchSlotsUpdate(
-	callback: (instanceKey: string, payload: { [string]: any }) -> ()
-)
+function NetMsg.ConnectNotifyWorkbenchSlotsUpdate(callback: (instanceKey: string, payload: { [string]: any }) -> ())
 	if notifyWorkbenchSlotsUpdateEvent == nil then
 		return
 	end
@@ -852,13 +910,7 @@ function NetMsg.ConnectRequestJumpRunwayLittleElfChestGrant(callback: (player: P
 end
 
 -- 服务端通知客户端 JumpRunway 小精灵宝箱开箱奖励结果
-function NetMsg.FireNotifyJumpRunwayLittleElfChestReward(
-	player: Player,
-	brainrotId: number,
-	chestConfigId: number,
-	chestLevel: number,
-	variantId: number
-)
+function NetMsg.FireNotifyJumpRunwayLittleElfChestReward(player: Player, brainrotId: number, chestConfigId: number, chestLevel: number, variantId: number)
 	if notifyJumpRunwayLittleElfChestRewardEvent == nil then
 		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
 		return
@@ -866,9 +918,7 @@ function NetMsg.FireNotifyJumpRunwayLittleElfChestReward(
 	notifyJumpRunwayLittleElfChestRewardEvent:FireClient(player, brainrotId, chestConfigId, chestLevel, variantId)
 end
 
-function NetMsg.ConnectNotifyJumpRunwayLittleElfChestReward(
-	callback: (brainrotId: number, chestConfigId: number, chestLevel: number, variantId: number) -> ()
-)
+function NetMsg.ConnectNotifyJumpRunwayLittleElfChestReward(callback: (brainrotId: number, chestConfigId: number, chestLevel: number, variantId: number) -> ())
 	if notifyJumpRunwayLittleElfChestRewardEvent == nil then
 		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
 		return

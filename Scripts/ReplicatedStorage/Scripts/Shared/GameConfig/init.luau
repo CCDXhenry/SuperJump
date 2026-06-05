@@ -220,11 +220,33 @@ GameConfig.ItemCountChangeReason = {
 	GainFromSellModel = 1003,
 	GainFromCollect = 1004,
 	GainFromClaimModelYield = 1005,
+	GainFromOfflineReward = 1006,
 	SpendOnUpgradeBrainrot = 2001,
 	SpendOnUpgradeHome = 2002,
 	SpendOnUpgradeWalkSpeed = 2003,
 	SpendOnUpgradeJetpackFuel = 2004,
 	SpendOnUpgradeJetpackThrust = 2005,
+}
+
+export type OfflineRewardsConfig = {
+	MinOfflineSeconds: number,
+	PaidReceiveMultiplier: number,
+	PaidReceiveProductId: number,
+}
+
+GameConfig.OfflineRewards = {
+	MinOfflineSeconds = 60,
+	PaidReceiveMultiplier = 10,
+	PaidReceiveProductId = 3602750413,
+} :: OfflineRewardsConfig
+
+export type OfflineRewardInfo = {
+	offlineSeconds: number,
+	rewardPerSecond: number,
+	baseReward: number,
+	paidReward: number,
+	paidReceiveMultiplier: number,
+	paidReceiveProductId: number,
 }
 
 export type BrainrotData = {
@@ -856,8 +878,6 @@ GameConfig.Paving = {
 -- 物理与状态机由客户端权威驱动；服务端仅会话登记、沿轴样本防作弊与终局距离采纳。
 -- JumpRunway 表内按主题分组；常用项由 JumpRunwayDesigner 透传，实现细节注释仍在本表。
 
-
-
 -- JumpRunway 策划调参：仅修改本表数值；经 GameConfig.JumpRunway 透传，业务勿直接读此表。
 GameConfig.JumpRunwayDesigner = {
 	-- ═══════════════════════════════════════
@@ -941,7 +961,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- 冲刺燃料上限(s)；↑ 可冲更久
 	DASH_FUEL_MAX = 2.5,
 	-- 冲刺向上线加速度；↑ 抬头爬升更强
-	DASH_UPWARD_ACCEL = 196.2*0.075,
+	DASH_UPWARD_ACCEL = 196.2 * 0.075,
 	-- 冲刺最高竖直速度；↑ 可飞更高
 	DASH_UPWARD_VY_MAX = 0,
 	-- 松冲刺后额外沿轴速衰减率；↑ 松键收速更快
