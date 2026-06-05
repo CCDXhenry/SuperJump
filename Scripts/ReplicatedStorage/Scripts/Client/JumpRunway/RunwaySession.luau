@@ -6755,7 +6755,8 @@ function RunwaySession.UpdateTick(dt: number)
 		nowClock,
 		NormalizeRunwayForward,
 		ComputeRunwayHorizontalAlongSpeed,
-		RunwaySession.IsRunwayScriptedGrounded
+		RunwaySession.IsRunwayScriptedGrounded,
+		RunwaySession.IsFinalDashThrustActive()
 	)
 	if not RunwaySession.IsLittleElfChestRunwayFlowActive() and not RunwaySession.ShouldDeferFinalReportForSlideChest() then
 		RunwayNetBridge.MaybeReportFinal(
@@ -6884,6 +6885,7 @@ function RunwaySession.NetReportJump()
 		kind = Kind.Input,
 		jumpPressed = true,
 		dashHeld = localState.dashHeld,
+		finalDashThrustActive = RunwaySession.IsFinalDashThrustActive(),
 		clientClock = os.clock(),
 		clientPhase = localState.phase,
 	})
@@ -6900,6 +6902,7 @@ function RunwaySession.NetReportDashIfChanged()
 	NetMsg.FireRequestJumpRunwayInput({
 		kind = Kind.Input,
 		dashHeld = localState.dashHeld,
+		finalDashThrustActive = RunwaySession.IsFinalDashThrustActive(),
 		clientClock = os.clock(),
 		clientPhase = localState.phase,
 	})

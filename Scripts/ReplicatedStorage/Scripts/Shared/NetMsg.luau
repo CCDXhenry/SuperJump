@@ -20,6 +20,7 @@ export type JumpRunwayInputReport = {
 	kind: number,
 	jumpPressed: boolean?,
 	dashHeld: boolean?,
+	finalDashThrustActive: boolean?,
 	sampleAlong: number?,
 	sampleAlongSpeed: number?,
 	samplePerpMag: number?,

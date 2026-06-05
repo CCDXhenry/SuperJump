@@ -25,7 +25,8 @@ function RunwayNetBridge.SendSampleIfDue(
 	nowClock: number,
 	normalizeRunwayForward: (Vector3) -> Vector3,
 	computeRunwayHorizontalAlongSpeed: (Vector3, Vector3) -> number,
-	isRunwayScriptedGrounded: (Humanoid) -> boolean
+	isRunwayScriptedGrounded: (Humanoid) -> boolean,
+	finalDashThrustActive: boolean
 )
 	if not netMsg.JumpRunwayRemotesExist() then
 		return
@@ -55,6 +56,7 @@ function RunwayNetBridge.SendSampleIfDue(
 	netMsg.FireRequestJumpRunwayInput({
 		kind = kind.Sample,
 		dashHeld = localState.dashHeld,
+		finalDashThrustActive = finalDashThrustActive,
 		sampleAlong = along,
 		sampleAlongSpeed = alongSpeed,
 		samplePerpMag = perpMag,

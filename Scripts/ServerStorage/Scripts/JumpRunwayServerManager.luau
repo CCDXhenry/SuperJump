@@ -187,6 +187,7 @@ local function NormalizeJumpRunwayInputReport(raw: any): NetMsg.JumpRunwayInputR
 		kind = kindN,
 		jumpPressed = if typeof(t.jumpPressed) == "boolean" then t.jumpPressed :: boolean else nil,
 		dashHeld = if typeof(t.dashHeld) == "boolean" then t.dashHeld :: boolean else nil,
+		finalDashThrustActive = if typeof(t.finalDashThrustActive) == "boolean" then t.finalDashThrustActive :: boolean else nil,
 		sampleAlong = sampleAlong,
 		sampleAlongSpeed = CoerceNumber(t.sampleAlongSpeed),
 		samplePerpMag = CoerceNumber(t.samplePerpMag),
@@ -811,8 +812,8 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 	if kind == Kind.Sample then
 		local ok = IngestSample(player, st, report, nowClock)
 		if ok then
-			if report.dashHeld ~= nil then
-				JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, report.dashHeld == true and report.clientPhase == Ph.Airborne)
+			if report.finalDashThrustActive ~= nil then
+				JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, report.finalDashThrustActive == true)
 			end
 			NotifyJumpRunway(
 				player,
@@ -832,8 +833,8 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 		if report.jumpPressed == true then
 			ServerGameInfo.IncrementJumpRunwayJumpCount(player)
 		end
-		if report.dashHeld ~= nil then
-			JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, report.dashHeld == true and report.clientPhase == Ph.Airborne)
+		if report.finalDashThrustActive ~= nil then
+			JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, report.finalDashThrustActive == true)
 		end
 	elseif kind == Kind.Abort then
 		JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, false)
