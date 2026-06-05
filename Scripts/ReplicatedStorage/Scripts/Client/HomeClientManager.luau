@@ -35,10 +35,68 @@ local yieldAnchorModelInstanceId: { [number]: { [string]: string } } = {}
 local localUpgradePreviewLevelByKey: { [string]: number } = {}
 local lastClaimRequestClockByKey: { [string]: number } = {}
 local floorModelsCache: { [string]: { [number]: Model } } = {}
+local localSlotInteractionResetLevelBySlot: { [string]: number } = {}
 local upgradeUITemplateBackup: SurfaceGui? = nil
 local FLOOR_HEIGHT = 32.6
 local MAX_FLOOR_COUNT = 3 -- 最大楼层上限
-local function GetPlotsPerFloor(slotModel: Model): number
+local FLOOR_PLACE_MODELS_NORMALIZED_PLOTS_ATTR = "PlaceModelsNormalizedPlotsPerFloor"
+local FLOOR_COLLECT_TOUCH_RESET_ATTR = "CollectTouchReset"
+local function GetFloorNumber(inst: Instance): number?
+	return tonumber(inst.Name:match("^Lv(%d+)$"))
+end
+
+local function FindFloorModel(slotModel: Instance, floorNumber: number): Model?
+	local floor = slotModel:FindFirstChild("Lv" .. tostring(floorNumber))
+	if floor and floor:IsA("Model") then
+		return floor
+	end
+	return nil
+end
+
+local function FindStructuralHomeModel(inst: Instance): Instance?
+	if inst.Name:match("^HomeModel") then
+		return inst
+	end
+	for _, child in ipairs(inst:GetChildren()) do
+		if child.Name:match("^HomeModel") then
+			return child
+		end
+	end
+	return nil
+end
+
+local function NormalizeFloorPlaceModels(floorModel: Model, floorNumber: number, plotsPerFloor: number)
+	if floorNumber <= 1 or plotsPerFloor <= 0 then
+		return
+	end
+	if floorModel:GetAttribute(FLOOR_PLACE_MODELS_NORMALIZED_PLOTS_ATTR) == plotsPerFloor then
+		return
+	end
+	for _, child in ipairs(floorModel:GetChildren()) do
+		local currentPointIndex = tonumber(child.Name:match("^PlaceModel(%d+)$"))
+		if currentPointIndex then
+			local localPointIndex = ((currentPointIndex - 1) % plotsPerFloor) + 1
+			child.Name = "PlaceModel" .. tostring((floorNumber - 1) * plotsPerFloor + localPointIndex)
+		end
+	end
+	floorModel:SetAttribute(FLOOR_PLACE_MODELS_NORMALIZED_PLOTS_ATTR, plotsPerFloor)
+end
+
+local function GetFloorModels(slotModel: Instance): { Model }
+	local floorModels: { Model } = {}
+	for _, child in ipairs(slotModel:GetChildren()) do
+		local floorNumber = GetFloorNumber(child)
+		if floorNumber and child:IsA("Model") then
+			table.insert(floorModels, child)
+		end
+	end
+	table.sort(floorModels, function(left: Model, right: Model): boolean
+		return (GetFloorNumber(left) or 0) < (GetFloorNumber(right) or 0)
+	end)
+	return floorModels
+end
+
+local function GetPlotsPerFloor(slotModel: Instance): number
 	local lv1 = slotModel:FindFirstChild("Lv1")
 	if not lv1 then
 		return 6
@@ -51,10 +109,40 @@ local function GetPlotsPerFloor(slotModel: Model): number
 	end
 	return if count > 0 then count else 6
 end
+
+local function NormalizeHigherFloorPlaceModels(slotModel: Instance)
+	local plotsPerFloor = GetPlotsPerFloor(slotModel)
+	for _, floorModel in ipairs(GetFloorModels(slotModel)) do
+		local floorNumber = GetFloorNumber(floorModel)
+		if floorNumber then
+			NormalizeFloorPlaceModels(floorModel, floorNumber, plotsPerFloor)
+		end
+	end
+end
+
+local function ResetFloorCollectTouchBindingsOnce(floorModel: Model)
+	if floorModel:GetAttribute(FLOOR_COLLECT_TOUCH_RESET_ATTR) == true then
+		return
+	end
+	for _, desc in ipairs(floorModel:GetDescendants()) do
+		if desc.Name == "CollectPart" then
+			desc:SetAttribute("TouchBound", nil)
+		end
+	end
+	floorModel:SetAttribute(FLOOR_COLLECT_TOUCH_RESET_ATTR, true)
+end
+
+local function GetHigherFloorCloneTemplate(slotModel: Instance, fallbackFloor: Model): (Model, number)
+	local lv2 = FindFloorModel(slotModel, 2)
+	if lv2 then
+		return lv2, 2
+	end
+	return fallbackFloor, 1
+end
+
 local pendingUpdates = {}
 local localSlotRecoveryPending = false
 local localSlotRecoveryAttemptCount = 0
-local skipNextLocalInteractionResetBySlot: { [string]: boolean } = {}
 local skipNextLocalInteractionFocusRefreshBySlot: { [string]: boolean } = {}
 local promptToPlotMap: { [ProximityPrompt]: { pointIndex: number, slotName: string } } = {}
 local isLocalHoldingBrainrot = false
@@ -328,13 +416,12 @@ local function getExtrapolatedUnclaimedDisplay(ownerUserId: number, pointIndexSt
 	return baseAmount + perSec * elapsed
 end
 
-local function findPlaceModelFolder(slotModel: Model, pointIndexStr: string): Instance?
-	for _, floor in ipairs(slotModel:GetChildren()) do
-		if floor.Name:match("^Lv%d+$") then
-			local plot = floor:FindFirstChild("PlaceModel" .. pointIndexStr)
-			if plot then
-				return plot
-			end
+local function findPlaceModelFolder(slotModel: Instance, pointIndexStr: string): Instance?
+	NormalizeHigherFloorPlaceModels(slotModel)
+	for _, floor in ipairs(GetFloorModels(slotModel)) do
+		local plot = floor:FindFirstChild("PlaceModel" .. pointIndexStr)
+		if plot then
+			return plot
 		end
 	end
 	return nil
@@ -587,15 +674,13 @@ end
 
 -- 本地家：在进入 UpdatePlot 前一次性关闭所有展台交互，避免每个 PlaceModel 各 Reset 一遍导致 winner 被反复 false→true
 local function ResetLocalSlotAllPlotInteractionVisibility(slotModel: Instance)
-	for _, floor in ipairs(slotModel:GetChildren()) do
-		if floor.Name:match("^Lv%d+$") then
-			for _, plot in ipairs(floor:GetChildren()) do
-				if plot.Name:match("^PlaceModel%d+$") then
-					local rootPart = plot:FindFirstChild("RootPart") :: BasePart?
-					local placeAttachment = rootPart and rootPart:FindFirstChild("PlaceAttachment") :: Attachment?
-					local sellAttachment = rootPart and rootPart:FindFirstChild("SellAttachment") :: Attachment?
-					ResetPlotInteractionVisibility(placeAttachment, sellAttachment)
-				end
+	for _, floor in ipairs(GetFloorModels(slotModel)) do
+		for _, plot in ipairs(floor:GetChildren()) do
+			if plot.Name:match("^PlaceModel%d+$") then
+				local rootPart = plot:FindFirstChild("RootPart") :: BasePart?
+				local placeAttachment = rootPart and rootPart:FindFirstChild("PlaceAttachment") :: Attachment?
+				local sellAttachment = rootPart and rootPart:FindFirstChild("SellAttachment") :: Attachment?
+				ResetPlotInteractionVisibility(placeAttachment, sellAttachment)
 			end
 		end
 	end
@@ -605,13 +690,21 @@ local function ResetLocalSlotAllPlotInteractionVisibility(slotModel: Instance)
 	lastAppliedShowSell = nil
 end
 
+local function ShouldResetLocalSlotInteractionVisibility(slotName: string, homeInfo: any): boolean
+	local homeLevel = tonumber(homeInfo.level) or 1
+	if localSlotInteractionResetLevelBySlot[slotName] == homeLevel then
+		return false
+	end
+	localSlotInteractionResetLevelBySlot[slotName] = homeLevel
+	return true
+end
+
 local function FindPlotByPointIndex(slotModel: Instance, pointIndex: number): Instance?
-	for _, floor in ipairs(slotModel:GetChildren()) do
-		if floor.Name:match("^Lv%d+$") then
-			local plot = floor:FindFirstChild("PlaceModel" .. tostring(pointIndex))
-			if plot then
-				return plot
-			end
+	NormalizeHigherFloorPlaceModels(slotModel)
+	for _, floor in ipairs(GetFloorModels(slotModel)) do
+		local plot = floor:FindFirstChild("PlaceModel" .. tostring(pointIndex))
+		if plot then
+			return plot
 		end
 	end
 	return nil
@@ -667,7 +760,7 @@ end
 
 local function RefreshLocalHomeInteractionFocus(force: boolean?)
 	local now = os.clock()
-	-- UpdateHomeVisuals 会先 Reset 掉全部 Prompt；若此处被 0.1s 节流直接 return，焦点整段空白会打断按住。
+	-- 初始化或等级变化会重置全部 Prompt；这些场景必须绕过节流，立即恢复当前焦点。
 	if not force and (now - lastFocusRefreshAt < INTERACTION_FOCUS_REFRESH_INTERVAL) then
 		return
 	end
@@ -693,6 +786,7 @@ local function RefreshLocalHomeInteractionFocus(force: boolean?)
 	if not slotModel then
 		return
 	end
+	NormalizeHigherFloorPlaceModels(slotModel)
 
 	local char = players.LocalPlayer.Character
 	local charPos: Vector3? = nil
@@ -734,28 +828,29 @@ local function RefreshLocalHomeInteractionFocus(force: boolean?)
 	local winnerPointIndex: number? = nil
 	local winnerDist = math.huge
 	local charPosNonNil = charPos :: Vector3
-	for _, floor in ipairs(slotModel:GetChildren()) do
-		if floor.Name:match("^Lv%d+$") then
-			for _, plot in ipairs(floor:GetChildren()) do
-				local pointIndex = tonumber(plot.Name:match("^PlaceModel(%d+)$"))
-				if not pointIndex then
-					continue
-				end
-				local isOccupied = homeInfo.placedModels[tostring(pointIndex)] ~= nil
-				local wantPlace = (not isOccupied and isLocalHoldingBrainrot) or isOccupied
-				local wantSell = isOccupied
-				if wantPlace or wantSell then
-					local rootPart = plot:FindFirstChild("RootPart") :: BasePart?
-					if rootPart then
-						local dist = (rootPart.Position - charPosNonNil).Magnitude
-						local placeAttachment = rootPart:FindFirstChild("PlaceAttachment")
-						local placePrompt = placeAttachment
-							and placeAttachment:FindFirstChildOfClass("ProximityPrompt")
-						local maxDist = if placePrompt then placePrompt.MaxActivationDistance else 15
-						if dist <= maxDist and (dist < winnerDist or (dist == winnerDist and winnerPointIndex ~= nil and pointIndex < winnerPointIndex)) then
-							winnerDist = dist
-							winnerPointIndex = pointIndex
-						end
+	for _, floor in ipairs(GetFloorModels(slotModel)) do
+		local floorNumber = GetFloorNumber(floor)
+		if not floorNumber or floorNumber > homeInfo.level then
+			continue
+		end
+		for _, plot in ipairs(floor:GetChildren()) do
+			local pointIndex = tonumber(plot.Name:match("^PlaceModel(%d+)$"))
+			if not pointIndex then
+				continue
+			end
+			local isOccupied = homeInfo.placedModels[tostring(pointIndex)] ~= nil
+			local wantPlace = (not isOccupied and isLocalHoldingBrainrot) or isOccupied
+			local wantSell = isOccupied
+			if wantPlace or wantSell then
+				local rootPart = plot:FindFirstChild("RootPart") :: BasePart?
+				if rootPart then
+					local dist = (rootPart.Position - charPosNonNil).Magnitude
+					local placeAttachment = rootPart:FindFirstChild("PlaceAttachment")
+					local placePrompt = placeAttachment and placeAttachment:FindFirstChildOfClass("ProximityPrompt")
+					local maxDist = if placePrompt then placePrompt.MaxActivationDistance else 15
+					if dist <= maxDist and (dist < winnerDist or (dist == winnerDist and winnerPointIndex ~= nil and pointIndex < winnerPointIndex)) then
+						winnerDist = dist
+						winnerPointIndex = pointIndex
 					end
 				end
 			end
@@ -819,29 +914,28 @@ local function UpdateHomePrompts(slotName: string)
 	if not homeInfo then
 		return
 	end
+	NormalizeHigherFloorPlaceModels(slotModel)
 
-	if isLocalPlayer then
-		ResetLocalSlotAllPlotInteractionVisibility(slotModel)
-	end
+	for _, floor in ipairs(GetFloorModels(slotModel)) do
+		local floorNumber = GetFloorNumber(floor)
+		if not floorNumber or floorNumber > homeInfo.level then
+			continue
+		end
+		for _, plot in ipairs(floor:GetChildren()) do
+			local pointIndex = tonumber(plot.Name:match("^PlaceModel(%d+)$"))
+			if pointIndex then
+				local isOccupied = homeInfo.placedModels[tostring(pointIndex)] ~= nil
+				local rootPart = plot:FindFirstChild("RootPart") :: BasePart?
+				local placeAttachment = rootPart and rootPart:FindFirstChild("PlaceAttachment") :: Attachment?
+				local sellAttachment = rootPart and rootPart:FindFirstChild("SellAttachment") :: Attachment?
 
-	for _, floor in ipairs(slotModel:GetChildren()) do
-		if floor.Name:match("^Lv%d+$") then
-			for _, plot in ipairs(floor:GetChildren()) do
-				local pointIndex = tonumber(plot.Name:match("^PlaceModel(%d+)$"))
-				if pointIndex then
-					local isOccupied = homeInfo.placedModels[tostring(pointIndex)] ~= nil
-					local rootPart = plot:FindFirstChild("RootPart") :: BasePart?
-					local placeAttachment = rootPart and rootPart:FindFirstChild("PlaceAttachment") :: Attachment?
-					local sellAttachment = rootPart and rootPart:FindFirstChild("SellAttachment") :: Attachment?
-
-					local showPlacePrompt = (not isOccupied and isLocalPlayer and isLocalHoldingBrainrot) or (isOccupied and isLocalPlayer)
-					if isLocalPlayer then
-						SetPromptState(placeAttachment, showPlacePrompt, isOccupied, pointIndex, slotName, false, isLocalHoldingBrainrot)
-						SetSellButtonVisibility(sellAttachment, isOccupied and isLocalPlayer, pointIndex, slotName, false)
-					else
-						SetPromptState(placeAttachment, showPlacePrompt, isOccupied, pointIndex, slotName, nil, isLocalHoldingBrainrot)
-						SetSellButtonVisibility(sellAttachment, isOccupied and isLocalPlayer, pointIndex, slotName)
-					end
+				local showPlacePrompt = (not isOccupied and isLocalPlayer and isLocalHoldingBrainrot) or (isOccupied and isLocalPlayer)
+				if isLocalPlayer then
+					SetPromptState(placeAttachment, showPlacePrompt, isOccupied, pointIndex, slotName, false, isLocalHoldingBrainrot)
+					SetSellButtonVisibility(sellAttachment, isOccupied and isLocalPlayer, pointIndex, slotName, false)
+				else
+					SetPromptState(placeAttachment, showPlacePrompt, isOccupied, pointIndex, slotName, nil, isLocalHoldingBrainrot)
+					SetSellButtonVisibility(sellAttachment, isOccupied and isLocalPlayer, pointIndex, slotName)
 				end
 			end
 		end
@@ -1763,12 +1857,35 @@ local function UpdateRebirthMultiplierUI(slotName: string, homeInfo: any, isLoca
 	TranslationTool.CustomAutoLocalizeTextLabel(totalRevenueLabel, GameTexts.TotalRevenueFormat.source, GameTexts.TotalRevenueFormat.key, { revenueStr })
 end
 
+local function SetFloorMovedUpgradeUIsEnabled(floorModel: Model, enabled: boolean)
+	local playerGui = players.LocalPlayer:FindFirstChild("PlayerGui")
+	if not playerGui then
+		return
+	end
+	for _, plot in ipairs(floorModel:GetChildren()) do
+		if not plot.Name:match("^PlaceModel%d+$") then
+			continue
+		end
+		local booth = plot:FindFirstChild("Booth")
+		local upgradePart = booth and booth:FindFirstChild("UpgradePart")
+		if not upgradePart then
+			continue
+		end
+		for _, gui in ipairs(playerGui:GetChildren()) do
+			if gui:IsA("SurfaceGui") and gui.Name == "UpgradeUI" and gui.Adornee == upgradePart then
+				gui.Enabled = enabled
+			end
+		end
+	end
+end
+
 -- Completely hides a slot (when empty)
 function ClearHomeVisuals(slotName: string)
 	local slotModel = homesFolder:FindFirstChild(slotName)
 	if not slotModel then
 		return
 	end
+	localSlotInteractionResetLevelBySlot[slotName] = nil
 
 	-- Hide PublicModel UIs
 	local publicModel = slotModel:FindFirstChild("PublicModel")
@@ -1783,10 +1900,9 @@ function ClearHomeVisuals(slotName: string)
 		playerInfoUI.Enabled = false
 	end
 
-	for _, child in ipairs(slotModel:GetChildren()) do
-		local lvStr = child.Name:match("^Lv(%d+)$")
-		if lvStr and child:IsA("Model") then
-			local lvNum = tonumber(lvStr)
+	for _, child in ipairs(GetFloorModels(slotModel)) do
+		local lvNum = GetFloorNumber(child)
+		if lvNum then
 			if lvNum == 1 then
 				-- Lv1: Show structural parts, but clear plots
 				for _, sub in ipairs(child:GetChildren()) do
@@ -1815,10 +1931,13 @@ function ClearHomeVisuals(slotName: string)
 				for _, desc in ipairs(child:GetDescendants()) do
 					SetVisuals(desc, false)
 				end
+				SetFloorMovedUpgradeUIsEnabled(child, false)
 			end
-		elseif child.Name == "TeleportPoint" then
-			UpdateTeleportPoint(child :: Model, false) -- 隐藏传送点 (针对空房)
 		end
+	end
+	local teleportPoint = slotModel:FindFirstChild("TeleportPoint")
+	if teleportPoint then
+		UpdateTeleportPoint(teleportPoint :: Model, false) -- 隐藏传送点 (针对空房)
 	end
 	-- Clear clones
 	if floorModelsCache[slotName] then
@@ -1883,20 +2002,25 @@ function UpdateHomeVisuals(slotName: string, homeInfo: any, isLocalPlayer: boole
 	-- Add/Remove clones to match target level
 	for i = 2, MAX_FLOOR_COUNT do
 		if i <= homeInfo.level then
-			if not clones[i] then
-				local cloned = lv1:Clone()
+			local existingFloor = FindFloorModel(slotModel, i)
+			if existingFloor then
+				NormalizeFloorPlaceModels(existingFloor, i, plotsPerFloor)
+			elseif not clones[i] then
+				local templateFloor, templateFloorNumber = GetHigherFloorCloneTemplate(slotModel, lv1)
+				local cloned = templateFloor:Clone()
 				cloned.Name = "Lv" .. i
-				local offset = Vector3.new(0, (i - 1) * FLOOR_HEIGHT, 0)
-				cloned:PivotTo(lv1:GetPivot() * CFrame.new(offset))
+				cloned:SetAttribute(FLOOR_PLACE_MODELS_NORMALIZED_PLOTS_ATTR, nil)
+				cloned:SetAttribute(FLOOR_COLLECT_TOUCH_RESET_ATTR, nil)
+				local offset = Vector3.new(0, (i - templateFloorNumber) * FLOOR_HEIGHT, 0)
+				cloned:PivotTo(templateFloor:GetPivot() * CFrame.new(offset))
 				cloned.Parent = slotModel
 				clones[i] = cloned
+				NormalizeFloorPlaceModels(cloned, i, plotsPerFloor)
+			end
 
-				-- Rename PlaceModels in the new floor
-				for _, child in ipairs(cloned:GetChildren()) do
-					local pIdx = tonumber(child.Name:match("^PlaceModel(%d+)$"))
-					if pIdx then
-						child.Name = "PlaceModel" .. tostring((i - 1) * plotsPerFloor + pIdx)
-					end
+			local floorModel = FindFloorModel(slotModel, i)
+			if floorModel then
+				for _, child in ipairs(floorModel:GetChildren()) do
 					if upgradeUITemplateBackup then
 						local booth = child:FindFirstChild("Booth")
 						local clonedUpgradePart = booth and booth:FindFirstChild("UpgradePart")
@@ -1906,13 +2030,8 @@ function UpdateHomeVisuals(slotName: string, homeInfo: any, isLocalPlayer: boole
 							backupUI.Parent = clonedUpgradePart
 						end
 					end
-					-- Important: clear TouchBound so touch events are re-bound for the clone
-					for _, desc in ipairs(child:GetDescendants()) do
-						if desc.Name == "CollectPart" then
-							desc:SetAttribute("TouchBound", nil)
-						end
-					end
 				end
+				ResetFloorCollectTouchBindingsOnce(floorModel)
 			end
 		else
 			if clones[i] then
@@ -1922,22 +2041,17 @@ function UpdateHomeVisuals(slotName: string, homeInfo: any, isLocalPlayer: boole
 		end
 	end
 
-	local skipLocalInteractionRefresh = skipNextLocalInteractionResetBySlot[slotName] == true
-	if skipLocalInteractionRefresh then
-		skipNextLocalInteractionResetBySlot[slotName] = nil
-	end
-	if isLocalPlayer then
-		if not skipLocalInteractionRefresh then
-			ResetLocalSlotAllPlotInteractionVisibility(slotModel)
-		end
+	local didResetLocalInteractions = false
+	if isLocalPlayer and ShouldResetLocalSlotInteractionVisibility(slotName, homeInfo) then
+		ResetLocalSlotAllPlotInteractionVisibility(slotModel)
+		didResetLocalInteractions = true
 	end
 
 	-- 2. Update all floors (Lv1 and Clones)
-	for _, child in ipairs(slotModel:GetChildren()) do
-		local lvStr = child.Name:match("^Lv(%d+)$")
-		if lvStr and child:IsA("Model") then
-			local lvNum = tonumber(lvStr)
-			if lvNum and lvNum <= homeInfo.level then
+	for _, child in ipairs(GetFloorModels(slotModel)) do
+		local lvNum = GetFloorNumber(child)
+		if lvNum then
+			if lvNum <= homeInfo.level then
 				-- Show & Update
 				for _, sub in ipairs(child:GetChildren()) do
 					if sub.Name:match("^PlaceModel%d+$") then
@@ -1947,7 +2061,7 @@ function UpdateHomeVisuals(slotName: string, homeInfo: any, isLocalPlayer: boole
 						end
 					else
 						-- Structural visibility
-						local homeModel = if sub.Name == "HomeModel" then sub else sub:FindFirstChild("HomeModel")
+						local homeModel = FindStructuralHomeModel(sub)
 						if homeModel then
 							local ground = homeModel:FindFirstChild("ground")
 							local stairs = homeModel:FindFirstChild("StairsPart")
@@ -1975,10 +2089,13 @@ function UpdateHomeVisuals(slotName: string, homeInfo: any, isLocalPlayer: boole
 				for _, desc in ipairs(child:GetDescendants()) do
 					SetVisuals(desc, false)
 				end
+				SetFloorMovedUpgradeUIsEnabled(child, false)
 			end
-		elseif child.Name == "TeleportPoint" then
-			UpdateTeleportPoint(child :: Model, isLocalPlayer)
 		end
+	end
+	local teleportPoint = slotModel:FindFirstChild("TeleportPoint")
+	if teleportPoint then
+		UpdateTeleportPoint(teleportPoint :: Model, isLocalPlayer)
 	end
 
 	-- 3. Update UpgradeHome
@@ -2114,7 +2231,8 @@ function UpdateHomeVisuals(slotName: string, homeInfo: any, isLocalPlayer: boole
 		local skipFocusRefresh = skipNextLocalInteractionFocusRefreshBySlot[slotName] == true
 		if skipFocusRefresh then
 			skipNextLocalInteractionFocusRefreshBySlot[slotName] = nil
-		else
+		end
+		if didResetLocalInteractions or not skipFocusRefresh then
 			RefreshLocalHomeInteractionFocus(true)
 		end
 	end
@@ -2413,10 +2531,8 @@ function HomeClientManager.Init()
 		local currentState = slotStateCache[homeSlot]
 		if isLocal then
 			if currentState and currentState.active and HasSamePlacedModelOccupancy(currentState.homeInfo, homeInfo) then
-				skipNextLocalInteractionResetBySlot[homeSlot] = true
 				skipNextLocalInteractionFocusRefreshBySlot[homeSlot] = true
 			else
-				skipNextLocalInteractionResetBySlot[homeSlot] = nil
 				skipNextLocalInteractionFocusRefreshBySlot[homeSlot] = nil
 			end
 		end
@@ -2499,16 +2615,7 @@ function HomeClientManager.Init()
 			local slotModel = homesFolder:FindFirstChild(homeSlot)
 			if slotModel then
 				for pointIndexStr, amount in pairs(yields) do
-					local plot: Instance? = nil
-					-- Search across all floors (Lv1, Lv2, Lv3...)
-					for _, floor in ipairs(slotModel:GetChildren()) do
-						if floor.Name:match("^Lv%d+$") then
-							plot = floor:FindFirstChild("PlaceModel" .. pointIndexStr)
-							if plot then
-								break
-							end
-						end
-					end
+					local plot = findPlaceModelFolder(slotModel, pointIndexStr)
 
 					if plot then
 						-- 1. 更新数据缓存 (使其在 ApplySlotVisuals 调用时能拿到最新值)
