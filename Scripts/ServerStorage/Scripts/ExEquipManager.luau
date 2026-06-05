@@ -51,6 +51,73 @@ local function DestroyExerciseModel(userId: number)
 	activeExerciseWorldPivotMap[userId] = nil
 end
 
+local function SetPartNetworkOwner(part: BasePart, owner: Player)
+	local ok, canSet = pcall(function()
+		return part:CanSetNetworkOwnership()
+	end)
+	if not ok or not canSet then
+		return
+	end
+
+	pcall(function()
+		part:SetNetworkOwner(owner)
+	end)
+end
+
+local function SetPartNetworkOwnershipAuto(part: BasePart)
+	local ok, canSet = pcall(function()
+		return part:CanSetNetworkOwnership()
+	end)
+	if not ok or not canSet then
+		return
+	end
+
+	pcall(function()
+		part:SetNetworkOwnershipAuto()
+	end)
+end
+
+local function SetInstanceNetworkOwner(instance: Instance, owner: Player)
+	if instance:IsA("BasePart") then
+		SetPartNetworkOwner(instance, owner)
+	end
+
+	for _, descendant in instance:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			SetPartNetworkOwner(descendant, owner)
+		end
+	end
+end
+
+local function SetInstanceNetworkOwnershipAuto(instance: Instance)
+	if instance:IsA("BasePart") then
+		SetPartNetworkOwnershipAuto(instance)
+	end
+
+	for _, descendant in instance:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			SetPartNetworkOwnershipAuto(descendant)
+		end
+	end
+end
+
+local function ApplyExerciseNetworkOwnership(player: Player, character: Model, equipmentModel: Model)
+	SetInstanceNetworkOwner(character, player)
+	SetInstanceNetworkOwner(equipmentModel, player)
+end
+
+local function ReleaseExerciseNetworkOwnership(player: Player)
+	local character = player.Character
+	if character ~= nil then
+		SetInstanceNetworkOwnershipAuto(character)
+	end
+
+	local equipmentModel = activeExerciseModelMap[player.UserId]
+	if equipmentModel ~= nil then
+		SetInstanceNetworkOwnershipAuto(equipmentModel)
+	end
+end
+
 local function EnsureExerciseModelPivotLockConnection()
 	if exerciseModelPivotLockConnection ~= nil then
 		return
@@ -192,6 +259,7 @@ local function StopExerciseForPlayer(player: Player, logReason: string)
 	exerciseRunningMap[userId] = nil
 	exerciseClickRewardNextAllowedAtMap[userId] = nil
 	player:SetAttribute(EXERCISING_ATTR, false)
+	ReleaseExerciseNetworkOwnership(player)
 	DestroyExerciseModel(userId)
 	if wasExercising then
 		ServerGameInfo.ApplyWalkSpeed(player)
@@ -425,6 +493,7 @@ function ExEquipManager.OnRequestStartExercise(player: Player, equipId: number)
 	exerciseRunningMap[userId] = true
 	exerciseClickRewardNextAllowedAtMap[userId] = os.clock() + ClickRewardConfig.ServerMinInterval
 	player:SetAttribute(EXERCISING_ATTR, true)
+	ApplyExerciseNetworkOwnership(player, character, equipmentModel)
 
 	local sessionId = (exerciseSessionMap[userId] or 0) + 1
 	exerciseSessionMap[userId] = sessionId
