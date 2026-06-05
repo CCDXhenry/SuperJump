@@ -76,6 +76,7 @@ function ClientGameInfo.InitPlayerInfo(
 		buffInfo = localPlayerSaveInfo.buffInfo or GameConfig.CreateDefaultBuffInfo(),
 		homeSlot = localPlayerSaveInfo.homeSlot,
 		guideProgressInfo = guideProgressInfo,
+		hasClaimedGroupReward = localPlayerSaveInfo.hasClaimedGroupReward or false,
 		currentGuideType = GameConfig.GuideType.None,
 
 		-- 初始化瞬态信息
@@ -522,6 +523,16 @@ function ClientGameInfo.SetExercising(value: boolean)
 	isExercising = value
 	ClientMsg.FireCurrentGuideTypeChanged()
 end
+
+function ClientGameInfo.SetLocalPlayerClaimedGroupReward()
+	if localPlayerInfo == nil then
+		return
+	end
+	localPlayerInfo.hasClaimedGroupReward = true
+	ClientMsg.FireLocalPlayerClaimedGroupReward()
+end
+
+NetMsg.ConnectNotifyPlayerClaimedGroupReward(ClientGameInfo.SetLocalPlayerClaimedGroupReward)
 
 -- 移除其他玩家信息 (当玩家离开时)
 function ClientGameInfo.RemoveOtherPlayer(playerId: number)

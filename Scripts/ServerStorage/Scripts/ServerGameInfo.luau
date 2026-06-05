@@ -192,6 +192,7 @@ function ServerGameInfo.InitPlayerInfo(
 			appearedGuideTypeInfo = {},
 		},
 		discoveredIslandIds = playerSaveInfo.discoveredIslandIds or {},
+		hasClaimedGroupReward = playerSaveInfo.hasClaimedGroupReward or false,
 		homeSlot = "",
 
 		-- 初始化瞬态数据
@@ -226,6 +227,7 @@ function ServerGameInfo.InitPlayerInfo(
 		buffInfo = playerInfo.buffInfo,
 		homeSlot = playerInfo.homeSlot,
 		guideProgressInfo = playerInfo.guideProgressInfo,
+		hasClaimedGroupReward = playerInfo.hasClaimedGroupReward,
 	}
 	local clientOtherPlayerSaveInfo: GameConfig.ClientOtherPlayerSyncInfo = {
 		homeSlot = playerInfo.homeSlot,
@@ -330,6 +332,7 @@ function ServerGameInfo.CreatePlayerSaveInfoByPlayerInfo(playerInfo: GameConfig.
 		exEquipInventory = playerInfo.exEquipInventory,
 		jetpackInventory = playerInfo.jetpackInventory,
 		buffInfo = playerInfo.buffInfo,
+		hasClaimedGroupReward = playerInfo.hasClaimedGroupReward,
 	}
 end
 

@@ -54,6 +54,7 @@ local jumpRunWayStartEscapeRedScreenEvent: BindableEvent =
 	EnsureBindableEvent("JumpRunWayStartEscapeRedScreen")
 local jumpRunWayStopEscapeRedScreenEvent: BindableEvent =
 	EnsureBindableEvent("JumpRunWayStopEscapeRedScreen")
+local localPlayerClaimedGroupRewardEvent: BindableEvent = EnsureBindableEvent("LocalPlayerClaimedGroupReward")
 
 --关闭窗口事件
 function ClientMsg.FireCloseWindow(windowName: string)
@@ -389,6 +390,14 @@ end
 
 function ClientMsg.ConnectJumpRunWayStopEscapeRedScreen(callback: () -> ())
 	jumpRunWayStopEscapeRedScreenEvent.Event:Connect(callback)
+end
+
+function ClientMsg.FireLocalPlayerClaimedGroupReward()
+	localPlayerClaimedGroupRewardEvent:Fire()
+end
+
+function ClientMsg.ConnectLocalPlayerClaimedGroupReward(callback: () -> ())
+	localPlayerClaimedGroupRewardEvent.Event:Connect(callback)
 end
 
 return ClientMsg

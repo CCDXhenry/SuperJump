@@ -9,6 +9,7 @@ local serverStorage: ServerStorage = game:GetService("ServerStorage")
 local serverScripts = serverStorage:WaitForChild("Scripts")
 local ServerGameInfo = require(serverScripts:FindFirstChild("ServerGameInfo"))
 local AnalyticsTool = require(serverScripts:FindFirstChild("AnalyticsTool"))
+local BrainrotQueueManager = require(serverScripts:FindFirstChild("BrainrotQueueManager"))
 
 local replicatedStorage: ReplicatedStorage = game:GetService("ReplicatedStorage")
 local scripts = replicatedStorage:WaitForChild("Scripts")
@@ -329,38 +330,53 @@ function ExEquipManager.OnRequestClaimGroupReward(player: Player, isInGroup: boo
 		return
 	end
 
-	-- 取所有 costType == GroupReward 的器材 ID
-	local groupRewardEquipIdList: { number } = {}
-	for _, equipData in GameConfig.ExEquipDataMap do
-		if equipData.costType == GameConfig.CostType.GroupReward then
-			table.insert(groupRewardEquipIdList, equipData.id)
-		end
-	end
-
-	if #groupRewardEquipIdList == 0 then
-		warn(string.format("%s Group reward exEquip list is empty", LOG_PREFIX))
+	if playerInfo.hasClaimedGroupReward then
+		LogInfo(string.format("GroupReward already claimed userId=%d", player.UserId))
 		return
 	end
 
-	-- 检查是否至少有一个群组奖励器材未拥有，避免重复通知
-	local hasAnyToClaim = false
-	for _, rewardEquipId in ipairs(groupRewardEquipIdList) do
-		local equipIdStr = tostring(rewardEquipId)
-		if not playerInfo.exEquipInventory.ownedList[equipIdStr] then
-			hasAnyToClaim = true
-			break
-		end
-	end
-
-	if not hasAnyToClaim then
-		LogInfo(string.format("GroupReward already claimed all userId=%d", player.UserId))
+	local groupRewardConfig = GameConfig.GetGroupRewardBrainrotConfig()
+	local brainrotData = GameConfig.BrainrotIdMap[groupRewardConfig.brainrotId]
+	if brainrotData == nil then
+		warn(
+			string.format(
+				"%s Group reward brainrot data not found id=%d",
+				LOG_PREFIX,
+				groupRewardConfig.brainrotId
+			)
+		)
 		return
 	end
 
-	for _, rewardEquipId in ipairs(groupRewardEquipIdList) do
-		ServerGameInfo.AddExEquipToInventory(player, tostring(rewardEquipId))
+	local success = BrainrotQueueManager.AddItem(
+		player,
+		groupRewardConfig.brainrotId,
+		brainrotData.quality,
+		1,
+		true,
+		GameConfig.ItemType.Brainrot,
+		false,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		groupRewardConfig.variantId
+	)
+	if success then
+		playerInfo.hasClaimedGroupReward = true
+		playerInfo.playerInfoChanged = true
+		NetMsg.FireNotifyPlayerClaimedGroupReward(player)
+		LogInfo(
+			string.format(
+				"GroupRewardClaimed userId=%d brainrotId=%d variantId=%d",
+				player.UserId,
+				groupRewardConfig.brainrotId,
+				groupRewardConfig.variantId
+			)
+		)
 	end
-	LogInfo(string.format("GroupRewardClaimed userId=%d count=%d", player.UserId, #groupRewardEquipIdList))
 end
 
 -- 处理客户端请求开始锻炼

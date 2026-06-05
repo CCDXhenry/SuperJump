@@ -122,6 +122,20 @@ GameConfig.GuidePlacementBoothPath = {
 
 GameConfig.SixcubeGroupId = 33977495
 
+export type GroupRewardBrainrotConfig = {
+	brainrotId: number,
+	variantId: number,
+}
+
+GameConfig.GroupRewardBrainrot = {
+	brainrotId = 10,
+	variantId = 3,
+} :: GroupRewardBrainrotConfig
+
+function GameConfig.GetGroupRewardBrainrotConfig(): GroupRewardBrainrotConfig
+	return GameConfig.GroupRewardBrainrot
+end
+
 export type RewardInfo = {
 	id: number?,
 	rewardType: number,
@@ -149,6 +163,7 @@ GameConfig.CostType = {
 	Rb = 2,
 	CoinOrRb = 3,
 	GroupReward = 4,
+	
 }
 
 GameConfig.SkillType = {
@@ -1817,6 +1832,7 @@ export type PlayerSaveInfo = {
 	buffInfo: BuffInfo,
 	guideProgressInfo: GuideProgressSaveInfo,
 	discoveredIslandIds: { [string]: boolean }?,
+	hasClaimedGroupReward: boolean,
 }
 
 export type PlayerInfo = PlayerSaveInfo & {
@@ -1894,6 +1910,7 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 			appearedGuideTypeInfo = {},
 		},
 		discoveredIslandIds = {},
+		hasClaimedGroupReward = false,
 	}
 end
 
@@ -1918,6 +1935,7 @@ export type ClientLocalPlayerSaveInfo = {
 	buffInfo: BuffInfo,
 	homeSlot: string,
 	guideProgressInfo: GuideProgressSaveInfo,
+	hasClaimedGroupReward: boolean,
 }
 
 export type ClientLocalPlayerInfo = ClientLocalPlayerSaveInfo & {

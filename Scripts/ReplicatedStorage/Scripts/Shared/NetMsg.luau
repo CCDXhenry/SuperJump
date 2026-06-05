@@ -146,6 +146,7 @@ local requestBuyExEquipPaidEvent: RemoteEvent? = remoteEventsFolder:FindFirstChi
 local requestUpdateExEquipUsingEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestUpdateExEquipUsing") :: RemoteEvent?
 local notifyPlayerExEquipInventoryUpdateEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyPlayerExEquipInventoryUpdate") :: RemoteEvent?
 local requestClaimGroupRewardEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestClaimGroupReward") :: RemoteEvent?
+local notifyPlayerClaimedGroupRewardEvent: RemoteEvent? = GetOrCreateRemoteEvent("NotifyPlayerClaimedGroupReward")
 
 -- 锻炼模式
 local requestStartExerciseEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestStartExercise") :: RemoteEvent?
@@ -1014,6 +1015,20 @@ function NetMsg.ConnectRequestClaimGroupReward(callback: (player: Player, isInGr
 		return
 	end
 	requestClaimGroupRewardEvent.OnServerEvent:Connect(callback)
+end
+
+function NetMsg.FireNotifyPlayerClaimedGroupReward(player: Player)
+	if notifyPlayerClaimedGroupRewardEvent == nil then
+		return
+	end
+	notifyPlayerClaimedGroupRewardEvent:FireClient(player)
+end
+
+function NetMsg.ConnectNotifyPlayerClaimedGroupReward(callback: () -> ())
+	if notifyPlayerClaimedGroupRewardEvent == nil then
+		return
+	end
+	notifyPlayerClaimedGroupRewardEvent.OnClientEvent:Connect(callback)
 end
 
 -- 锻炼模式：客户端请求开始锻炼
