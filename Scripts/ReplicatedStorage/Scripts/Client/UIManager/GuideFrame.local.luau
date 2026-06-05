@@ -120,6 +120,85 @@ local function FindLobbyBrainrotSlotButton(): GuiButton?
 	return nil
 end
 
+local function GetPlaceModelIndexFromUpgradeAdornee(adornee: BasePart): string?
+	local current: Instance? = adornee
+	while current ~= nil do
+		local idxStr = string.match(current.Name, "^PlaceModel(%d+)$")
+		if idxStr ~= nil then
+			return idxStr
+		end
+		current = current.Parent
+	end
+	return nil
+end
+
+-- 展台 UpgradeUI（PlayerGui 内 SurfaceGui）上可负担升级的 ClickButton，优先离玩家最近
+local function FindBrainrotUpgradeClickButton(): GuiButton?
+	if localPlayer == nil then
+		return nil
+	end
+	local localInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if localInfo == nil or localInfo.homeSlot == nil or localInfo.homeSlot == "" then
+		return nil
+	end
+	local playerGui = localPlayer:FindFirstChild("PlayerGui") :: PlayerGui?
+	if playerGui == nil then
+		return nil
+	end
+	local coinCount = localInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
+	local character = localPlayer.Character
+	local hrp = if character then character:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
+	local origin = if hrp then hrp.Position else nil
+
+	local bestBtn: GuiButton? = nil
+	local bestDist = math.huge
+	local fallbackBtn: GuiButton? = nil
+
+	for _, gui in ipairs(playerGui:GetChildren()) do
+		if not gui:IsA("SurfaceGui") or gui.Name ~= "UpgradeUI" or not gui.Enabled then
+			continue
+		end
+		local adornee = gui.Adornee
+		if adornee == nil or not adornee:IsA("BasePart") then
+			continue
+		end
+		local pointIndexStr = GetPlaceModelIndexFromUpgradeAdornee(adornee)
+		if pointIndexStr == nil then
+			continue
+		end
+		local placed = localInfo.homeInfo.placedModels[pointIndexStr]
+		if placed == nil then
+			continue
+		end
+		local brainrotData = GameConfig.BrainrotIdMap[placed.configId]
+		if brainrotData == nil then
+			continue
+		end
+		local upgradeCost = GameConfig.GetBrainrotUpgradeCost(brainrotData.baseAbility, placed.level)
+		if coinCount < upgradeCost then
+			continue
+		end
+		local clickBtn = gui:FindFirstChild("ClickButton", true)
+		if clickBtn == nil or not clickBtn:IsA("GuiButton") then
+			continue
+		end
+		if not IsGuiVisibleChain(clickBtn) then
+			continue
+		end
+		if fallbackBtn == nil then
+			fallbackBtn = clickBtn
+		end
+		if origin ~= nil then
+			local dist = ((adornee :: BasePart).Position - origin).Magnitude
+			if dist < bestDist then
+				bestDist = dist
+				bestBtn = clickBtn
+			end
+		end
+	end
+	return bestBtn or fallbackBtn
+end
+
 local function FindUpgradeShopWalkSpeedButton(): GuiButton?
 	if localPlayer == nil then
 		return nil
@@ -463,6 +542,18 @@ local function RefreshGuideFrame()
 		return
 	end
 
+	if guideType == GameConfig.GuideType.TutorialBrainrotUpgrade then
+		local guideBtn = FindBrainrotUpgradeClickButton()
+		if guideBtn == nil or not IsGuiVisibleChain(guideBtn) then
+			guideFrame.Visible = false
+			StopGuideAni()
+			return
+		end
+		MountFingerCloneUnder(guideBtn)
+		guideFrame.Visible = false
+		return
+	end
+
 	guideFrame.Visible = false
 	StopGuideAni()
 end
@@ -471,6 +562,7 @@ guideFrame:GetPropertyChangedSignal("Visible"):Connect(function()
 	if not guideFrame.Visible then
 		local t = ClientGameInfo.GetCurrentGuideType()
 		if t == GameConfig.GuideType.TutorialBrainrotPlaceSlot
+			or t == GameConfig.GuideType.TutorialBrainrotUpgrade
 			or t == GameConfig.GuideType.TutorialJetpackBuy
 			or t == GameConfig.GuideType.TutorialExEquipBuy
 			or t == GameConfig.GuideType.TutorialExEquipUse
@@ -523,6 +615,8 @@ runService.RenderStepped:Connect(function()
 		UpdateFingerOnTrackedButton(FindExEquipBackpackSlotButton)
 	elseif t == GameConfig.GuideType.TutorialWalkSpeedUpgrade then
 		UpdateFingerOnTrackedButton(FindUpgradeShopWalkSpeedButton)
+	elseif t == GameConfig.GuideType.TutorialBrainrotUpgrade then
+		UpdateFingerOnTrackedButton(FindBrainrotUpgradeClickButton)
 	end
 end)
 

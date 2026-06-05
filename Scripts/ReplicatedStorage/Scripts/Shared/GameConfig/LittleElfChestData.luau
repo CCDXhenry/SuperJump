@@ -1,5 +1,6 @@
 return {
 	[1] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box1",
 		["distance"] = 0,
 		["id"] = 1,
@@ -8,6 +9,7 @@ return {
 		["quality"] = 1,
 	},
 	[2] = {
+		["onlyPay"] = 1,
 		["resourceName"] = "box2",
 		["distance"] = 300,
 		["id"] = 2,
@@ -16,6 +18,7 @@ return {
 		["quality"] = 2,
 	},
 	[3] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box3",
 		["distance"] = 600,
 		["id"] = 3,
@@ -24,6 +27,7 @@ return {
 		["quality"] = 3,
 	},
 	[4] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box4",
 		["distance"] = 900,
 		["id"] = 4,
@@ -32,6 +36,7 @@ return {
 		["quality"] = 4,
 	},
 	[5] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box5",
 		["distance"] = 1200,
 		["id"] = 5,
@@ -40,6 +45,7 @@ return {
 		["quality"] = 5,
 	},
 	[6] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box6",
 		["distance"] = 1500,
 		["id"] = 6,
@@ -48,6 +54,7 @@ return {
 		["quality"] = 6,
 	},
 	[7] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box7",
 		["distance"] = 1800,
 		["id"] = 7,
@@ -56,6 +63,7 @@ return {
 		["quality"] = 7,
 	},
 	[8] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box1",
 		["distance"] = 2100,
 		["id"] = 8,
@@ -64,6 +72,7 @@ return {
 		["quality"] = 1,
 	},
 	[9] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box2",
 		["distance"] = 2400,
 		["id"] = 9,
@@ -72,6 +81,7 @@ return {
 		["quality"] = 2,
 	},
 	[10] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box3",
 		["distance"] = 2700,
 		["id"] = 10,
@@ -80,6 +90,7 @@ return {
 		["quality"] = 3,
 	},
 	[11] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box4",
 		["distance"] = 3000,
 		["id"] = 11,
@@ -88,6 +99,7 @@ return {
 		["quality"] = 4,
 	},
 	[12] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box5",
 		["distance"] = 3300,
 		["id"] = 12,
@@ -96,6 +108,7 @@ return {
 		["quality"] = 5,
 	},
 	[13] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box6",
 		["distance"] = 3600,
 		["id"] = 13,
@@ -104,6 +117,7 @@ return {
 		["quality"] = 6,
 	},
 	[14] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box7",
 		["distance"] = 3900,
 		["id"] = 14,
@@ -112,6 +126,7 @@ return {
 		["quality"] = 7,
 	},
 	[15] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box1",
 		["distance"] = 4200,
 		["id"] = 15,
@@ -120,6 +135,7 @@ return {
 		["quality"] = 1,
 	},
 	[16] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box2",
 		["distance"] = 4500,
 		["id"] = 16,
@@ -128,6 +144,7 @@ return {
 		["quality"] = 2,
 	},
 	[17] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box3",
 		["distance"] = 5000,
 		["id"] = 17,
@@ -136,6 +153,7 @@ return {
 		["quality"] = 3,
 	},
 	[18] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box4",
 		["distance"] = 5500,
 		["id"] = 18,
@@ -144,6 +162,7 @@ return {
 		["quality"] = 4,
 	},
 	[19] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box5",
 		["distance"] = 6300,
 		["id"] = 19,
@@ -152,6 +171,7 @@ return {
 		["quality"] = 5,
 	},
 	[20] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box6",
 		["distance"] = 7100,
 		["id"] = 20,
@@ -160,6 +180,7 @@ return {
 		["quality"] = 6,
 	},
 	[21] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box7",
 		["distance"] = 7900,
 		["id"] = 21,
@@ -168,6 +189,7 @@ return {
 		["quality"] = 7,
 	},
 	[22] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box1",
 		["distance"] = 8700,
 		["id"] = 22,
@@ -176,6 +198,7 @@ return {
 		["quality"] = 1,
 	},
 	[23] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box2",
 		["distance"] = 9500,
 		["id"] = 23,
@@ -184,6 +207,7 @@ return {
 		["quality"] = 2,
 	},
 	[24] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box3",
 		["distance"] = 10500,
 		["id"] = 24,
@@ -192,6 +216,7 @@ return {
 		["quality"] = 3,
 	},
 	[25] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box4",
 		["distance"] = 11500,
 		["id"] = 25,
@@ -200,6 +225,7 @@ return {
 		["quality"] = 4,
 	},
 	[26] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box5",
 		["distance"] = 12500,
 		["id"] = 26,
@@ -208,6 +234,7 @@ return {
 		["quality"] = 5,
 	},
 	[27] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box6",
 		["distance"] = 13500,
 		["id"] = 27,
@@ -216,6 +243,7 @@ return {
 		["quality"] = 6,
 	},
 	[28] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box7",
 		["distance"] = 14800,
 		["id"] = 28,
@@ -224,6 +252,7 @@ return {
 		["quality"] = 7,
 	},
 	[29] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box1",
 		["distance"] = 16100,
 		["id"] = 29,
@@ -232,6 +261,7 @@ return {
 		["quality"] = 1,
 	},
 	[30] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box2",
 		["distance"] = 17400,
 		["id"] = 30,
@@ -240,6 +270,7 @@ return {
 		["quality"] = 2,
 	},
 	[31] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box3",
 		["distance"] = 18700,
 		["id"] = 31,
@@ -248,6 +279,7 @@ return {
 		["quality"] = 3,
 	},
 	[32] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box4",
 		["distance"] = 20000,
 		["id"] = 32,
@@ -256,6 +288,7 @@ return {
 		["quality"] = 4,
 	},
 	[33] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box5",
 		["distance"] = 21300,
 		["id"] = 33,
@@ -264,6 +297,7 @@ return {
 		["quality"] = 5,
 	},
 	[34] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box6",
 		["distance"] = 22600,
 		["id"] = 34,
@@ -272,6 +306,7 @@ return {
 		["quality"] = 6,
 	},
 	[35] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box7",
 		["distance"] = 23900,
 		["id"] = 35,
@@ -280,6 +315,7 @@ return {
 		["quality"] = 7,
 	},
 	[36] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box1",
 		["distance"] = 25200,
 		["id"] = 36,
@@ -288,6 +324,7 @@ return {
 		["quality"] = 1,
 	},
 	[37] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box2",
 		["distance"] = 26500,
 		["id"] = 37,
@@ -296,6 +333,7 @@ return {
 		["quality"] = 2,
 	},
 	[38] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box3",
 		["distance"] = 27800,
 		["id"] = 38,
@@ -304,6 +342,7 @@ return {
 		["quality"] = 3,
 	},
 	[39] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box4",
 		["distance"] = 29100,
 		["id"] = 39,
@@ -312,6 +351,7 @@ return {
 		["quality"] = 4,
 	},
 	[40] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box5",
 		["distance"] = 30400,
 		["id"] = 40,
@@ -320,6 +360,7 @@ return {
 		["quality"] = 5,
 	},
 	[41] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box6",
 		["distance"] = 31700,
 		["id"] = 41,
@@ -328,6 +369,7 @@ return {
 		["quality"] = 6,
 	},
 	[42] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box7",
 		["distance"] = 33000,
 		["id"] = 42,
@@ -336,6 +378,7 @@ return {
 		["quality"] = 7,
 	},
 	[43] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box1",
 		["distance"] = 34300,
 		["id"] = 43,
@@ -344,6 +387,7 @@ return {
 		["quality"] = 1,
 	},
 	[44] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box2",
 		["distance"] = 35600,
 		["id"] = 44,
@@ -352,6 +396,7 @@ return {
 		["quality"] = 2,
 	},
 	[45] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box3",
 		["distance"] = 36900,
 		["id"] = 45,
@@ -360,6 +405,7 @@ return {
 		["quality"] = 3,
 	},
 	[46] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box4",
 		["distance"] = 38200,
 		["id"] = 46,
@@ -368,6 +414,7 @@ return {
 		["quality"] = 4,
 	},
 	[47] = {
+		["onlyPay"] = 0,
 		["resourceName"] = "box5",
 		["distance"] = 39500,
 		["id"] = 47,
