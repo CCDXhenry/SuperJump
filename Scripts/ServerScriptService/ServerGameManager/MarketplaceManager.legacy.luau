@@ -139,7 +139,8 @@ local function GrantShopBundleByProductId(player: Player, receiptInfo: GameConfi
 			if bundleData.config.arePaidRandomItemsRestricted ~= 0 and playerInfo.playerConfigInfo.arePaidRandomItemsRestricted then
 				return false, false, true
 			end
-			if bundleData.config.canRepurchased == 0 and playerInfo.ownedShopBundleMap[shopBundleId] == true then
+			local shopBundleIdKey = tostring(shopBundleId)
+			if bundleData.config.canRepurchased == 0 and playerInfo.ownedShopBundleMap[shopBundleIdKey] == true then
 				return false, true, false
 			end
 			local function getGrantTipKey(reward: GameConfig.RewardInfo): string
@@ -150,7 +151,7 @@ local function GrantShopBundleByProductId(player: Player, receiptInfo: GameConfi
 					GrantShopBundleReward(player, reward, getGrantTipKey(reward), reward.rewardCount, shopBundleId, productId)
 				end
 			end
-			playerInfo.ownedShopBundleMap[shopBundleId] = true
+			playerInfo.ownedShopBundleMap[shopBundleIdKey] = true
 			playerInfo.playerInfoChanged = true
 			return true, false, false
 		end

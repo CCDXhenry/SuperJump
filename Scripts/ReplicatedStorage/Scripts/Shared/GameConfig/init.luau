@@ -586,7 +586,7 @@ export type BuffData = {
 }
 
 export type BuffInfo = {
-	ownedBuffMap: { [number]: boolean },
+	ownedBuffMap: { [string]: boolean },
 }
 
 GameConfig.Buffs = BuffDataModule
@@ -609,8 +609,12 @@ function GameConfig.GetBuffMultiplier(buffInfo: BuffInfo?, buffType: number): nu
 		return 1
 	end
 	local multiplier = 1
-	for buffId, owned in pairs(buffInfo.ownedBuffMap) do
+	for buffIdKey, owned in pairs(buffInfo.ownedBuffMap) do
 		if owned ~= true then
+			continue
+		end
+		local buffId = tonumber(buffIdKey)
+		if buffId == nil then
 			continue
 		end
 		local buffData = GameConfig.BuffIdMap[buffId]
@@ -1795,7 +1799,7 @@ export type PlayerSaveInfo = {
 	lastOnlineDateUTC: number,
 	settingInfo: SettingInfo,
 	ownedGamePassList: { number },
-	ownedShopBundleMap: { [number]: boolean },
+	ownedShopBundleMap: { [string]: boolean },
 	currencies: { [string]: number },
 	inventoryInfo: PlayerInventorySaveInfo,
 	homeInfo: {
@@ -1896,7 +1900,7 @@ end
 export type ClientLocalPlayerSaveInfo = {
 	settingInfo: SettingInfo,
 	ownedGamePassList: { number },
-	ownedShopBundleMap: { [number]: boolean },
+	ownedShopBundleMap: { [string]: boolean },
 	currencies: { [string]: number },
 	inventoryInfo: PlayerInventorySaveInfo,
 	homeInfo: {

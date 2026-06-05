@@ -316,13 +316,25 @@ local function getPoolItemIcon(itemType: number, itemId: number): string
 	return ""
 end
 
-local function bindProductPurchase(button: ImageButton, productId: number)
+local function canPurchaseBundle(bundleConfig: GameConfig.ShopBundleConfigurationData): boolean
+	local playerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if playerInfo == nil then
+		return false
+	end
+	local bundleIdKey = tostring(bundleConfig.id)
+	return bundleConfig.canRepurchased ~= 0 or not playerInfo.ownedShopBundleMap or playerInfo.ownedShopBundleMap[bundleIdKey] ~= true
+end
+
+local function bindProductPurchase(button: ImageButton, productId: number, bundleConfig: GameConfig.ShopBundleConfigurationData?)
 	button.Active = productId > 0
 	if productId <= 0 then
 		return
 	end
 	button.Activated:Connect(function()
 		if not players.LocalPlayer then
+			return
+		end
+		if bundleConfig ~= nil and not canPurchaseBundle(bundleConfig) then
 			return
 		end
 		marketplaceService:PromptProductPurchase(players.LocalPlayer, productId)
@@ -350,7 +362,7 @@ local function createMixBundleFrame(bundleData: GameConfig.ShopBundleData, index
 	local buyButton = frame:WaitForChild("BuyButton") :: ImageButton
 	local buyTextLabel = buyButton:WaitForChild("TextLabel") :: TextLabel
 	localizeText(buyTextLabel, tostring(bundleConfig.price1))
-	bindProductPurchase(buyButton, bundleConfig.productId1)
+	bindProductPurchase(buyButton, bundleConfig.productId1, bundleConfig)
 
 	local bundleShowFrame = frame:WaitForChild("BundleShowFrame") :: Frame
 	local packTemplate = bundleShowFrame:WaitForChild("PackFrame1") :: Frame
@@ -413,7 +425,7 @@ local function createSingleBundleFrame(bundleData: GameConfig.ShopBundleData, in
 	local buyButton = frame:WaitForChild("BuyButton") :: ImageButton
 	local buyTextLabel = buyButton:WaitForChild("TextLabel") :: TextLabel
 	localizeText(buyTextLabel, tostring(bundleConfig.price1))
-	bindProductPurchase(buyButton, bundleConfig.productId1)
+	bindProductPurchase(buyButton, bundleConfig.productId1, bundleConfig)
 end
 
 local function setupBuffBundleSlot(bundleData: GameConfig.ShopBundleData, buffFrame: Frame)
@@ -454,7 +466,7 @@ local function setupBuffBundleSlot(bundleData: GameConfig.ShopBundleData, buffFr
 	local buyButton = buffFrame:WaitForChild("BuyButton") :: ImageButton
 	local buyTextLabel = buyButton:WaitForChild("TextLabel") :: TextLabel
 	localizeText(buyTextLabel, tostring(bundleConfig.price1))
-	bindProductPurchase(buyButton, bundleConfig.productId1)
+	bindProductPurchase(buyButton, bundleConfig.productId1, bundleConfig)
 end
 
 local function createBuffBundleFrames(buffBundleDataList: { GameConfig.ShopBundleData }, layoutStartIndex: number): number
@@ -607,7 +619,7 @@ local function createChestBundleFrame(bundleData: GameConfig.ShopBundleData, ind
 			)
 		end
 
-		bindProductPurchase(button, productId)
+		bindProductPurchase(button, productId, bundleConfig)
 	end
 end
 
@@ -621,7 +633,7 @@ local function updateRepurchaseMask()
 		local bundleData = GameConfig.ShopBundleById[bundleId]
 		if bundleData and frame and frame.Parent ~= nil then
 			local canRepurchased = bundleData.config.canRepurchased
-			local owned = playerInfo.ownedShopBundleMap and playerInfo.ownedShopBundleMap[bundleId] == true
+			local owned = playerInfo.ownedShopBundleMap and playerInfo.ownedShopBundleMap[tostring(bundleId)] == true
 			local maskNeeded = canRepurchased == 0 and owned
 
 			local maskImageLabel = frame:FindFirstChild("MaskImageLabel") :: ImageLabel?
@@ -629,19 +641,17 @@ local function updateRepurchaseMask()
 				maskImageLabel.Visible = maskNeeded
 			end
 
-			if maskNeeded then
-				-- Mix/Single 的 BuyButton
-				local buyButton = frame:FindFirstChild("BuyButton") :: ImageButton?
-				if buyButton then
-					buyButton.Active = false
-				end
+			-- Mix/Single/Buff 的 BuyButton
+			local buyButton = frame:FindFirstChild("BuyButton") :: ImageButton?
+			if buyButton then
+				buyButton.Active = not maskNeeded and bundleData.config.productId1 > 0
+			end
 
-				-- 宝箱礼包的 BuyButton1/2/3
-				for productIndex = 1, 3 do
-					local productButton = frame:FindFirstChild(`BuyButton{productIndex}`) :: ImageButton?
-					if productButton then
-						productButton.Active = false
-					end
+			-- 宝箱礼包的 BuyButton1/2/3
+			for productIndex = 1, 3 do
+				local productButton = frame:FindFirstChild(`BuyButton{productIndex}`) :: ImageButton?
+				if productButton then
+					productButton.Active = not maskNeeded and getBundleProductId(bundleData.config, productIndex) > 0
 				end
 			end
 		end

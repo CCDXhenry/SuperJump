@@ -392,7 +392,7 @@ function ClientGameInfo.UpdateBrainrotQueue(queue: { GameConfig.BrainrotQueueIte
 
 					-- 更新本地“已购”状态：用于商店界面立刻展示不可复购遮罩
 					if g.shopBundleId ~= nil then
-						localPlayerInfo.ownedShopBundleMap[g.shopBundleId] = true
+						localPlayerInfo.ownedShopBundleMap[tostring(g.shopBundleId)] = true
 					end
 				end
 			end
@@ -427,7 +427,7 @@ function ClientGameInfo.UpdateBuffInfo(buffInfo: GameConfig.BuffInfo, grantBuffI
 	if localPlayerInfo then
 		localPlayerInfo.buffInfo = buffInfo
 		if shopBundleId ~= nil then
-			localPlayerInfo.ownedShopBundleMap[shopBundleId] = true
+			localPlayerInfo.ownedShopBundleMap[tostring(shopBundleId)] = true
 		end
 		ClientMsg.FireLocalPlayerBuffInfoUpdate(buffInfo, grantBuffId, shopBundleId)
 		if grantBuffId ~= nil then

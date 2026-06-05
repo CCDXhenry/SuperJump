@@ -751,7 +751,7 @@ function ServerGameInfo.GrantBuff(player: Player, buffId: number, shopBundleId: 
 	if buffData == nil then
 		return false
 	end
-	playerInfo.buffInfo.ownedBuffMap[buffId] = true
+	playerInfo.buffInfo.ownedBuffMap[tostring(buffId)] = true
 	playerInfo.playerInfoChanged = true
 	NetMsg.FireNotifyPlayerBuffInfoUpdate(player, playerInfo.buffInfo, buffId, shopBundleId)
 	return true

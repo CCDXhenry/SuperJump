@@ -146,7 +146,7 @@ local function tryPromptShopBundleDirectPurchase(shopModel: Model): boolean
 	end
 
 	local canRepurchased = bundleData.config.canRepurchased
-	local owned = playerInfo.ownedShopBundleMap ~= nil and playerInfo.ownedShopBundleMap[bundleId] == true
+	local owned = playerInfo.ownedShopBundleMap ~= nil and playerInfo.ownedShopBundleMap[tostring(bundleId)] == true
 	if canRepurchased == 0 and owned then
 		local tip = GameTexts.ShopBundleAlreadyPurchased
 		ClientMsg.FireShowGameTip(tip.source, GameConfig.GameTipTweenType.FlyUp, tip.key)
