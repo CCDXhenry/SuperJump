@@ -324,6 +324,7 @@ function ClientGameInfo.UpdateJumpRunwayBestDistance(distance: number)
 	end
 	if distance > localPlayerInfo.jumpRunwayBestDistance then
 		localPlayerInfo.jumpRunwayBestDistance = distance
+		ClientMsg.FireLocalPlayerJumpRunwayBestDistanceUpdate(distance)
 	end
 end
 

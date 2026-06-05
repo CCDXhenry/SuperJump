@@ -8,11 +8,11 @@ return {
 		["productIndex"] = 1,
 	},
 	[2] = {
-		["rewardType"] = 4,
+		["rewardType"] = 6,
 		["rewardLv"] = 1,
 		["id"] = 1,
 		["rewardCount"] = 1,
-		["rewardId"] = 1,
+		["rewardId"] = 2,
 		["productIndex"] = 1,
 	},
 	[3] = {
@@ -28,7 +28,7 @@ return {
 		["rewardLv"] = 1,
 		["id"] = 2,
 		["rewardCount"] = 1,
-		["rewardId"] = 2,
+		["rewardId"] = 3,
 		["productIndex"] = 1,
 	},
 	[5] = {

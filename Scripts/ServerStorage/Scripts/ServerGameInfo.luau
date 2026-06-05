@@ -208,6 +208,7 @@ function ServerGameInfo.InitPlayerInfo(
 	playerInfoMap[player.UserId] = playerInfo
 	player:SetAttribute("LastArrivedIslandId", playerInfo.lastArrivedIslandId)
 	player:SetAttribute("CurrentJetpackId", playerInfo.jetpackInventory.currentId)
+	player:SetAttribute("JumpRunwayBestDistance", playerInfo.jumpRunwayBestDistance)
 	ServerMsg.FirePlayerInfoInit(player)
 
 	local clientLocalPlayerSaveInfo: GameConfig.ClientLocalPlayerSaveInfo = {
@@ -1441,6 +1442,7 @@ function ServerGameInfo.UpdateJumpRunwayBestDistance(player: Player, distance: n
 	if playerInfo.jumpRunwayBestDistance == nil or distance > playerInfo.jumpRunwayBestDistance then
 		playerInfo.jumpRunwayBestDistance = distance
 		playerInfo.playerInfoChanged = true
+		player:SetAttribute("JumpRunwayBestDistance", playerInfo.jumpRunwayBestDistance)
 	end
 end
 

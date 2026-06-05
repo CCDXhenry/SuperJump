@@ -55,6 +55,8 @@ local jumpRunWayStartEscapeRedScreenEvent: BindableEvent =
 local jumpRunWayStopEscapeRedScreenEvent: BindableEvent =
 	EnsureBindableEvent("JumpRunWayStopEscapeRedScreen")
 local localPlayerClaimedGroupRewardEvent: BindableEvent = EnsureBindableEvent("LocalPlayerClaimedGroupReward")
+local localPlayerJumpRunwayBestDistanceUpdateEvent: BindableEvent =
+	EnsureBindableEvent("LocalPlayerJumpRunwayBestDistanceUpdate")
 
 --关闭窗口事件
 function ClientMsg.FireCloseWindow(windowName: string)
@@ -398,6 +400,14 @@ end
 
 function ClientMsg.ConnectLocalPlayerClaimedGroupReward(callback: () -> ())
 	localPlayerClaimedGroupRewardEvent.Event:Connect(callback)
+end
+
+function ClientMsg.FireLocalPlayerJumpRunwayBestDistanceUpdate(distance: number)
+	localPlayerJumpRunwayBestDistanceUpdateEvent:Fire(distance)
+end
+
+function ClientMsg.ConnectLocalPlayerJumpRunwayBestDistanceUpdate(callback: (distance: number) -> ())
+	localPlayerJumpRunwayBestDistanceUpdateEvent.Event:Connect(callback)
 end
 
 return ClientMsg

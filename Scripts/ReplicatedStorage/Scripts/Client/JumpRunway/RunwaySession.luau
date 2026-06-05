@@ -182,6 +182,9 @@ local Refs: {
 	runwayDistanceRecorderText: TextLabel?,
 	distanceRecorderLastGroundY: number?,
 	distanceRecorderTemplateWarned: boolean,
+	runwayDistanceRecorderPeakStuds: number?,
+	runwayDistanceRecorderFrozenStuds: number?,
+	runwayBestDistanceCommitted: boolean?,
 	rocketBackpackPart: BasePart?,
 	rocketBackpackFallbackWarned: boolean,
 	jetpackVisualRoot: Model?,
@@ -275,6 +278,9 @@ local Refs: {
 	ringBaseSizeZ = 1,
 	ringTemplateWarned = false,
 	distanceRecorderTemplateWarned = false,
+	runwayDistanceRecorderPeakStuds = 0,
+	runwayDistanceRecorderFrozenStuds = nil,
+	runwayBestDistanceCommitted = false,
 	rocketBackpackFallbackWarned = false,
 	jetpackDashParticleEmitters = {},
 	jetpackTemplateWarned = false,
@@ -646,6 +652,9 @@ function RunwaySession.ResolveBeginLineAlongFromOrigin(forward: Vector3, origin:
 end
 
 function RunwaySession.ComputeRunwayDisplayDistanceStuds(hrp: BasePart): number
+	if Refs.runwayDistanceRecorderPart ~= nil then
+		return RunwaySession.GetDistanceRecorderDisplayStuds(hrp)
+	end
 	return RunwaySession.CurrentAlongProgress(hrp)
 end
 
@@ -1088,14 +1097,7 @@ function RunwaySession.RefreshJumpRunWayFrameStats(hrp: BasePart?)
 	local fuelVisible = localState.phase == Ph.Airborne
 		and localState.takeoffCount >= cfg.N_TOTAL_JUMPS
 		and maxFuel > 0
-	local isFinalSlideSecondStage = localState.phase == Ph.Slide
-		and localState.finalLandSubPhase == 2
-		and (
-			localState.runwaySlideKind == SlideKindFinalLanding
-			or localState.runwaySlideKind == SlideKindMiss
-			or localState.runwaySlideKind == SlideKindObstacleBounce
-		)
-	local distanceVisible = not isFinalSlideSecondStage and distanceStuds > 0
+	local distanceVisible = distanceStuds > 0
 	ClientMsg.FireJumpRunWayRefreshStats(distanceStuds, localState.fuel, maxFuel, fuelVisible, distanceVisible, horizontalSpeed)
 end
 
@@ -4018,6 +4020,61 @@ function RunwaySession.UpdateRunwayRingTransform(humanoid: Humanoid, hrp: BasePa
 	RunwaySession.UpdateRunwayRingColor(humanoid, hrp, dt)
 end
 
+function RunwaySession.ResetDistanceRecorderDistanceTracking()
+	Refs.runwayDistanceRecorderPeakStuds = 0
+	Refs.runwayDistanceRecorderFrozenStuds = nil
+	Refs.runwayBestDistanceCommitted = false
+end
+
+function RunwaySession.RefreshDistanceRecorderPeak(hrp: BasePart)
+	local live = RunwaySession.CurrentAlongProgress(hrp)
+	local peak = Refs.runwayDistanceRecorderPeakStuds or 0
+	if live > peak then
+		Refs.runwayDistanceRecorderPeakStuds = live
+	end
+end
+
+function RunwaySession.GetDistanceRecorderDisplayStuds(hrp: BasePart): number
+	local frozen = Refs.runwayDistanceRecorderFrozenStuds
+	if frozen ~= nil then
+		return frozen
+	end
+	RunwaySession.RefreshDistanceRecorderPeak(hrp)
+	return Refs.runwayDistanceRecorderPeakStuds or 0
+end
+
+function RunwaySession.CommitRunwayBestDistanceFromDistanceRecorder(hrpOpt: BasePart?)
+	if Refs.runwayBestDistanceCommitted == true then
+		return
+	end
+	if hrpOpt ~= nil then
+		RunwaySession.RefreshDistanceRecorderPeak(hrpOpt)
+	end
+	local peak = Refs.runwayDistanceRecorderPeakStuds
+	if peak == nil or peak <= 0 then
+		return
+	end
+	Refs.runwayBestDistanceCommitted = true
+	Refs.runwayDistanceRecorderFrozenStuds = peak
+	ClientGameInfo.UpdateJumpRunwayBestDistance(peak)
+	NetMsg.FireRequestJumpRunwayBestDistance(peak)
+	local lbl = Refs.runwayDistanceRecorderText
+	if lbl ~= nil and lbl.Parent ~= nil then
+		if hrpOpt ~= nil then
+			RunwaySession.ApplyDistanceRecorderDisplay(lbl, hrpOpt)
+		else
+			local metersWhole = math.floor(peak + 0.5)
+			if metersWhole <= 0 then
+				lbl.Visible = false
+			else
+				lbl.Visible = true
+				local tip = GameTexts.JumpRunwayDistanceMeters
+				TranslationTool.CustomAutoLocalizeTextLabel(lbl, tip.source, tip.key, { tostring(metersWhole) })
+			end
+		end
+	end
+end
+
 function RunwaySession.DestroyDistanceRecorder()
 	local lbl = Refs.runwayDistanceRecorderText
 	if lbl ~= nil then
@@ -4029,6 +4086,7 @@ function RunwaySession.DestroyDistanceRecorder()
 		Refs.runwayDistanceRecorderPart = nil
 	end
 	Refs.distanceRecorderLastGroundY = nil
+	RunwaySession.ResetDistanceRecorderDistanceTracking()
 end
 
 function RunwaySession.DestroyBestDistanceWall()
@@ -4278,6 +4336,7 @@ end
 
 function RunwaySession.EnsureDistanceRecorderFromTemplate(humanoid: Humanoid, hrp: BasePart)
 	RunwaySession.DestroyDistanceRecorder()
+	RunwaySession.ResetDistanceRecorderDistanceTracking()
 	local modelsFolder = replicatedStorage:FindFirstChild("Models")
 	if modelsFolder == nil then
 		if not Refs.distanceRecorderTemplateWarned then
@@ -4344,7 +4403,7 @@ function RunwaySession.EnsureDistanceRecorderFromTemplate(humanoid: Humanoid, hr
 end
 
 function RunwaySession.ApplyDistanceRecorderDisplay(lbl: TextLabel, hrp: BasePart)
-	local studs = RunwaySession.ComputeRunwayDisplayDistanceStuds(hrp)
+	local studs = RunwaySession.GetDistanceRecorderDisplayStuds(hrp)
 	if studs <= 0 then
 		lbl.Visible = false
 		return
@@ -6137,6 +6196,7 @@ function RunwaySession.EndChestProneBounceAndWaitForReward()
 	if humanoidWait and hrpWait then
 		local forwardWait = NormalizeRunwayForward(localState.runwayForward)
 		RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoidWait, hrpWait, forwardWait)
+		RunwaySession.CommitRunwayBestDistanceFromDistanceRecorder(hrpWait)
 	end
 	RunwaySession.TryPresentLittleElfChestReward()
 end
@@ -6209,6 +6269,7 @@ function RunwaySession.EnterLittleElfChestRewardWaitPose(humanoid: Humanoid, hrp
 	local forwardReward = NormalizeRunwayForward(localState.runwayForward)
 	RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoid, hrp, forwardReward)
 	RunwaySession.EnsureHumanoidRunningState(humanoid)
+	RunwaySession.CommitRunwayBestDistanceFromDistanceRecorder(hrp)
 end
 
 function RunwaySession.TryForceReportFinalAfterChestExit()
@@ -6348,9 +6409,6 @@ function RunwaySession.OpenLittleElfChestAfterObstacleBounceStop(humanoid: Human
 	Refs.chestRewardPresentationStarted = false
 	localState.slideEndClock = math.huge
 	RunwaySession.EnterLittleElfChestRewardWaitPose(humanoid, hrp)
-	local chestOpenDistance = RunwaySession.CurrentAlongProgress(hrp)
-	ClientGameInfo.UpdateJumpRunwayBestDistance(chestOpenDistance)
-	NetMsg.FireRequestJumpRunwayBestDistance(chestOpenDistance)
 	NetMsg.FireRequestJumpRunwayLittleElfChestReward(chestConfigId)
 	task.spawn(RunwaySession.TryPresentLittleElfChestReward)
 end
@@ -6436,9 +6494,6 @@ function RunwaySession.ProcessLittleElfChestHit(chestModel: Model, fwdH: Vector3
 		RunwaySession.EndChestProneBounceAndWaitForReward()
 	end)
 
-	local chestHitDistance = RunwaySession.CurrentAlongProgress(hrpT)
-	ClientGameInfo.UpdateJumpRunwayBestDistance(chestHitDistance)
-	NetMsg.FireRequestJumpRunwayBestDistance(chestHitDistance)
 	NetMsg.FireRequestJumpRunwayLittleElfChestReward(chestConfigId)
 	task.spawn(RunwaySession.TryPresentLittleElfChestReward)
 end
