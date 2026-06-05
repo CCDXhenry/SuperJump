@@ -77,7 +77,8 @@ local EXERCISE_POPUP_RANDOM_ANGLE_DEGREES: number = 360
 -- 第二段淡出开始时间占比，越小越早开始变透明。
 local EXERCISE_POPUP_FADE_START_RATIO: number = 0.45
 -- R15 默认跑步（507767968 为 Fall，勿混用）
-local EXERCISE_TREADMILL_ANIMATION_ID = "rbxassetid://507767714"
+local EXERCISE_TREADMILL_R15_ANIMATION_ID = "rbxassetid://507767714"
+local EXERCISE_TREADMILL_R6_ANIMATION_ID = "rbxassetid://180426354"
 local ClickRewardConfig = GameConfig.ExerciseClickReward
 
 -- 锻炼模式状态
@@ -989,6 +990,22 @@ local function WaitForLocalActiveExerciseModel(): Model?
 	return foundModel
 end
 
+local function GetOrCreateAnimator(humanoid: Humanoid): Animator
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if animator == nil then
+		animator = Instance.new("Animator")
+		animator.Parent = humanoid
+	end
+	return animator
+end
+
+local function GetExerciseTreadmillAnimationId(humanoid: Humanoid): string
+	if humanoid.RigType == Enum.HumanoidRigType.R6 then
+		return EXERCISE_TREADMILL_R6_ANIMATION_ID
+	end
+	return EXERCISE_TREADMILL_R15_ANIMATION_ID
+end
+
 local function GetExerciseStandCFrame(equipmentModel: Model, equipData: GameConfig.ExEquipData, character: Model, hrp: BasePart): CFrame
 	local modelRootPart: BasePart? = equipmentModel.PrimaryPart
 	local rootCf: CFrame
@@ -1178,16 +1195,14 @@ local function StartExercise(equipId: number)
 		end
 
 		if equipData.type == 1 then
-			-- Treadmill 类型：播放固定跑步动画（机制同 Bike）
+			-- Treadmill 类型：播放固定跑步动画（保留 R6/R15 兼容）
 			if exerciseTreadmillAnimTrack == nil then
-				local animator: Animator? = exerciseHumanoid:FindFirstChildOfClass("Animator")
-				if animator ~= nil then
-					local treadmillAnim = Instance.new("Animation")
-					treadmillAnim.AnimationId = EXERCISE_TREADMILL_ANIMATION_ID
-					exerciseTreadmillAnimTrack = animator:LoadAnimation(treadmillAnim)
-					exerciseTreadmillAnimTrack.Looped = true
-					exerciseTreadmillAnimTrack:Play()
-				end
+				local animator = GetOrCreateAnimator(exerciseHumanoid)
+				local treadmillAnim = Instance.new("Animation")
+				treadmillAnim.AnimationId = GetExerciseTreadmillAnimationId(exerciseHumanoid)
+				exerciseTreadmillAnimTrack = animator:LoadAnimation(treadmillAnim)
+				exerciseTreadmillAnimTrack.Looped = true
+				exerciseTreadmillAnimTrack:Play()
 			end
 		elseif equipData.type == 2 then
 			-- Bike 类型：播放专属骑行动画
