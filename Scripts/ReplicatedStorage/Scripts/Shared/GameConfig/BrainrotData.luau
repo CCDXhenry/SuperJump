@@ -80,11 +80,11 @@ return {
 		["quality"] = 1,
 	},
 	[11] = {
-		["resourceName"] = "Liril矛_Laril脿",
+		["resourceName"] = "Lirilì_Larilà",
 		["baseAbility"] = 45,
 		["id"] = 11,
 		["iconImageId"] = "rbxassetid://119554115652526",
-		["name_t"] = "Liril矛 Laril脿",
+		["name_t"] = "Lirilì Larilà",
 		["quality"] = 2,
 	},
 	[12] = {
