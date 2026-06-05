@@ -7154,13 +7154,12 @@ function RunwaySession.JumpApplyRatingForTakeoff(
 	if inAuto then
 		tier, bonusRatio, contextName = RunwaySession.ResolveAutoBeforeLineRating(jumpIndex, humanoid.RootPart)
 	elseif inLineWindow then
-		if RunwaySession.IsRunwayScriptedGrounded(humanoid) and localState.tHudStart ~= nil then
+		if localState.tHudStart ~= nil then
 			tier, bonusRatio, contextName =
 				RunwaySession.ResolveTimedWindowRating(nowClock - (localState.tHudStart :: number), jumpIndex, "TimedWindow")
 		else
-			tier = 2
-			bonusRatio = RunwaySession.ResolveJumpWindowRatingSpeedBonusRatio(jumpIndex, tier)
-			contextName = "LineWindow"
+			-- 触线后计时器需稳定贴地才启动；此期间起跳按距 BeginLine 距离评分（与 AutoRun 提前跳一致）。
+			tier, bonusRatio, contextName = RunwaySession.ResolveAutoBeforeLineRating(jumpIndex, humanoid.RootPart)
 		end
 	elseif inChainWindow then
 		if localState.tHudStart ~= nil then
@@ -7352,9 +7351,11 @@ function RunwaySession.JumpTry(): boolean
 	local okDist, distFeet = RunwaySession.RaycastFeet(humanoid)
 	if okDist then
 		local deltaT = if localState.tHudStart ~= nil then nowClock - (localState.tHudStart :: number) else -1
+		local okBegin, distToBegin, _maxDist = RunwaySession.ResolveBeginLineAlongMetrics(hrp)
+		local distToBeginText = if okBegin then string.format("%.2f", distToBegin) else "n/a"
 		print(
-			`[RunwaySession] JumpTry takeoffCount={localState.takeoffCount} dist={string.format("%.2f", distFeet)}`
-				.. ` deltaT={string.format("%.3f", deltaT)} phase={localState.phase}`
+			`[RunwaySession] JumpTry takeoffCount={localState.takeoffCount} distFeet={string.format("%.2f", distFeet)}`
+				.. ` distToBegin={distToBeginText} deltaT={string.format("%.3f", deltaT)} phase={localState.phase}`
 		)
 	end
 	return RunwaySession.JumpApplyTakeoff(humanoid, hrp, nowClock, inAuto, inLineWindow, inChainWindow)
