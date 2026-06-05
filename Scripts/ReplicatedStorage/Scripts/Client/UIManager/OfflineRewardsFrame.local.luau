@@ -9,6 +9,7 @@ local coreSharedScripts = coreScripts:WaitForChild("Shared")
 local NumberExtension = require(coreSharedScripts:FindFirstChild("NumberExtension"))
 local coreClientScripts = coreScripts:WaitForChild("Client")
 local TranslationTool = require(coreClientScripts:FindFirstChild("TranslationTool"))
+local UIAdapter = require(coreClientScripts:FindFirstChild("UIAdapter"))
 
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
@@ -21,6 +22,8 @@ local ClientGameInfo = require(clientScripts:FindFirstChild("ClientGameInfo"))
 local UIManager = require(clientScripts:FindFirstChild("UIManager"))
 
 local offlineRewardsFrame: Frame = script.Parent :: Frame
+local windowId: string = offlineRewardsFrame:GetAttribute("WindowId") :: string
+local closeButton: ImageButton = offlineRewardsFrame:FindFirstChild("CloseButton") :: ImageButton
 local mainFrame: Frame = offlineRewardsFrame:FindFirstChild("MainFrame") :: Frame
 local numberLabel: TextLabel = mainFrame:FindFirstChild("NumberLabel") :: TextLabel
 local payReceiveButton: ImageButton = mainFrame:FindFirstChild("PayReceiveButton") :: ImageButton
@@ -78,15 +81,21 @@ local function PromptPaidReward()
 	marketplaceService:PromptProductPurchase(players.LocalPlayer, rewardInfo.paidReceiveProductId)
 end
 
+local function OnCloseButtonActivated()
+	UIManager.CloseWindow(windowId)
+end
+
 local function OnCloseWindow(closeWindowId: string)
 	if closeWindowId ~= UIManager.WindowId.OfflineRewards then
 		return
 	end
+	UIAdapter.RemoveAdaptiveFrame(offlineRewardsFrame)
 	offlineRewardsFrame:Destroy()
 end
 
 receiveButton.Activated:Connect(ClaimNormalReward)
 payReceiveButton.Activated:Connect(PromptPaidReward)
+closeButton.Activated:Connect(OnCloseButtonActivated)
 ClientMsg.ConnectCloseWindow(OnCloseWindow)
 
 NetMsg.ConnectNotifyOfflineRewardInfo(function(offlineRewardInfo: GameConfig.OfflineRewardInfo?)
@@ -94,4 +103,5 @@ NetMsg.ConnectNotifyOfflineRewardInfo(function(offlineRewardInfo: GameConfig.Off
 	RefreshView()
 end)
 
+UIAdapter.AddAdaptiveFrame(offlineRewardsFrame, UIAdapter.AdaptiveType.Center)
 RefreshView()
