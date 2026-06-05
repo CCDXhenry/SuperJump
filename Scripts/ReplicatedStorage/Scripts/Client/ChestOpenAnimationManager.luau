@@ -348,6 +348,7 @@ type PlayInWorldOptions = {
 	resolveFinalVariantId: (() -> number?)?,
 	finalVariantId: number?,
 	maxPlayTimeSec: number?,
+	postFinalRevealHoldSec: number?,
 }
 
 local function PrepareExistingChestForOpenAnim(chestModel: Model, container: Instance, throwCFrame: CFrame): BasePart?
@@ -478,6 +479,11 @@ local function PlayInWorld(
 	yDriver:Destroy()
 	yawDriver:Destroy()
 
+	local postFinalRevealHoldSec = 0
+	if options ~= nil and typeof(options.postFinalRevealHoldSec) == "number" then
+		postFinalRevealHoldSec = math.max(0, options.postFinalRevealHoldSec :: number)
+	end
+
 	local displayModel: Model? = nil
 	local displayRoot: BasePart? = nil
 	local lastId: number? = nil
@@ -536,7 +542,11 @@ local function PlayInWorld(
 				Enum.EasingStyle.Quad,
 				Enum.EasingDirection.Out
 			)
-			task.wait(0.08)
+			if postFinalRevealHoldSec > 0 then
+				task.wait(postFinalRevealHoldSec)
+			else
+				task.wait(0.08)
+			end
 			TweenModelScale(
 				displayModel,
 				finalSettleScale,

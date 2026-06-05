@@ -1140,8 +1140,14 @@ GameConfig.JumpRunwayDesigner = {
 	RUNWAY_CHEST_HIT_HORIZONTAL_MAX_DIST_STUDS = 5,
 	-- 小精灵宝箱撞击速度（studs/s）；滑到宝箱时保留该末速度，撞击后也用该速度反弹并按统一趴滑减速度减速
 	RUNWAY_CHEST_HIT_SPEED = 15,
-	-- 开箱动画结束后、触发回城传送前的等待时长（秒）
-	RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC = 0.5,
+	-- 开箱最终 brainrot 弹出后的展示停留时长（秒）
+	RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC = 0.3,
+	-- 玩家举起最终 brainrot 后的展示停留时长（秒）；结束后才创建追击者
+	RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC = 0.5,
+	-- 开箱时摄像机向后拉远距离（stud）；↑ 镜头更远
+	RUNWAY_CHEST_CAMERA_BACK_OFFSET = 45,
+	-- 开箱时摄像机 FOV；↑ 视野更广
+	RUNWAY_CHEST_CAMERA_FOV = 70,
 
 	-- ═══════════════════════════════════════
 	-- —— ⑧ 逃生红屏 ——
@@ -1451,7 +1457,10 @@ GameConfig.JumpRunway = {
 	RUNWAY_CHEST_SPAWN_BEFORE_END_SEC = jumpRunwayDesigner.RUNWAY_CHEST_SPAWN_BEFORE_END_SEC,
 	RUNWAY_CHEST_HIT_HORIZONTAL_MAX_DIST_STUDS = jumpRunwayDesigner.RUNWAY_CHEST_HIT_HORIZONTAL_MAX_DIST_STUDS,
 	RUNWAY_CHEST_HIT_SPEED = jumpRunwayDesigner.RUNWAY_CHEST_HIT_SPEED,
-	RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC = jumpRunwayDesigner.RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC,
+	RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC = jumpRunwayDesigner.RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC,
+	RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC = jumpRunwayDesigner.RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC,
+	RUNWAY_CHEST_CAMERA_BACK_OFFSET = jumpRunwayDesigner.RUNWAY_CHEST_CAMERA_BACK_OFFSET,
+	RUNWAY_CHEST_CAMERA_FOV = jumpRunwayDesigner.RUNWAY_CHEST_CAMERA_FOV,
 	-- 旧字段：B 段不再追宝箱，保留字段避免配置兼容问题
 	RUNWAY_CHEST_SLIDE_MIN_CHASE_SPEED = 16,
 	-- 旧字段：B 段不再追宝箱，保留字段避免配置兼容问题

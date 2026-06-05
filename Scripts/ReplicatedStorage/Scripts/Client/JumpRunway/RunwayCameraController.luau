@@ -11,7 +11,9 @@ type CameraState = {
 	cameraFovBeforeRunway: number?,
 	smoothedCameraPosition: Vector3?,
 	smoothedCameraLookAt: Vector3?,
+	smoothedCameraFov: number?,
 	releaseTransitionToken: number,
+	chestOpenZoomActive: boolean,
 }
 
 local state: CameraState = {
@@ -21,7 +23,9 @@ local state: CameraState = {
 	cameraFovBeforeRunway = nil,
 	smoothedCameraPosition = nil,
 	smoothedCameraLookAt = nil,
+	smoothedCameraFov = nil,
 	releaseTransitionToken = 0,
+	chestOpenZoomActive = false,
 }
 
 local function ResolveReleaseTransitionDuration(cfg: any?): number
@@ -192,7 +196,39 @@ local function InvokeOnCompleteOnce(onComplete: (() -> ())?, invoked: { boolean 
 	onComplete()
 end
 
-function RunwayCameraController.CalculateTargets(hrp: BasePart, runwayForward: Vector3, cfg: any, normalizeForward: (Vector3) -> Vector3): (Vector3, Vector3)
+local function ResolveChestOpenBackOffset(cfg: any?): number
+	if cfg == nil then
+		return 45
+	end
+	local backOffset = cfg.RUNWAY_CHEST_CAMERA_BACK_OFFSET
+	if typeof(backOffset) ~= "number" or backOffset ~= backOffset or backOffset <= 0 then
+		return 45
+	end
+	return backOffset
+end
+
+local function ResolveChestOpenFov(cfg: any?): number
+	if cfg == nil then
+		return 70
+	end
+	local fov = cfg.RUNWAY_CHEST_CAMERA_FOV
+	if typeof(fov) ~= "number" or fov ~= fov or fov <= 0 then
+		return 70
+	end
+	return fov
+end
+
+function RunwayCameraController.SetChestOpenZoomActive(active: boolean)
+	state.chestOpenZoomActive = active
+end
+
+function RunwayCameraController.CalculateTargets(
+	hrp: BasePart,
+	runwayForward: Vector3,
+	cfg: any,
+	normalizeForward: (Vector3) -> Vector3,
+	useChestOpenZoom: boolean?
+): (Vector3, Vector3)
 	local forward = normalizeForward(runwayForward)
 	local right = forward:Cross(Vector3.yAxis)
 	if right.Magnitude < 1e-4 then
@@ -200,9 +236,12 @@ function RunwayCameraController.CalculateTargets(hrp: BasePart, runwayForward: V
 	else
 		right = right.Unit
 	end
+	local backOffset = if useChestOpenZoom == true
+		then ResolveChestOpenBackOffset(cfg)
+		else cfg.RUNWAY_CAMERA_BACK_OFFSET
 	local targetLookAt = hrp.Position + forward * cfg.RUNWAY_CAMERA_LOOK_AHEAD
 		+ Vector3.new(0, cfg.RUNWAY_CAMERA_LOOK_HEIGHT, 0)
-	local targetPosition = hrp.Position - forward * cfg.RUNWAY_CAMERA_BACK_OFFSET
+	local targetPosition = hrp.Position - forward * backOffset
 		+ right * cfg.RUNWAY_CAMERA_RIGHT_OFFSET
 		+ Vector3.new(0, cfg.RUNWAY_CAMERA_HEIGHT_OFFSET, 0)
 	if (targetLookAt - targetPosition).Magnitude < 1e-3 then
@@ -265,9 +304,11 @@ function RunwayCameraController.Enable(workspaceRef: Workspace, cfg: any, hrp: B
 		state.cameraFovBeforeRunway = camera.FieldOfView
 	end
 	state.active = true
-	local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(hrp, runwayForward, cfg, normalizeForward)
+	state.chestOpenZoomActive = false
+	local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(hrp, runwayForward, cfg, normalizeForward, false)
 	state.smoothedCameraPosition = targetPosition
 	state.smoothedCameraLookAt = targetLookAt
+	state.smoothedCameraFov = cfg.RUNWAY_CAMERA_FOV
 	camera.CameraType = Enum.CameraType.Scriptable
 	camera.FieldOfView = cfg.RUNWAY_CAMERA_FOV
 	camera.CFrame = CFrame.lookAt(targetPosition, targetLookAt, Vector3.yAxis)
@@ -283,6 +324,8 @@ function RunwayCameraController.Disable(
 )
 	state.smoothedCameraPosition = nil
 	state.smoothedCameraLookAt = nil
+	state.smoothedCameraFov = nil
+	state.chestOpenZoomActive = false
 	if not state.active then
 		return
 	end
@@ -366,6 +409,8 @@ function RunwayCameraController.FocusChaserThenDisable(
 	end
 	state.smoothedCameraPosition = nil
 	state.smoothedCameraLookAt = nil
+	state.smoothedCameraFov = nil
+	state.chestOpenZoomActive = false
 	if not state.active then
 		return
 	end
@@ -469,9 +514,18 @@ function RunwayCameraController.Update(
 		RunwayCameraController.Disable(workspaceRef, getCharacterParts)
 		return
 	end
-	local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(hrp, runwayForward, cfg, normalizeForward)
+	local useChestOpenZoom = state.chestOpenZoomActive
+	local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(
+		hrp,
+		runwayForward,
+		cfg,
+		normalizeForward,
+		useChestOpenZoom
+	)
+	local targetFov = if useChestOpenZoom then ResolveChestOpenFov(cfg) else cfg.RUNWAY_CAMERA_FOV
 	local currentPosition: Vector3 = state.smoothedCameraPosition or targetPosition
 	local currentLookAt: Vector3 = state.smoothedCameraLookAt or targetLookAt
+	local currentFov: number = state.smoothedCameraFov or camera.FieldOfView
 	local smoothSpeed = smoothSpeedOverride
 	if typeof(smoothSpeed) ~= "number" or smoothSpeed ~= smoothSpeed or smoothSpeed <= 0 then
 		smoothSpeed = math.max(0, cfg.RUNWAY_CAMERA_SMOOTH_SPEED)
@@ -479,10 +533,12 @@ function RunwayCameraController.Update(
 	local alpha = 1 - math.exp(-math.max(0, dt) * smoothSpeed)
 	local nextPosition = currentPosition:Lerp(targetPosition, alpha)
 	local nextLookAt = currentLookAt:Lerp(targetLookAt, alpha)
+	local nextFov = currentFov + (targetFov - currentFov) * alpha
 	state.smoothedCameraPosition = nextPosition
 	state.smoothedCameraLookAt = nextLookAt
+	state.smoothedCameraFov = nextFov
 	camera.CameraType = Enum.CameraType.Scriptable
-	camera.FieldOfView = cfg.RUNWAY_CAMERA_FOV
+	camera.FieldOfView = nextFov
 	camera.CFrame = CFrame.lookAt(nextPosition, nextLookAt, Vector3.yAxis)
 end
 

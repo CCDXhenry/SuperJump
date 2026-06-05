@@ -136,6 +136,21 @@ local function ResolveChestHitHorizontalMaxDistStuds(): number
 	return math.max(0, ResolveConfigNumber(cfg.RUNWAY_CHEST_HIT_HORIZONTAL_MAX_DIST_STUDS, ChestHitHorizontalMaxDistStudsDefault))
 end
 
+local function ResolveChestHoldDelaySec(rawValue: any, fallbackSec: number): number
+	if typeof(rawValue) ~= "number" or rawValue ~= rawValue or rawValue < 0 then
+		return fallbackSec
+	end
+	return rawValue
+end
+
+local function ResolveChestFinalRewardHoldSec(): number
+	return ResolveChestHoldDelaySec(cfg.RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC, 0.5)
+end
+
+local function ResolveChestCarryPresentHoldSec(): number
+	return ResolveChestHoldDelaySec(cfg.RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC, 0.5)
+end
+
 local Refs: {
 	screenGui: ScreenGui?,
 	phaseLabel: TextLabel?,
@@ -218,8 +233,6 @@ local Refs: {
 	chestDynamicConfigId: number?,
 	chestScheduledSpawnPos: Vector3?,
 	chestPredictedPlaceDistance: number?,
-	chestPostRewardExitCleanup: boolean?,
-	chestPostOpenTeleportDelayToken: number,
 	chestBackpackDeliverRequested: boolean?,
 	chestCarryReturnActive: boolean?,
 	lastRunAlongDistance: number?,
@@ -227,7 +240,6 @@ local Refs: {
 	startTriggerStartArmed: boolean?,
 	startTriggerPlayerWasInsideVolume: boolean?,
 	startTriggerOutsideVolumeClock: number?,
-	deferredTerminalServerPayload: NetMsg.JumpRunwayStatePayload?,
 	forwardBlockedStartClock: number?,
 	forwardBlockedStartAlong: number?,
 	treeHitLastProcessClock: number,
@@ -301,15 +313,12 @@ local Refs: {
 	chestDynamicConfigId = nil,
 	chestScheduledSpawnPos = nil,
 	chestPredictedPlaceDistance = nil,
-	chestPostRewardExitCleanup = false,
-	chestPostOpenTeleportDelayToken = 0,
 	chestBackpackDeliverRequested = false,
 	chestCarryReturnActive = false,
 	lastRunAlongDistance = nil,
 	startTriggerStartArmed = true,
 	startTriggerPlayerWasInsideVolume = false,
 	startTriggerOutsideVolumeClock = nil,
-	deferredTerminalServerPayload = nil,
 	missAbortSentForThisRun = nil,
 	forwardBlockedStartClock = nil,
 	forwardBlockedStartAlong = nil,
@@ -2897,7 +2906,7 @@ function RunwaySession.ResolveRunwayLocomotionMode(humanoid: Humanoid, nowClock:
 	then
 		return RUNWAY_LOCOMOTION_NONE
 	end
-	if Refs.chestRewardWaitPose == true or Refs.chestPostRewardExitCleanup == true then
+	if Refs.chestRewardWaitPose == true then
 		return RUNWAY_LOCOMOTION_NONE
 	end
 	local grounded = RunwaySession.IsRunwayScriptedGrounded(humanoid)
@@ -4576,10 +4585,7 @@ function RunwaySession.ResetLocalRunToIdle()
 	RunwaySession.ClearJumpHorizontalLerp()
 	RunwaySession.DestroyRunwayRing()
 	RunwaySession.ClearLittleElfChestRefs()
-	Refs.chestPostRewardExitCleanup = false
 	Refs.chestCarryReturnActive = false
-	Refs.chestPostOpenTeleportDelayToken += 1
-	Refs.deferredTerminalServerPayload = nil
 	Refs.missAbortSentForThisRun = nil
 	Refs.forwardBlockedStartClock = nil
 	Refs.forwardBlockedStartAlong = nil
@@ -4799,10 +4805,6 @@ function RunwaySession.GetEffectivePhysicsPhase(humanoid: Humanoid, nowClock: nu
 end
 
 function RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid: Humanoid, nowClock: number)
-	if Refs.chestPostRewardExitCleanup == true then
-		RunwaySession.ApplyExpectedWalkSpeedAfterRunway(humanoid)
-		return
-	end
 	if localState.phase == Ph.Slide and Refs.chestRewardWaitPose == true then
 		RunwaySession.ApplyExpectedWalkSpeedAfterRunway(humanoid)
 		return
@@ -5100,12 +5102,8 @@ function RunwaySession.ApplyLocalPhysics(dt: number)
 		hrp.AssemblyLinearVelocity = forward * keepAlong + Vector3.new(0, v.Y, 0)
 	end
 	if not RunwaySession.IsLittleElfChestRunwayFlowActive() then
-		if Refs.chestPostRewardExitCleanup ~= true then
-			RunwaySession.EnsureRunwayGravityForce(hrp)
-			RunwaySession.UpdateRunwayGravityForce(hrp)
-		else
-			RunwaySession.DestroyRunwayGravityForce()
-		end
+		RunwaySession.EnsureRunwayGravityForce(hrp)
+		RunwaySession.UpdateRunwayGravityForce(hrp)
 	elseif RunwaySession.IsLittleElfChestRunwayFlowActive() then
 		RunwaySession.DestroyRunwayGravityForce()
 	end
@@ -5179,13 +5177,6 @@ function RunwaySession.OnPostSimulationLocomotion(dt: number)
 				else forward
 			RunwaySession.ApplyLittleElfChestStandingWaitOrientation(humanoid, hrp, waitForward)
 		end
-	elseif Refs.chestPostRewardExitCleanup == true and hrp ~= nil then
-		local cleanupForward = if localState.runwaySlideKind == SlideKindObstacleBounce
-			then NormalizeRunwayForward(localState.runwayForward)
-			else forward
-		RunwaySession.SnapCharacterHrpToGround(humanoid, hrp, cleanupForward)
-		hrp.AssemblyLinearVelocity = Vector3.zero
-		hrp.AssemblyAngularVelocity = Vector3.zero
 	elseif
 		(localState.phase == Ph.Airborne and localState.takeoffCount >= cfg.N_TOTAL_JUMPS)
 		or isFinalLandingSlide
@@ -5233,12 +5224,8 @@ function RunwaySession.OnJumpRunwayFinalTiltRenderStep(dt: number)
 		return
 	end
 	if not RunwaySession.IsLittleElfChestRunwayFlowActive() then
-		if Refs.chestPostRewardExitCleanup ~= true then
-			RunwaySession.EnsureRunwayGravityForce(hrp)
-			RunwaySession.UpdateRunwayGravityForce(hrp)
-		else
-			RunwaySession.DestroyRunwayGravityForce()
-		end
+		RunwaySession.EnsureRunwayGravityForce(hrp)
+		RunwaySession.UpdateRunwayGravityForce(hrp)
 	elseif RunwaySession.IsLittleElfChestRunwayFlowActive() then
 		RunwaySession.DestroyRunwayGravityForce()
 	end
@@ -5942,13 +5929,19 @@ function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chest
 	else
 		RunwayCameraController.Disable(workspace, RunwaySession.GetCharacterParts, baseDirection, cfg, NormalizeRunwayForward)
 	end
-	localState.phase = Ph.Idle
-	localState.groundedStableTime = 0
-	Refs.deferredTerminalServerPayload = nil
-	Refs.chestPostOpenTeleportDelayToken += 1
 	if localState.controlsDisabled then
 		RunwaySession.SetControlsEnabled(true)
 	end
+	local carryPresentHoldSec = ResolveChestCarryPresentHoldSec()
+	if carryPresentHoldSec > 0 then
+		task.wait(carryPresentHoldSec)
+	end
+	if Refs.chestPickedConfigId ~= chestConfigId or Refs.chestRewardPresentationStarted ~= true then
+		return
+	end
+	-- 举起展示结束后再切 Idle，避免等待期间 OnCameraRenderStep 提前 Disable 导致追击者镜头动画失效
+	localState.phase = Ph.Idle
+	localState.groundedStableTime = 0
 	-- 在清理之前先获取怪物数据
 	local monsterData: GameConfig.MonsterData? = nil
 	if Refs.lastRunAlongDistance ~= nil then
@@ -6073,6 +6066,7 @@ function RunwaySession.TryPresentLittleElfChestReward()
 	end
 	Refs.chestRewardPresentationStarted = true
 	Refs.chestAnimPlaying = true
+	RunwayCameraController.SetChestOpenZoomActive(true)
 
 	local runwayChestModelForOpen = Refs.chestSpawnedModel
 	local openCFrame = if runwayChestModelForOpen and runwayChestModelForOpen.Parent
@@ -6116,12 +6110,17 @@ function RunwaySession.TryPresentLittleElfChestReward()
 					end
 					return Refs.chestPickedVariantId
 				end,
+				postFinalRevealHoldSec = ResolveChestFinalRewardHoldSec(),
 			}
 		)
 		if selectedBrainrotId == nil then
 			selectedBrainrotId = RunwaySession.GetLittleElfChestFallbackBrainrotId(pickedConfigId)
 		end
 		Refs.chestPickedBrainrotId = selectedBrainrotId
+	end
+	RunwayCameraController.SetChestOpenZoomActive(false)
+	if Refs.chestPickedConfigId ~= pickedConfigId or Refs.chestRewardPresentationStarted ~= true then
+		return
 	end
 	RunwaySession.EnterLittleElfChestCarryReturn(Refs.chestPickedBrainrotId, pickedConfigId)
 end
@@ -6235,65 +6234,6 @@ function RunwaySession.TryForceReportFinalAfterChestExit()
 	})
 	localState.finalSent = true
 	RunwaySession.PrintDistanceLogSummary("force_final_report", hrpFinal)
-end
-
-function RunwaySession.ApplyDeferredTerminalServerPayloadAfterChest()
-	local deferred = Refs.deferredTerminalServerPayload
-	if deferred == nil then
-		return
-	end
-	Refs.deferredTerminalServerPayload = nil
-	RunwaySession.ApplyServerPayload(deferred)
-end
-
-function RunwaySession.ScheduleChestExitFinalReportAfterDelay()
-	Refs.chestPostOpenTeleportDelayToken += 1
-	local token = Refs.chestPostOpenTeleportDelayToken
-	local delaySec = cfg.RUNWAY_CHEST_POST_OPEN_TELEPORT_DELAY_SEC
-	if typeof(delaySec) ~= "number" or delaySec ~= delaySec or delaySec < 0 then
-		delaySec = 0.5
-	end
-	task.delay(delaySec, function()
-		if Refs.chestPostOpenTeleportDelayToken ~= token then
-			return
-		end
-		if Refs.chestPostRewardExitCleanup ~= true then
-			return
-		end
-		RunwaySession.TryForceReportFinalAfterChestExit()
-		RunwaySession.ApplyDeferredTerminalServerPayloadAfterChest()
-	end)
-end
-
-function RunwaySession.FinishLittleElfChestRunwayExit()
-	Refs.chestPostRewardExitCleanup = true
-	RunwaySession.RestorePlayerSlideCollisionGroup()
-	local forwardExit = Refs.chestSlideFwdH or NormalizeRunwayForward(localState.runwayForward)
-	if forwardExit.Magnitude < 1e-4 then
-		forwardExit = Vector3.new(0, 0, -1)
-	else
-		forwardExit = Vector3.new(forwardExit.X, 0, forwardExit.Z).Unit
-	end
-	local _, hDelay, hrpDelay = RunwaySession.GetCharacterParts()
-	RunwaySession.DestroyRunwayGravityForce()
-	if hDelay and hrpDelay then
-		RunwaySession.SnapCharacterHrpToGround(hDelay, hrpDelay, forwardExit)
-		hrpDelay.AssemblyLinearVelocity = Vector3.zero
-		hrpDelay.AssemblyAngularVelocity = Vector3.zero
-		RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(hDelay)
-		RunwaySession.ClearFinalLandingSlideModuleLocals()
-		RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(hDelay, hrpDelay)
-		RunwaySession.ApplyExpectedWalkSpeedAfterRunway(hDelay)
-		RunwaySession.SlideTraceScheduleDestroyAfterRunwayEnd()
-	end
-	RunwaySession.PrintDistanceLogSummary("chest_exit", hrpDelay)
-	localState.phase = Ph.RunEnded
-	localState.groundedStableTime = 0
-	if localState.controlsDisabled then
-		RunwaySession.SetControlsEnabled(true)
-	end
-	RunwaySession.ClearLittleElfChestRefs()
-	RunwaySession.ScheduleChestExitFinalReportAfterDelay()
 end
 
 function RunwaySession.IsPlayerNearLittleElfChest(hrp: BasePart, chestModel: Model, _fwdH: Vector3): boolean
@@ -6721,11 +6661,7 @@ function RunwaySession.UpdateTick(dt: number)
 		ComputeRunwayHorizontalAlongSpeed,
 		RunwaySession.IsRunwayScriptedGrounded
 	)
-	if
-		not RunwaySession.IsLittleElfChestRunwayFlowActive()
-		and Refs.chestPostRewardExitCleanup ~= true
-		and not RunwaySession.ShouldDeferFinalReportForSlideChest()
-	then
+	if not RunwaySession.IsLittleElfChestRunwayFlowActive() and not RunwaySession.ShouldDeferFinalReportForSlideChest() then
 		RunwayNetBridge.MaybeReportFinal(
 			NetMsg,
 			cfg,
@@ -6806,9 +6742,6 @@ function RunwaySession.ApplyServerPayload(payload: NetMsg.JumpRunwayStatePayload
 		if payload.phase == Ph.ScoreLocked and payload.finalScore ~= nil then
 			localState.finalScore = payload.finalScore
 		end
-		if payload.phase == Ph.ScoreLocked or payload.phase == Ph.Cleaning or payload.phase == Ph.Idle then
-			Refs.deferredTerminalServerPayload = payload
-		end
 		return
 	end
 	if payload.phase == Ph.Idle or payload.phase == Ph.Cleaning then
@@ -6840,8 +6773,7 @@ function RunwaySession.ApplyServerPayload(payload: NetMsg.JumpRunwayStatePayload
 		if localState.controlsDisabled then
 			RunwaySession.SetControlsEnabled(true)
 		end
-		local canAcceptScoreLockedCleanup = localState.phase == Ph.RunEnded or Refs.chestPostRewardExitCleanup == true
-		if canAcceptScoreLockedCleanup then
+		if localState.phase == Ph.RunEnded then
 			RunwaySession.WarnSlideEndContext("server_score_locked_cleanup")
 			RunwaySession.ResetLocalRunToIdle()
 		end
