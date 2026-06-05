@@ -229,9 +229,9 @@ GameConfig.EnablePlayerGift = false
 GameConfig.PlayerRespawnTime = 1
 
 -- 无操作自动重连当前服务器
-GameConfig.IdleWarnSec = 14 * 60
-GameConfig.IdleTeleportSec = 15 * 60
-GameConfig.IdleTeleportCooldownSec = 20
+GameConfig.IdleWarnSec = 14 * 60 --开始提示“即将重连”
+GameConfig.IdleTeleportSec = 15 * 60 --无操作多久后触发重连
+GameConfig.IdleTeleportCooldownSec = 20 --两次重连请求/执行之间的最短间隔
 
 GameConfig.CoilType = {
 	Speed = 1,
