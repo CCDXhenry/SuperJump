@@ -81,6 +81,7 @@ local EXERCISE_TREADMILL_R15_ANIMATION_ID = "rbxassetid://507767714"
 local EXERCISE_TREADMILL_R6_ANIMATION_ID = "rbxassetid://180426354"
 local EXERCISE_BIKE_ANIMATION_ID = "rbxassetid://78524237347942"
 local EXERCISE_BIKE2_ANIMATION_ID = "rbxassetid://94029105754285"
+local EXERCISE_BIKE3_ANIMATION_ID = "rbxassetid://78744145986758"
 local FULL_ROTATION_RADIANS = math.pi * 2
 local ClickRewardConfig = GameConfig.ExerciseClickReward
 
@@ -860,12 +861,17 @@ local function FindDirectBasePart(parent: Instance, childName: string): BasePart
 end
 
 local function IsBikeExEquipType(exEquipType: number): boolean
-	return exEquipType == GameConfig.ExEquipType.Bike or exEquipType == GameConfig.ExEquipType.Bike2
+	return exEquipType == GameConfig.ExEquipType.Bike
+		or exEquipType == GameConfig.ExEquipType.Bike2
+		or exEquipType == GameConfig.ExEquipType.Bike3
 end
 
 local function GetExerciseBikeAnimationId(equipData: GameConfig.ExEquipData): string
 	if equipData.type == GameConfig.ExEquipType.Bike2 then
 		return EXERCISE_BIKE2_ANIMATION_ID
+	end
+	if equipData.type == GameConfig.ExEquipType.Bike3 then
+		return EXERCISE_BIKE3_ANIMATION_ID
 	end
 	return EXERCISE_BIKE_ANIMATION_ID
 end

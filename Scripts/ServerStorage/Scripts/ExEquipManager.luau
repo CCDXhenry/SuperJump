@@ -43,7 +43,9 @@ local function LogInfo(message: string)
 end
 
 local function IsBikeExEquipType(exEquipType: number): boolean
-	return exEquipType == GameConfig.ExEquipType.Bike or exEquipType == GameConfig.ExEquipType.Bike2
+	return exEquipType == GameConfig.ExEquipType.Bike
+		or exEquipType == GameConfig.ExEquipType.Bike2
+		or exEquipType == GameConfig.ExEquipType.Bike3
 end
 
 local function AnchorExerciseModel(equipmentModel: Model)
