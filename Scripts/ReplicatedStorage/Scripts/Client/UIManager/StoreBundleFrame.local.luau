@@ -284,25 +284,24 @@ local function formatProbabilityPercent(weight: number, totalWeight: number): st
 	return text .. "%"
 end
 
-type ChestPoolDisplayEntry = {
-	itemType: number,
-	itemId: number,
-	weight: number,
+type ChestBundleAbilitySlot = {
+	abilityLabel: TextLabel,
+	poolEntry: GameConfig.LittleElfChestRewardPoolEntry,
+	chestLevel: number,
 }
 
-local function getChestPoolDisplayEntries(chestId: number): { ChestPoolDisplayEntry }
+local chestBundleAbilitySlots: { ChestBundleAbilitySlot } = {}
+local warnedChestBundleRewardConfigIds: { [number]: boolean } = {}
+
+local function getChestPoolDisplayEntries(chestId: number): { GameConfig.LittleElfChestRewardPoolEntry }
 	local sourcePool = GameConfig.ChestRewardPoolMap[chestId]
 	if sourcePool == nil then
 		return {}
 	end
 
-	local copied: { ChestPoolDisplayEntry } = {}
+	local copied: { GameConfig.LittleElfChestRewardPoolEntry } = {}
 	for _, entry in ipairs(sourcePool) do
-		table.insert(copied, {
-			itemType = entry.itemType,
-			itemId = entry.itemId,
-			weight = entry.weight,
-		})
+		table.insert(copied, entry)
 	end
 	table.sort(copied, function(a, b)
 		if a.weight == b.weight then
@@ -311,12 +310,118 @@ local function getChestPoolDisplayEntries(chestId: number): { ChestPoolDisplayEn
 		return a.weight > b.weight
 	end)
 
-	local displayEntries: { ChestPoolDisplayEntry } = {}
+	local displayEntries: { GameConfig.LittleElfChestRewardPoolEntry } = {}
 	local maxCount = math.min(MAX_CHEST_POOL_SHOW_COUNT, #copied)
 	for i = 1, maxCount do
 		table.insert(displayEntries, copied[i])
 	end
 	return displayEntries
+end
+
+local function warnChestBundleRewardConfigIfInvalid(bundleData: GameConfig.ShopBundleData)
+	local bundleId = bundleData.config.id
+	if warnedChestBundleRewardConfigIds[bundleId] then
+		return
+	end
+
+	local chestRewards: { GameConfig.RewardInfo } = {}
+	for _, reward in ipairs(bundleData.rewards) do
+		if reward.rewardType == GameConfig.RewardType.LittleElfChest then
+			table.insert(chestRewards, reward)
+		end
+	end
+
+	local issues: { string } = {}
+	local byProductIndex: { [number]: GameConfig.RewardInfo } = {}
+	for _, reward in ipairs(chestRewards) do
+		local rewardProductIndex = reward.productIndex or 1
+		if byProductIndex[rewardProductIndex] ~= nil then
+			table.insert(issues, `duplicate productIndex {rewardProductIndex} on LittleElfChest rewards`)
+		else
+			byProductIndex[rewardProductIndex] = reward
+		end
+	end
+	for productIndex = 1, 3 do
+		local productId = getBundleProductId(bundleData.config, productIndex)
+		if productId > 0 and byProductIndex[productIndex] == nil then
+			table.insert(issues, `missing LittleElfChest reward for productIndex {productIndex}`)
+		end
+	end
+	if #issues == 0 then
+		return
+	end
+
+	warnedChestBundleRewardConfigIds[bundleId] = true
+	warn(
+		`[StoreBundleFrame] ShopBundle {bundleId} chest reward config invalid: {table.concat(issues, "; ")}. `
+			.. "Please set unique productIndex (1/2/3) for each LittleElfChest reward in ShopBundleData."
+	)
+end
+
+local function getMaxVariantCoinMultiplier(poolEntry: GameConfig.LittleElfChestRewardPoolEntry): number
+	local maxMultiplier = 1
+	local variantList = poolEntry.variantList
+	if variantList == nil then
+		return maxMultiplier
+	end
+	for _, variantId in ipairs(variantList) do
+		local variant = GameConfig.GetBrainrotVariant(variantId)
+		if variant then
+			local multiplier = 1 + variant.coinBonusPercent / 100
+			if multiplier > maxMultiplier then
+				maxMultiplier = multiplier
+			end
+		end
+	end
+	return maxMultiplier
+end
+
+local function getPoolBrainrotAbilityDisplay(
+	poolEntry: GameConfig.LittleElfChestRewardPoolEntry,
+	chestLevel: number,
+	playerInfo: GameConfig.ClientLocalPlayerInfo?
+): number?
+	if poolEntry.itemType ~= GameConfig.ItemType.Brainrot then
+		return nil
+	end
+	local brainrotData = GameConfig.BrainrotIdMap[poolEntry.itemId]
+	if brainrotData == nil then
+		return nil
+	end
+	local ability = GameConfig.GetBrainrotAbility(brainrotData.baseAbility, chestLevel)
+	local coinMultiplier = 1
+	if playerInfo and playerInfo.buffInfo then
+		coinMultiplier = GameConfig.GetBuffMultiplier(playerInfo.buffInfo, GameConfig.BuffType.CoinEfficiency)
+	end
+	return math.ceil(ability * coinMultiplier * getMaxVariantCoinMultiplier(poolEntry))
+end
+
+local function setPoolBrainrotAbilityLabel(
+	abilityLabel: TextLabel,
+	poolEntry: GameConfig.LittleElfChestRewardPoolEntry,
+	chestLevel: number
+)
+	local playerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	local ability = getPoolBrainrotAbilityDisplay(poolEntry, chestLevel, playerInfo)
+	if ability == nil then
+		abilityLabel.Visible = false
+		return
+	end
+	abilityLabel.Visible = true
+	TranslationTool.CustomAutoLocalizeTextLabel(
+		abilityLabel,
+		GameTexts.YieldPerSecond.source,
+		GameTexts.YieldPerSecond.key,
+		{ NumberExtension.FormatBigNumberAA(ability) }
+	)
+end
+
+local function refreshChestBundleAbilityLabels()
+	for _, slot in ipairs(chestBundleAbilitySlots) do
+		if slot.abilityLabel.Parent ~= nil then
+			setPoolBrainrotAbilityLabel(slot.abilityLabel, slot.poolEntry, slot.chestLevel)
+		end
+	end
 end
 
 local function getPoolItemIcon(itemType: number, itemId: number): string
@@ -526,6 +631,7 @@ local function createChestBundleFrame(bundleData: GameConfig.ShopBundleData, ind
 
 	local bundleConfig = bundleData.config
 	bundleFramesById[bundleConfig.id] = frame
+	warnChestBundleRewardConfigIfInvalid(bundleData)
 	local bundleNameLabel = frame:WaitForChild("BundleNameLabel") :: TextLabel
 	localizeText(bundleNameLabel, bundleConfig.name_t)
 	bundleNameLabel.TextColor3 = getBundleNameColor(bundleConfig)
@@ -571,6 +677,7 @@ local function createChestBundleFrame(bundleData: GameConfig.ShopBundleData, ind
 	end
 
 	if chestReward then
+		local chestLevel = chestReward.rewardLv or 1
 		local poolEntries = getChestPoolDisplayEntries(chestReward.rewardId)
 		local totalSlots = #packFrames
 		local showCount = math.min(totalSlots, #poolEntries)
@@ -595,6 +702,15 @@ local function createChestBundleFrame(bundleData: GameConfig.ShopBundleData, ind
 				local probabilityLabel = packFrame:FindFirstChild("TextLabel") :: TextLabel?
 				if probabilityLabel then
 					localizeText(probabilityLabel, formatProbabilityPercent(poolEntry.weight, totalWeight))
+				end
+				local abilityLabel = packFrame:FindFirstChild("AbilityLabel") :: TextLabel?
+				if abilityLabel then
+					setPoolBrainrotAbilityLabel(abilityLabel, poolEntry, chestLevel)
+					table.insert(chestBundleAbilitySlots, {
+						abilityLabel = abilityLabel,
+						poolEntry = poolEntry,
+						chestLevel = chestLevel,
+					})
 				end
 			end
 		end
@@ -702,6 +818,8 @@ local function detachTemplatesFromLayout()
 end
 
 local function clearShopBundleFrames()
+	table.clear(chestBundleAbilitySlots)
+	table.clear(warnedChestBundleRewardConfigIds)
 	for bundleId, frame in pairs(bundleFramesById) do
 		if frame.Parent ~= nil then
 			frame:Destroy()
@@ -794,6 +912,7 @@ ClientMsg.ConnectLocalPlayerBuffInfoUpdate(function(_buffInfo: GameConfig.BuffIn
 	if isWindowClosed then
 		return
 	end
+	refreshChestBundleAbilityLabels()
 	updateRepurchaseMask()
 end)
 

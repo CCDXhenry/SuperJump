@@ -77,7 +77,7 @@ return {
 		["id"] = 5,
 		["rewardCount"] = 3,
 		["rewardId"] = 1001,
-		["productIndex"] = 1,
+		["productIndex"] = 2,
 	},
 	[11] = {
 		["rewardType"] = 4,
@@ -85,6 +85,6 @@ return {
 		["id"] = 5,
 		["rewardCount"] = 10,
 		["rewardId"] = 1001,
-		["productIndex"] = 1,
+		["productIndex"] = 3,
 	},
 }
