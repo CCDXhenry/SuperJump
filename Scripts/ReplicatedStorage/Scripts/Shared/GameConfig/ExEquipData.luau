@@ -136,7 +136,7 @@ return {
 	},
 	[10] = {
 		["Column13"] = 0,
-		["type"] = 2,
+		["type"] = 3,
 		["resourceName"] = "Bike5",
 		["id"] = 10,
 		["iconImageId"] = "rbxassetid://88450114804805",
@@ -166,7 +166,7 @@ return {
 	},
 	[12] = {
 		["Column13"] = 0,
-		["type"] = 2,
+		["type"] = 3,
 		["resourceName"] = "Bike6",
 		["id"] = 12,
 		["iconImageId"] = "rbxassetid://101496326491409",
@@ -196,7 +196,7 @@ return {
 	},
 	[14] = {
 		["Column13"] = 0,
-		["type"] = 2,
+		["type"] = 3,
 		["resourceName"] = "Bike7",
 		["id"] = 14,
 		["iconImageId"] = "rbxassetid://117736147046687",
