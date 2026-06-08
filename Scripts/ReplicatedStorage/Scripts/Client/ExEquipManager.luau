@@ -79,6 +79,9 @@ local EXERCISE_POPUP_FADE_START_RATIO: number = 0.45
 -- R15 默认跑步（507767968 为 Fall，勿混用）
 local EXERCISE_TREADMILL_R15_ANIMATION_ID = "rbxassetid://507767714"
 local EXERCISE_TREADMILL_R6_ANIMATION_ID = "rbxassetid://180426354"
+local EXERCISE_BIKE_ANIMATION_ID = "rbxassetid://78524237347942"
+local EXERCISE_BIKE2_ANIMATION_ID = "rbxassetid://94029105754285"
+local FULL_ROTATION_RADIANS = math.pi * 2
 local ClickRewardConfig = GameConfig.ExerciseClickReward
 
 -- 锻炼模式状态
@@ -113,6 +116,25 @@ local clickRewardPendingMinAddExp: number = 0
 local clickRewardExpectedServerAddExp: number = 0
 local clickRewardButtonVisible: boolean = false
 
+type BikeFootPedalInfo = {
+	footPedal: BasePart,
+	initialCFrame: CFrame,
+	initialRollerLocalPosition: Vector3,
+}
+
+type BikePedalControllerInfo = {
+	rollerModel: Model,
+	initialRollerModelPivot: CFrame,
+	roller1: BasePart,
+	roller2: BasePart,
+	initialRoller1CFrame: CFrame,
+	initialRoller2CFrame: CFrame,
+	initialRoller1LocalPosition: Vector3,
+	initialRoller2LocalPosition: Vector3,
+	footPedal1: BikeFootPedalInfo,
+	footPedal2: BikeFootPedalInfo,
+}
+
 type ExercisePopupItem = {
 	gui: BillboardGui,
 	attachment: Attachment?,
@@ -128,6 +150,7 @@ type ExercisePopupItem = {
 }
 
 local exercisePopupPool: { ExercisePopupItem } = {}
+local bikePedalControllerInfo: BikePedalControllerInfo? = nil
 local GetExercisePopupParent: () -> PlayerGui? = function()
 	return nil
 end
@@ -828,9 +851,134 @@ QueueNextExerciseClickReward = function(clientSessionId: number)
 	end)
 end
 
+local function FindDirectBasePart(parent: Instance, childName: string): BasePart?
+	local child = parent:FindFirstChild(childName)
+	if child ~= nil and child:IsA("BasePart") then
+		return child
+	end
+	return nil
+end
+
+local function IsBikeExEquipType(exEquipType: number): boolean
+	return exEquipType == GameConfig.ExEquipType.Bike or exEquipType == GameConfig.ExEquipType.Bike2
+end
+
+local function GetExerciseBikeAnimationId(equipData: GameConfig.ExEquipData): string
+	if equipData.type == GameConfig.ExEquipType.Bike2 then
+		return EXERCISE_BIKE2_ANIMATION_ID
+	end
+	return EXERCISE_BIKE_ANIMATION_ID
+end
+
+local function CreateBikeFootPedalInfo(initialRollerModelPivot: CFrame, footPedal: BasePart): BikeFootPedalInfo?
+	local initialRollerLocalPosition = initialRollerModelPivot:PointToObjectSpace(footPedal.Position)
+	local radiusMagnitude = Vector2.new(initialRollerLocalPosition.Y, initialRollerLocalPosition.Z).Magnitude
+	if radiusMagnitude <= 0.001 then
+		warn("[ExEquipManager] Bike pedal is too close to roller axis")
+		return nil
+	end
+
+	return {
+		footPedal = footPedal,
+		initialCFrame = footPedal.CFrame,
+		initialRollerLocalPosition = initialRollerLocalPosition,
+	}
+end
+
+local function SetupBikePedalController(equipmentModel: Model): BikePedalControllerInfo?
+	local rollerModel = equipmentModel:FindFirstChild("Roller")
+	if rollerModel == nil or not rollerModel:IsA("Model") then
+		return nil
+	end
+
+	local roller1 = FindDirectBasePart(rollerModel, "Roller1")
+	local roller2 = FindDirectBasePart(rollerModel, "Roller2")
+	if roller1 == nil or roller2 == nil then
+		warn("[ExEquipManager] Bike missing Roller1/Roller2")
+		return nil
+	end
+
+	local initialRollerModelPivot = rollerModel:GetPivot()
+	local footPedal1 = FindDirectBasePart(equipmentModel, "FootPedal1") or roller1
+	local footPedal2 = FindDirectBasePart(equipmentModel, "FootPedal2") or roller2
+	local pedal1 = CreateBikeFootPedalInfo(initialRollerModelPivot, footPedal1)
+	local pedal2 = CreateBikeFootPedalInfo(initialRollerModelPivot, footPedal2)
+	if pedal1 == nil or pedal2 == nil then
+		return nil
+	end
+
+	return {
+		rollerModel = rollerModel,
+		initialRollerModelPivot = initialRollerModelPivot,
+		roller1 = roller1,
+		roller2 = roller2,
+		initialRoller1CFrame = roller1.CFrame,
+		initialRoller2CFrame = roller2.CFrame,
+		initialRoller1LocalPosition = initialRollerModelPivot:PointToObjectSpace(roller1.Position),
+		initialRoller2LocalPosition = initialRollerModelPivot:PointToObjectSpace(roller2.Position),
+		footPedal1 = pedal1,
+		footPedal2 = pedal2,
+	}
+end
+
+local function UpdateBikeRollerPartPosition(roller: BasePart, initialCFrame: CFrame, initialRollerLocalPosition: Vector3, rollerModelPivot: CFrame)
+	if roller.Parent == nil then
+		return
+	end
+
+	local rollerPosition = rollerModelPivot:PointToWorldSpace(initialRollerLocalPosition)
+	roller.CFrame = CFrame.new(rollerPosition) * initialCFrame.Rotation
+end
+
+local function UpdateBikeFootPedalPosition(pedalInfo: BikeFootPedalInfo, rollerModelPivot: CFrame)
+	if pedalInfo.footPedal.Parent == nil then
+		return
+	end
+
+	local footPedalPosition = rollerModelPivot:PointToWorldSpace(pedalInfo.initialRollerLocalPosition)
+	pedalInfo.footPedal.CFrame = CFrame.new(footPedalPosition) * pedalInfo.initialCFrame.Rotation
+end
+
+local function UpdateBikePedalController()
+	local controllerInfo = bikePedalControllerInfo
+	if controllerInfo == nil or controllerInfo.rollerModel.Parent == nil then
+		return
+	end
+
+	local bikeAnimTrack = exerciseBikeAnimTrack
+	if bikeAnimTrack == nil or bikeAnimTrack.Length <= 0 then
+		return
+	end
+
+	local cycleRatio = (bikeAnimTrack.TimePosition % bikeAnimTrack.Length) / bikeAnimTrack.Length
+	local angle = cycleRatio * FULL_ROTATION_RADIANS
+	local rollerModelPivot = controllerInfo.initialRollerModelPivot * CFrame.Angles(angle, 0, 0)
+	controllerInfo.rollerModel:PivotTo(rollerModelPivot)
+	UpdateBikeRollerPartPosition(
+		controllerInfo.roller1,
+		controllerInfo.initialRoller1CFrame,
+		controllerInfo.initialRoller1LocalPosition,
+		rollerModelPivot
+	)
+	UpdateBikeRollerPartPosition(
+		controllerInfo.roller2,
+		controllerInfo.initialRoller2CFrame,
+		controllerInfo.initialRoller2LocalPosition,
+		rollerModelPivot
+	)
+	UpdateBikeFootPedalPosition(controllerInfo.footPedal1, rollerModelPivot)
+	UpdateBikeFootPedalPosition(controllerInfo.footPedal2, rollerModelPivot)
+end
+
+local function CleanupBikePedalController()
+	bikePedalControllerInfo = nil
+end
+
 local function ReleaseExerciseCharacterPhysics()
 	local humanoid = exerciseHumanoid
 	local hrp = exerciseHrp
+	CleanupBikePedalController()
+
 	if humanoid == nil then
 		return
 	end
@@ -1006,6 +1154,21 @@ local function GetExerciseTreadmillAnimationId(humanoid: Humanoid): string
 	return EXERCISE_TREADMILL_R15_ANIMATION_ID
 end
 
+local function GetBikeLowerTorsoOffset(character: Model, hrp: BasePart): Vector3
+	local lowerTorso: BasePart? = character:FindFirstChild("LowerTorso") :: BasePart?
+	if lowerTorso == nil then
+		return Vector3.zero
+	end
+
+	local hrpRootAttachment: Attachment? = hrp:FindFirstChild("RootRigAttachment") :: Attachment?
+	local lowerTorsoRootAttachment: Attachment? = lowerTorso:FindFirstChild("RootRigAttachment") :: Attachment?
+	if hrpRootAttachment ~= nil and lowerTorsoRootAttachment ~= nil then
+		return hrp.CFrame:VectorToWorldSpace(hrpRootAttachment.Position - lowerTorsoRootAttachment.Position)
+	end
+
+	return lowerTorso.Position - hrp.Position
+end
+
 local function GetExerciseStandCFrame(equipmentModel: Model, equipData: GameConfig.ExEquipData, character: Model, hrp: BasePart): CFrame
 	local modelRootPart: BasePart? = equipmentModel.PrimaryPart
 	local rootCf: CFrame
@@ -1022,18 +1185,18 @@ local function GetExerciseStandCFrame(equipmentModel: Model, equipData: GameConf
 	local lowerTorsoOffset: Vector3 = Vector3.zero
 	local lowerTorso: BasePart? = character:FindFirstChild("LowerTorso") :: BasePart?
 	if lowerTorso ~= nil and hrp ~= nil then
-		lowerTorsoOffset = lowerTorso.Position - hrp.Position
+		lowerTorsoOffset = if IsBikeExEquipType(equipData.type) then GetBikeLowerTorsoOffset(character, hrp) else lowerTorso.Position - hrp.Position
 	end
 
 	-- 根据器材类型确定站立位置和高度
 	local standPos: Vector3
-	if equipData.type == 1 or equipData.type == 2 then
+	if equipData.type == GameConfig.ExEquipType.Treadmill or IsBikeExEquipType(equipData.type) then
 		-- type == 1/2：模型下有 ExerciseAttachment 标记站立位置和高度
 		local exerciseAttachment: Attachment? = equipmentModel:FindFirstChild("ExerciseAttachment") :: Attachment?
 		if exerciseAttachment ~= nil then
 			local attachPos: Vector3 = exerciseAttachment.WorldPosition
-			if equipData.type == 2 then
-				-- type == 2（Bike）：将玩家的 LowerTorso 对齐到 Attachment 位置
+			if IsBikeExEquipType(equipData.type) then
+				-- Bike 类型：将玩家的 LowerTorso 对齐到 Attachment 位置
 				standPos = attachPos - lowerTorsoOffset
 			else
 				-- type == 1（Treadmill）：人物站立，需要躯干高度偏移
@@ -1149,6 +1312,10 @@ local function StartExercise(equipId: number)
 	exerciseForward = forwardZ
 	exerciseEquipId = equipId
 	EnsureExercisePopupPool()
+	CleanupBikePedalController()
+	if IsBikeExEquipType(equipData.type) then
+		bikePedalControllerInfo = SetupBikePedalController(equipmentModel)
+	end
 
 	exerciseClientSessionId += 1
 	local clientSessionId = exerciseClientSessionId
@@ -1194,7 +1361,7 @@ local function StartExercise(equipId: number)
 			end
 		end
 
-		if equipData.type == 1 then
+		if equipData.type == GameConfig.ExEquipType.Treadmill then
 			-- Treadmill 类型：播放固定跑步动画（保留 R6/R15 兼容）
 			if exerciseTreadmillAnimTrack == nil then
 				local animator = GetOrCreateAnimator(exerciseHumanoid)
@@ -1204,18 +1371,17 @@ local function StartExercise(equipId: number)
 				exerciseTreadmillAnimTrack.Looped = true
 				exerciseTreadmillAnimTrack:Play()
 			end
-		elseif equipData.type == 2 then
+		elseif IsBikeExEquipType(equipData.type) then
 			-- Bike 类型：播放专属骑行动画
 			if exerciseBikeAnimTrack == nil then
-				local animator: Animator? = exerciseHumanoid:FindFirstChildOfClass("Animator")
-				if animator ~= nil then
-					local bikeAnim = Instance.new("Animation")
-					bikeAnim.AnimationId = "rbxassetid://78744145986758"
-					exerciseBikeAnimTrack = animator:LoadAnimation(bikeAnim)
-					exerciseBikeAnimTrack.Looped = true
-					exerciseBikeAnimTrack:Play()
-				end
+				local animator = GetOrCreateAnimator(exerciseHumanoid)
+				local bikeAnim = Instance.new("Animation")
+				bikeAnim.AnimationId = GetExerciseBikeAnimationId(equipData)
+				exerciseBikeAnimTrack = animator:LoadAnimation(bikeAnim)
+				exerciseBikeAnimTrack.Looped = true
+				exerciseBikeAnimTrack:Play()
 			end
+			UpdateBikePedalController()
 		end
 	end)
 

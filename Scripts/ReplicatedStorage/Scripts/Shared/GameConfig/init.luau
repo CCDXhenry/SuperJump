@@ -190,6 +190,7 @@ GameConfig.ShopAbilityByType[GameConfig.SkillType.WalkSpeed] = {
 GameConfig.ExEquipType = {
 	Treadmill = 1,
 	Bike = 2,
+	Bike2 =3,
 }
 
 GameConfig.ExStatsType = {

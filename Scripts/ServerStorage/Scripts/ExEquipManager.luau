@@ -42,6 +42,18 @@ local function LogInfo(message: string)
 	print(string.format("%s %s", LOG_PREFIX, message))
 end
 
+local function IsBikeExEquipType(exEquipType: number): boolean
+	return exEquipType == GameConfig.ExEquipType.Bike or exEquipType == GameConfig.ExEquipType.Bike2
+end
+
+local function AnchorExerciseModel(equipmentModel: Model)
+	for _, descendant in equipmentModel:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			descendant.Anchored = true
+		end
+	end
+end
+
 local function DestroyExerciseModel(userId: number)
 	local equipmentModel = activeExerciseModelMap[userId]
 	if equipmentModel ~= nil then
@@ -132,6 +144,21 @@ local function EnsureExerciseModelPivotLockConnection()
 	end)
 end
 
+local function GetBikeLowerTorsoOffset(character: Model, hrp: BasePart): Vector3
+	local lowerTorso: BasePart? = character:FindFirstChild("LowerTorso") :: BasePart?
+	if lowerTorso == nil then
+		return Vector3.zero
+	end
+
+	local hrpRootAttachment: Attachment? = hrp:FindFirstChild("RootRigAttachment") :: Attachment?
+	local lowerTorsoRootAttachment: Attachment? = lowerTorso:FindFirstChild("RootRigAttachment") :: Attachment?
+	if hrpRootAttachment ~= nil and lowerTorsoRootAttachment ~= nil then
+		return hrp.CFrame:VectorToWorldSpace(hrpRootAttachment.Position - lowerTorsoRootAttachment.Position)
+	end
+
+	return lowerTorso.Position - hrp.Position
+end
+
 local function GetExerciseStandCFrame(equipmentModel: Model, equipData: GameConfig.ExEquipData, character: Model, hrp: BasePart): CFrame
 	local modelRootPart: BasePart? = equipmentModel.PrimaryPart
 	local rootCf: CFrame
@@ -147,15 +174,15 @@ local function GetExerciseStandCFrame(equipmentModel: Model, equipData: GameConf
 	local lowerTorsoOffset: Vector3 = Vector3.zero
 	local lowerTorso: BasePart? = character:FindFirstChild("LowerTorso") :: BasePart?
 	if lowerTorso ~= nil then
-		lowerTorsoOffset = lowerTorso.Position - hrp.Position
+		lowerTorsoOffset = if IsBikeExEquipType(equipData.type) then GetBikeLowerTorsoOffset(character, hrp) else lowerTorso.Position - hrp.Position
 	end
 
 	local standPos: Vector3
-	if equipData.type == 1 or equipData.type == 2 then
+	if equipData.type == GameConfig.ExEquipType.Treadmill or IsBikeExEquipType(equipData.type) then
 		local exerciseAttachment: Attachment? = equipmentModel:FindFirstChild("ExerciseAttachment") :: Attachment?
 		if exerciseAttachment ~= nil then
 			local attachPos: Vector3 = exerciseAttachment.WorldPosition
-			if equipData.type == 2 then
+			if IsBikeExEquipType(equipData.type) then
 				standPos = attachPos - lowerTorsoOffset
 			else
 				standPos = Vector3.new(attachPos.X, attachPos.Y + CHARACTER_TORSO_HEIGHT, attachPos.Z)
@@ -242,6 +269,7 @@ local function CreateExerciseModelAtPlayer(player: Player, equipData: GameConfig
 	local equipmentModel = sourceModel:Clone()
 	equipmentModel.Name = ACTIVE_EXERCISE_EQUIP_NAME
 	equipmentModel:SetAttribute(EXERCISE_OWNER_USER_ID_ATTR, player.UserId)
+	AnchorExerciseModel(equipmentModel)
 	-- 挂到玩家角色下，避免 Invisicam 将本地玩家的健身器材当作遮挡物隐藏
 	equipmentModel.Parent = character
 	equipmentModel:PivotTo(CFrame.lookAt(hrp.Position, hrp.Position - flatLook.Unit))
@@ -498,7 +526,7 @@ function ExEquipManager.OnRequestStartExercise(player: Player, equipId: number)
 	local sessionId = (exerciseSessionMap[userId] or 0) + 1
 	exerciseSessionMap[userId] = sessionId
 
-	if equipData.type ~= 2 then
+	if not IsBikeExEquipType(equipData.type) then
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
 		if humanoid ~= nil then
 			humanoid.WalkSpeed = GameConfig.ExerciseRunWalkSpeed
