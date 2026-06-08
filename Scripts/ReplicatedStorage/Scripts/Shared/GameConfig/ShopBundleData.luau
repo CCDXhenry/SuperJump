@@ -63,4 +63,28 @@ return {
 		["rewardId"] = 2,
 		["productIndex"] = 1,
 	},
+	[9] = {
+		["rewardType"] = 4,
+		["rewardLv"] = 5,
+		["id"] = 5,
+		["rewardCount"] = 1,
+		["rewardId"] = 1001,
+		["productIndex"] = 1,
+	},
+	[10] = {
+		["rewardType"] = 4,
+		["rewardLv"] = 5,
+		["id"] = 5,
+		["rewardCount"] = 3,
+		["rewardId"] = 1001,
+		["productIndex"] = 1,
+	},
+	[11] = {
+		["rewardType"] = 4,
+		["rewardLv"] = 5,
+		["id"] = 5,
+		["rewardCount"] = 10,
+		["rewardId"] = 1001,
+		["productIndex"] = 1,
+	},
 }

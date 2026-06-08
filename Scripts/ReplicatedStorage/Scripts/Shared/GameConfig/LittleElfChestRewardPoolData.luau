@@ -9599,4 +9599,76 @@ return {
 		},
 		["itemId"] = 300,
 	},
+	[301] = {
+		["itemType"] = 1,
+		["weight"] = 40000,
+		["id"] = 1001,
+		["variantWeight"] = {
+			[1] = 100,
+		},
+		["variantList"] = {
+			[1] = 5,
+		},
+		["itemId"] = 33,
+	},
+	[302] = {
+		["itemType"] = 1,
+		["weight"] = 34000,
+		["id"] = 1001,
+		["variantWeight"] = {
+			[1] = 100,
+		},
+		["variantList"] = {
+			[1] = 5,
+		},
+		["itemId"] = 37,
+	},
+	[303] = {
+		["itemType"] = 1,
+		["weight"] = 22000,
+		["id"] = 1001,
+		["variantWeight"] = {
+			[1] = 100,
+		},
+		["variantList"] = {
+			[1] = 5,
+		},
+		["itemId"] = 38,
+	},
+	[304] = {
+		["itemType"] = 1,
+		["weight"] = 2000,
+		["id"] = 1001,
+		["variantWeight"] = {
+			[1] = 100,
+		},
+		["variantList"] = {
+			[1] = 5,
+		},
+		["itemId"] = 48,
+	},
+	[305] = {
+		["itemType"] = 1,
+		["weight"] = 1500,
+		["id"] = 1001,
+		["variantWeight"] = {
+			[1] = 100,
+		},
+		["variantList"] = {
+			[1] = 5,
+		},
+		["itemId"] = 51,
+	},
+	[306] = {
+		["itemType"] = 1,
+		["weight"] = 500,
+		["id"] = 1001,
+		["variantWeight"] = {
+			[1] = 100,
+		},
+		["variantList"] = {
+			[1] = 5,
+		},
+		["itemId"] = 54,
+	},
 }

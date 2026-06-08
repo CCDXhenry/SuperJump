@@ -144,11 +144,11 @@ return {
 		["quality"] = 2,
 	},
 	[19] = {
-		["resourceName"] = "Model",
+		["resourceName"] = "MAKANAN KUIH",
 		["baseAbility"] = 410,
 		["id"] = 19,
 		["iconImageId"] = "rbxassetid://89810954110481",
-		["name_t"] = "Model",
+		["name_t"] = "MAKANAN KUIH",
 		["quality"] = 3,
 	},
 	[20] = {
