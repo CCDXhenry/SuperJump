@@ -31,6 +31,15 @@ local mainGuideText: LocalScript = uiManagerScript:FindFirstChild("MainGuideText
 local guideTextScript: LocalScript = mainGuideText:Clone()
 guideTextScript.Parent = guideText
 
+local buffsFrame: Frame? = lobbyFrame:FindFirstChild("BuffsFrame") :: Frame?
+if buffsFrame then
+	local mainBuffsFrameScript: LocalScript? = uiManagerScript:FindFirstChild("MainBuffsFrame") :: LocalScript?
+	if mainBuffsFrameScript then
+		local buffsFrameScript: LocalScript = mainBuffsFrameScript:Clone()
+		buffsFrameScript.Parent = buffsFrame
+	end
+end
+
 local walkSpeedFrame: Frame = lobbyFrame:FindFirstChild("WalkSpeedFrame") :: Frame
 local walkSpeedText: TextLabel = walkSpeedFrame:FindFirstChild("NumberText") :: TextLabel
 local maxFuelFrame: Frame = lobbyFrame:FindFirstChild("MaxFuelFrame") :: Frame
