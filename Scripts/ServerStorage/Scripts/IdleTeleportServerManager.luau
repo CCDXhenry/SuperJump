@@ -39,6 +39,9 @@ end
 
 local function TryProcessIdleTeleport(player: Player, nowClock: number, reason: string)
 	local state = GetOrCreatePlayerIdleState(player.UserId)
+	if state.pendingIdleTeleport and not PlaceInstanceTeleportTool.IsPlayerTeleporting(player.UserId) then
+		state.pendingIdleTeleport = false
+	end
 	if state.pendingIdleTeleport then
 		return
 	end
