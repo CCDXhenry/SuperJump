@@ -1,6 +1,6 @@
 return {
 	[1] = {
-		["bgIconId"] = "rbxassetid://77886307507247",
+		["bgIconId"] = "1",
 		["type"] = 1,
 		["productId2"] = 0,
 		["beforeDiscountPrice2"] = 0,
@@ -22,7 +22,7 @@ return {
 		["productId1"] = 3602583418,
 	},
 	[2] = {
-		["bgIconId"] = "rbxassetid://83983663285653",
+		["bgIconId"] = "2",
 		["type"] = 1,
 		["productId2"] = 0,
 		["beforeDiscountPrice2"] = 0,
@@ -44,7 +44,7 @@ return {
 		["productId1"] = 3602583447,
 	},
 	[3] = {
-		["bgIconId"] = "rbxassetid://140006926894911",
+		["bgIconId"] = "3",
 		["type"] = 4,
 		["productId2"] = 0,
 		["beforeDiscountPrice2"] = 0,
@@ -66,7 +66,7 @@ return {
 		["productId1"] = 3602750616,
 	},
 	[4] = {
-		["bgIconId"] = "rbxassetid://131609692287978",
+		["bgIconId"] = "4",
 		["type"] = 4,
 		["productId2"] = 0,
 		["beforeDiscountPrice2"] = 0,
@@ -88,7 +88,7 @@ return {
 		["productId1"] = 3602750670,
 	},
 	[5] = {
-		["bgIconId"] = "rbxassetid://123495708111145",
+		["bgIconId"] = "5",
 		["type"] = 2,
 		["productId2"] = 3603365249,
 		["beforeDiscountPrice2"] = 297,

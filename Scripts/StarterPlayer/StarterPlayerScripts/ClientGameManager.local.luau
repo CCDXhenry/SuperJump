@@ -229,6 +229,9 @@ PreloadAssets = function()
 	for _, buffData in pairs(GameConfig.Buffs) do
 		AddImage(buffData.iconImageId)
 	end
+	for _, bgIconId in pairs(GameConfig.ShopBundleBgIconIdById) do
+		AddImage(bgIconId)
+	end
 
 	for _, otherImage: string in otherImageList do
 		AddImage(otherImage)

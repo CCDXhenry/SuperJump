@@ -1714,6 +1714,14 @@ GameConfig.Shop = {
 }
 BuildShopFromRawData()
 
+GameConfig.ShopBundleBgIconIdById = {
+	[1] = "rbxassetid://77886307507247",
+	[2] = "rbxassetid://83983663285653",
+	[3] = "rbxassetid://140006926894911",
+	[4] = "rbxassetid://131609692287978",
+	[5] = "rbxassetid://123495708111145",
+} :: { [number]: string }
+
 export type ShopBundleConfigurationData = {
 	id: number,
 	type: number,
@@ -1760,6 +1768,10 @@ for _, configRow in pairs(ShopBundleConfigurationDataModule) do
 		continue
 	end
 	local bundleConfig = configRow :: ShopBundleConfigurationData
+	local bgIconId = GameConfig.ShopBundleBgIconIdById[bundleConfig.id]
+	if bgIconId ~= nil then
+		bundleConfig.bgIconId = bgIconId
+	end
 	GameConfig.ShopBundleById[bundleConfig.id] = {
 		config = bundleConfig,
 		rewards = shopBundleRewardsById[bundleConfig.id] or {},
