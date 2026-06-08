@@ -22,6 +22,26 @@ local DebugModelYieldLogEnabled = false
 local seenQueueUidSet: { [string]: boolean } = {}
 local triggeredGrantTipKeySet: { [string]: boolean } = {}
 
+function ClientGameInfo.IsInJumpRunwaySession(): boolean
+	return isInJumpRunway or isInJumpRunwayEscapePhase
+end
+
+function ClientGameInfo.IsEffectiveDecelerationOn(): boolean
+	return GameConfig.GetEffectiveDecelerationOn(ClientGameInfo.IsInJumpRunwaySession())
+end
+
+local function SyncDecelerationSettingForPhase()
+	if localPlayerInfo == nil then
+		return
+	end
+	local targetOn = ClientGameInfo.IsEffectiveDecelerationOn()
+	if localPlayerInfo.settingInfo.decelerationOn == targetOn then
+		return
+	end
+	localPlayerInfo.settingInfo.decelerationOn = targetOn
+	NetMsg.FireRequestSetDecelerationOn(targetOn)
+end
+
 local function DebugModelYieldLog(eventName: string, playerIdStr: string, pointIndexStr: string, data: { [string]: any }?)
 	if not DebugModelYieldLogEnabled then
 		return
@@ -108,6 +128,7 @@ function ClientGameInfo.InitPlayerInfo(
 		}
 		otherPlayerInfoMap[otherPlayerId] = otherPlayerInfo
 	end
+	SyncDecelerationSettingForPhase()
 	--发送消息
 	ClientMsg.FireLocalPlayerInfoInit()
 	--print("[ClientGameInfo] InitPlayerInfo complete")
@@ -311,7 +332,9 @@ function ClientGameInfo.UpdateSkillLevel(skillType: number, level: number)
 		localPlayerInfo.shopInfo.walkSpeedLevel = level
 	elseif skillType == GameConfig.SkillType.RebirthLevel then
 		localPlayerInfo.shopInfo.rebirthLevel = level
-		localPlayerInfo.settingInfo.decelerationOn = false
+		if not (isInJumpRunway or isInJumpRunwayEscapePhase) then
+			localPlayerInfo.settingInfo.decelerationOn = true
+		end
 	end
 
 	print("[ClientGameInfo] UpdateSkillLevel", skillType, level)
@@ -518,6 +541,7 @@ function ClientGameInfo.SetInJumpRunway(value: boolean)
 	if not value then
 		isInJumpRunwayEscapePhase = false
 	end
+	SyncDecelerationSettingForPhase()
 	ClientMsg.FireCurrentGuideTypeChanged()
 end
 
@@ -530,6 +554,7 @@ function ClientGameInfo.SetInJumpRunwayEscapePhase(value: boolean)
 		return
 	end
 	isInJumpRunwayEscapePhase = value
+	SyncDecelerationSettingForPhase()
 	ClientMsg.FireCurrentGuideTypeChanged()
 end
 

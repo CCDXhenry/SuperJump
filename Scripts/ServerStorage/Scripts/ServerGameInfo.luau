@@ -504,9 +504,9 @@ function ServerGameInfo.ExecuteRebirth(player: Player, isPaid: boolean): boolean
 	playerInfo.shopInfo.rebirthLevel = nextRebirthCount
 	playerInfo.playerInfoChanged = true
 
-	-- 升级重生等级后关闭减速，并刷新移速与 Speed Coil（与 PlayerSettingManager 请求关减速一致）
-	if playerInfo.settingInfo.decelerationOn == true then
-		ServerGameInfo.UpdateDecelerationOn(player, false)
+	-- 重生后处于非 JumpRunway 阶段，恢复默认减速开
+	if player:GetAttribute("JumpRunwayActive") ~= true then
+		ServerGameInfo.UpdateDecelerationOn(player, true)
 		ServerGameInfo.ApplyWalkSpeed(player)
 	end
 
@@ -1028,7 +1028,8 @@ function ServerGameInfo.GetResolvedShopWalkSpeed(player: Player): number?
 		return nil
 	end
 	local walkSpeedLevel = playerInfo.shopInfo.walkSpeedLevel
-	local isDecelerationOn = playerInfo.settingInfo.decelerationOn == true
+	local isInJumpRunway = player:GetAttribute("JumpRunwayActive") == true
+	local isDecelerationOn = GameConfig.GetEffectiveDecelerationOn(isInJumpRunway)
 	local config = GameConfig.Shop.WalkSpeed
 	local targetLevel = if isDecelerationOn then 1 else walkSpeedLevel
 	return config.abilityList[targetLevel] or config.abilityList[config.maxLevel] or config.abilityList[1]

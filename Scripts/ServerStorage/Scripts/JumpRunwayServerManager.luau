@@ -259,6 +259,7 @@ local function DisconnectState(player: Player, st: RunState)
 	end
 	runMap[player.UserId] = nil
 	ClearPlayerRunAttribute(player)
+	ServerGameInfo.UpdateDecelerationOn(player, true)
 	local character = player.Character
 	local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
 	if humanoid then
@@ -472,6 +473,7 @@ local function TryStartSession(player: Player, report: NetMsg.JumpRunwayInputRep
 	runMap[player.UserId] = st
 	ResetScoreTracking(player.UserId)
 	player:SetAttribute("JumpRunwayActive", true)
+	ServerGameInfo.UpdateDecelerationOn(player, false)
 	humanoid.AutoRotate = true
 	st.diedConn = humanoid.Died:Connect(function()
 		local s = runMap[player.UserId]
