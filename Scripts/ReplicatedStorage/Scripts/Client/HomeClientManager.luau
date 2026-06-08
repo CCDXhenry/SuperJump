@@ -1138,6 +1138,64 @@ local function CaptureUpgradeUITemplateBackup(sourceUI: SurfaceGui)
 	upgradeUITemplateBackup = backup
 end
 
+local function GetLocalPlayerGui(): PlayerGui?
+	return players.LocalPlayer:FindFirstChild("PlayerGui") :: PlayerGui?
+end
+
+local function FindMovedUpgradeUI(upgradePart: BasePart): SurfaceGui?
+	local playerGui = GetLocalPlayerGui()
+	if not playerGui then
+		return nil
+	end
+	for _, gui in ipairs(playerGui:GetChildren()) do
+		if gui:IsA("SurfaceGui") and gui.Name == "UpgradeUI" and gui.Adornee == upgradePart then
+			return gui
+		end
+	end
+	return nil
+end
+
+local function DestroyUpgradeUIsForPart(upgradePart: BasePart)
+	local childUI = upgradePart:FindFirstChild("UpgradeUI")
+	if childUI and childUI:IsA("SurfaceGui") then
+		childUI:Destroy()
+	end
+
+	local playerGui = GetLocalPlayerGui()
+	if not playerGui then
+		return
+	end
+	for _, gui in ipairs(playerGui:GetChildren()) do
+		if gui:IsA("SurfaceGui") and gui.Name == "UpgradeUI" and gui.Adornee == upgradePart then
+			gui:Destroy()
+		end
+	end
+end
+
+local function EnsureMovedUpgradeUI(upgradePart: BasePart): SurfaceGui?
+	local movedUI = FindMovedUpgradeUI(upgradePart)
+	if movedUI then
+		return movedUI
+	end
+
+	local upgradeUI = upgradePart:FindFirstChild("UpgradeUI") :: SurfaceGui?
+	if not upgradeUI and upgradeUITemplateBackup then
+		upgradeUI = upgradeUITemplateBackup:Clone()
+		upgradeUI.Parent = upgradePart
+	end
+	if not upgradeUI then
+		return nil
+	end
+
+	CaptureUpgradeUITemplateBackup(upgradeUI)
+	upgradeUI.Adornee = upgradePart
+	upgradeUI.Parent = players.LocalPlayer:WaitForChild("PlayerGui")
+	upgradePart.Destroying:Connect(function()
+		DestroyUpgradeUIsForPart(upgradePart)
+	end)
+	return upgradeUI
+end
+
 -- Handles model placement for a single plot
 local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boolean, slotName: string)
 	local modelContainer = folder:FindFirstChild("Model") or folder:FindFirstChild("RootPart")
@@ -1194,26 +1252,13 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 		upgradePart.CanCollide = false
 	end
 
+	local isOccupied = placedData ~= nil
 	local upgradeUI: SurfaceGui? = nil
 	if upgradePart then
-		upgradeUI = upgradePart:FindFirstChild("UpgradeUI") :: SurfaceGui?
-		if upgradeUI then
-			CaptureUpgradeUITemplateBackup(upgradeUI)
-			upgradeUI.Adornee = upgradePart
-			upgradeUI.Parent = players.LocalPlayer:WaitForChild("PlayerGui")
-			upgradePart.Destroying:Connect(function()
-				if upgradeUI then
-					upgradeUI:Destroy()
-				end
-			end)
+		if isOccupied and isLocalPlayer then
+			upgradeUI = EnsureMovedUpgradeUI(upgradePart)
 		else
-			-- Retrieve it if it was previously moved
-			for _, gui in ipairs(players.LocalPlayer:WaitForChild("PlayerGui"):GetChildren()) do
-				if gui:IsA("SurfaceGui") and gui.Name == "UpgradeUI" and gui.Adornee == upgradePart then
-					upgradeUI = gui
-					break
-				end
-			end
+			DestroyUpgradeUIsForPart(upgradePart)
 		end
 	end
 
@@ -1225,8 +1270,6 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 	end
 
 	-- 4. Set prompt/UI visibility based on occupancy
-	local isOccupied = placedData ~= nil
-
 	-- Empty booth: hide specific mesh (Workspace.*.Booth.BoothModel.group2_polySurface6.xian)
 	if pedestal and pedestal.Parent then
 		local boothModel = pedestal:FindFirstChild("BoothModel")
@@ -2025,7 +2068,10 @@ function UpdateHomeVisuals(slotName: string, homeInfo: any, isLocalPlayer: boole
 						local booth = child:FindFirstChild("Booth")
 						local clonedUpgradePart = booth and booth:FindFirstChild("UpgradePart")
 						local clonedUpgradeUI = clonedUpgradePart and clonedUpgradePart:FindFirstChild("UpgradeUI")
-						if clonedUpgradePart and not clonedUpgradeUI then
+						local movedUpgradeUI = if clonedUpgradePart and clonedUpgradePart:IsA("BasePart")
+							then FindMovedUpgradeUI(clonedUpgradePart :: BasePart)
+							else nil
+						if clonedUpgradePart and not clonedUpgradeUI and not movedUpgradeUI then
 							local backupUI = upgradeUITemplateBackup:Clone()
 							backupUI.Parent = clonedUpgradePart
 						end
