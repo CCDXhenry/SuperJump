@@ -1152,7 +1152,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- 玩家举起最终 brainrot 后的展示停留时长（秒）；结束后才创建追击者
 	RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC = 0.5,
 	-- 开箱时摄像机向后拉远距离（stud）；↑ 镜头更远
-	RUNWAY_CHEST_CAMERA_BACK_OFFSET = 45,
+	RUNWAY_CHEST_CAMERA_BACK_OFFSET = 60,
 	-- 开箱时摄像机 FOV；↑ 视野更广
 	RUNWAY_CHEST_CAMERA_FOV = 70,
 
