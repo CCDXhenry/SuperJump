@@ -36,6 +36,9 @@ local exerciseSessionMap: { [number]: number } = {}
 local exerciseClickRewardNextAllowedAtMap: { [number]: number } = {}
 local activeExerciseModelMap: { [number]: Model } = {}
 local activeExerciseWorldPivotMap: { [number]: CFrame } = {}
+local activeExerciseCharacterMap: { [number]: Model } = {}
+local activeExerciseCharacterCFrameMap: { [number]: CFrame } = {}
+local activeExerciseHrpAnchoredMap: { [number]: boolean } = {}
 local exerciseModelPivotLockConnection: RBXScriptConnection? = nil
 
 local function LogInfo(message: string)
@@ -118,8 +121,7 @@ local function SetInstanceNetworkOwnershipAuto(instance: Instance)
 	end
 end
 
-local function ApplyExerciseNetworkOwnership(player: Player, character: Model, equipmentModel: Model)
-	SetInstanceNetworkOwner(character, player)
+local function ApplyExerciseNetworkOwnership(player: Player, _character: Model, equipmentModel: Model)
 	SetInstanceNetworkOwner(equipmentModel, player)
 end
 
@@ -145,8 +147,44 @@ local function EnsureExerciseModelPivotLockConnection()
 			if worldPivot ~= nil and equipmentModel.Parent ~= nil then
 				equipmentModel:PivotTo(worldPivot)
 			end
+
+			local character = activeExerciseCharacterMap[userId]
+			local standCFrame = activeExerciseCharacterCFrameMap[userId]
+			local hrp: BasePart? = if character ~= nil then character:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
+			if standCFrame ~= nil and hrp ~= nil and hrp.Parent ~= nil then
+				if not hrp.Anchored then
+					hrp.Anchored = true
+				end
+				hrp.CFrame = standCFrame
+				hrp.AssemblyLinearVelocity = Vector3.zero
+				hrp.AssemblyAngularVelocity = Vector3.zero
+			end
 		end
 	end)
+end
+
+local function LockExerciseCharacter(userId: number, character: Model, hrp: BasePart, standCFrame: CFrame)
+	activeExerciseCharacterMap[userId] = character
+	activeExerciseCharacterCFrameMap[userId] = standCFrame
+	activeExerciseHrpAnchoredMap[userId] = hrp.Anchored
+	hrp.CFrame = standCFrame
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	hrp.AssemblyAngularVelocity = Vector3.zero
+	hrp.Anchored = true
+end
+
+local function ReleaseExerciseCharacterLock(userId: number)
+	local character = activeExerciseCharacterMap[userId]
+	local hrp: BasePart? = if character ~= nil then character:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
+	local previousAnchored = activeExerciseHrpAnchoredMap[userId]
+	if hrp ~= nil and hrp.Parent ~= nil then
+		hrp.AssemblyLinearVelocity = Vector3.zero
+		hrp.AssemblyAngularVelocity = Vector3.zero
+		hrp.Anchored = if previousAnchored ~= nil then previousAnchored else false
+	end
+	activeExerciseCharacterMap[userId] = nil
+	activeExerciseCharacterCFrameMap[userId] = nil
+	activeExerciseHrpAnchoredMap[userId] = nil
 end
 
 local function GetBikeLowerTorsoOffset(character: Model, hrp: BasePart): Vector3
@@ -292,6 +330,7 @@ local function StopExerciseForPlayer(player: Player, logReason: string)
 	exerciseRunningMap[userId] = nil
 	exerciseClickRewardNextAllowedAtMap[userId] = nil
 	player:SetAttribute(EXERCISING_ATTR, false)
+	ReleaseExerciseCharacterLock(userId)
 	ReleaseExerciseNetworkOwnership(player)
 	DestroyExerciseModel(userId)
 	if wasExercising then
@@ -523,6 +562,7 @@ function ExEquipManager.OnRequestStartExercise(player: Player, equipId: number)
 
 	activeExerciseModelMap[userId] = equipmentModel
 	activeExerciseWorldPivotMap[userId] = equipmentModel:GetPivot()
+	LockExerciseCharacter(userId, character, hrp, GetExerciseStandCFrame(equipmentModel, equipData, character, hrp))
 	exerciseRunningMap[userId] = true
 	exerciseClickRewardNextAllowedAtMap[userId] = os.clock() + ClickRewardConfig.ServerMinInterval
 	player:SetAttribute(EXERCISING_ATTR, true)
