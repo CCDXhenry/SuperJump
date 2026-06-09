@@ -44,8 +44,8 @@ local function syncCoilLocomotionForCharacter(character: Model)
 		if resolved ~= nil then
 			baseWalk = resolved
 		end
-		local isInJumpRunway = player:GetAttribute("JumpRunwayActive") == true
-		isDecelerationOn = GameConfig.GetEffectiveDecelerationOn(isInJumpRunway)
+		local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+		isDecelerationOn = playerInfo ~= nil and playerInfo.settingInfo.decelerationOn == true
 	end
 
 	local equippedTool = character:FindFirstChildOfClass("Tool")

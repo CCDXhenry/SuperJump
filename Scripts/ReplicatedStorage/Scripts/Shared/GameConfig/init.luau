@@ -43,11 +43,6 @@ GameConfig.DecelerationOnImage = "rbxassetid://114216336762183"
 GameConfig.DecelerationOffImage = "rbxassetid://113696020530948"
 GameConfig.DecelerationButtonShowSpeed = 40
 
--- JumpRunway 阶段减速关（使用 walkSpeedLevel），其余阶段减速开（移速按 1 级）
-function GameConfig.GetEffectiveDecelerationOn(isInJumpRunwaySession: boolean): boolean
-	return not isInJumpRunwaySession
-end
-
 GameConfig.GuideType = {
 	None = 0,
 	TutorialBrainrotPickup = 1,
@@ -1915,7 +1910,7 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 			bgmVolume = 1,
 			soundEffectVolume = 1,
 			vibrationOn = true,
-			decelerationOn = true,
+			decelerationOn = false,
 		},
 		ownedGamePassList = {},
 		ownedShopBundleMap = {},

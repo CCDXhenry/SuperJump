@@ -19,6 +19,7 @@ local RunwaySession = require(clientScripts:FindFirstChild("JumpRunway"):FindFir
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
 local TranslationTool = require(core:WaitForChild("Scripts"):WaitForChild("Client"):FindFirstChild("TranslationTool"))
 local GameTexts = require(sharedScripts_game:FindFirstChild("GameTexts"))
+local userInputService = game:GetService("UserInputService")
 local tweenService: TweenService = game:GetService("TweenService")
 
 local lobbyFrame: Frame = script.Parent
@@ -46,9 +47,7 @@ local maxFuelText: TextLabel = maxFuelFrame:FindFirstChild("NumberText") :: Text
 local maxThrustFrame: Frame = lobbyFrame:FindFirstChild("MaxThrustFrame") :: Frame
 local maxThrustText: TextLabel = maxThrustFrame:FindFirstChild("NumberText") :: TextLabel
 local decelerationButton: ImageButton? = lobbyFrame:FindFirstChild("DecelerationButton") :: ImageButton?
-if decelerationButton then
-	decelerationButton.Visible = false
-end
+local decelerationButtonTextLabel: TextLabel? = if decelerationButton then (decelerationButton:FindFirstChild("TextLabel") :: TextLabel?) else nil
 local bottomButtonsFrame = lobbyFrame:FindFirstChild("BottomButtonsFrame")
 local exEquipButton: ImageButton? = lobbyFrame:FindFirstChild("ExEquipButton") :: ImageButton?
 local jetpackButton: ImageButton? = lobbyFrame:FindFirstChild("JetpackButton") :: ImageButton?
@@ -73,6 +72,9 @@ local jumpPowerFloatingText: TextLabel? = if jumpPowerFrame then jumpPowerFrame:
 
 local defaultWalkSpeedColor = walkSpeedText.TextColor3
 local humSpeedConnection: RBXScriptConnection? = nil
+local DecelerationOnImage = GameConfig.DecelerationOnImage
+local DecelerationOffImage = GameConfig.DecelerationOffImage
+local DecelerationButtonShowSpeed = GameConfig.DecelerationButtonShowSpeed
 local localPlayer = game:GetService("Players").LocalPlayer
 
 -- RebirthFrame 红点（感叹号圆圈）
@@ -121,6 +123,41 @@ local function RefreshRebirthRedPointView()
 	rebirthRedPoint.Visible = IsRebirthRedPointConditionMet()
 end
 
+local function GetIsDecelerationOn(): boolean
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if localPlayerInfo == nil then
+		return false
+	end
+	return localPlayerInfo.settingInfo.decelerationOn == true
+end
+
+local function RefreshDecelerationButtonImage()
+	if decelerationButton == nil then
+		return
+	end
+	decelerationButton.Image = if GetIsDecelerationOn() then DecelerationOnImage else DecelerationOffImage
+end
+
+local function RefreshDecelerationButtonText()
+	if decelerationButtonTextLabel == nil then
+		return
+	end
+	local textData = if GetIsDecelerationOn() then GameTexts.DecelerationOn else GameTexts.DecelerationOff
+	TranslationTool.CustomAutoLocalizeTextLabel(decelerationButtonTextLabel, textData.source, textData.key)
+end
+
+local function RefreshDecelerationButtonView()
+	RefreshDecelerationButtonImage()
+	RefreshDecelerationButtonText()
+end
+
+local function RefreshDecelerationButtonVisible(levelSpeed: number)
+	if decelerationButton == nil then
+		return
+	end
+	decelerationButton.Visible = levelSpeed > DecelerationButtonShowSpeed
+end
+
 local RefreshUpgradeValues: () -> ()
 
 local function ResolveLocalBaseWalkSpeed(): number
@@ -128,7 +165,7 @@ local function ResolveLocalBaseWalkSpeed(): number
 	if localPlayerInfo == nil then
 		return 16
 	end
-	local isDecelerationOn = ClientGameInfo.IsEffectiveDecelerationOn()
+	local isDecelerationOn = localPlayerInfo.settingInfo.decelerationOn == true
 	local walkSpeedLevel = localPlayerInfo.shopInfo.walkSpeedLevel or 1
 	local targetLevel = if isDecelerationOn then 1 else walkSpeedLevel
 	local walkSpeedConfig = GameConfig.Shop.WalkSpeed
@@ -154,6 +191,19 @@ local function ApplyLocalWalkSpeedFromSettings()
 		return
 	end
 	hum.WalkSpeed = ResolveLocalBaseWalkSpeed()
+end
+
+local function ToggleDecelerationOn()
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if localPlayerInfo == nil then
+		return
+	end
+	local newDecelerationOn = not (localPlayerInfo.settingInfo.decelerationOn == true)
+	NetMsg.FireRequestSetDecelerationOn(newDecelerationOn)
+	localPlayerInfo.settingInfo.decelerationOn = newDecelerationOn
+	ApplyLocalWalkSpeedFromSettings()
+	RefreshDecelerationButtonView()
+	RefreshUpgradeValues()
 end
 
 if walkSpeedAddButton then
@@ -222,6 +272,22 @@ if teleShopButton then
 	end)
 end
 
+if decelerationButton then
+	decelerationButton.Activated:Connect(function()
+		ToggleDecelerationOn()
+	end)
+end
+
+userInputService.InputBegan:Connect(function(inputObject: InputObject, gameProcessedEvent: boolean)
+	if gameProcessedEvent then
+		return
+	end
+	if inputObject.KeyCode ~= Enum.KeyCode.T then
+		return
+	end
+	ToggleDecelerationOn()
+end)
+
 local function RefreshJumpPowerText(jumpPowerLevel: number)
 	if jumpPowerText == nil then
 		return
@@ -254,7 +320,7 @@ function RefreshUpgradeValues()
 	-- WalkSpeed
 	local walkSpeedLevel = localPlayerInfo.shopInfo.walkSpeedLevel or 1
 
-	local isDecelerationOn = ClientGameInfo.IsEffectiveDecelerationOn()
+	local isDecelerationOn = localPlayerInfo.settingInfo.decelerationOn == true
 	local targetWalkSpeedLevel = if isDecelerationOn then 1 else walkSpeedLevel
 	local walkSpeedConfig = GameConfig.Shop.WalkSpeed
 	local levelSpeed = 16
@@ -291,6 +357,8 @@ function RefreshUpgradeValues()
 		walkSpeedText.Text = NumberExtension.FormatBigNumberAA(baseSpeed)
 		walkSpeedText.TextColor3 = defaultWalkSpeedColor
 	end
+	RefreshDecelerationButtonVisible(levelSpeed)
+
 	-- MaxFuel: 从火箭背包库存读取（跑道模式中显示实时燃料）
 	local jetpackCurrentId = localPlayerInfo.jetpackInventory.currentId or "1"
 	local jetpackData = GameConfig.JetpackDataMap[tonumber(jetpackCurrentId)]
@@ -385,6 +453,7 @@ end
 local function OnLocalPlayerInfoInit()
 	RefreshView()
 	RefreshRebirthDisplay()
+	RefreshDecelerationButtonView()
 	RefreshRebirthRedPointView()
 end
 
@@ -410,6 +479,7 @@ local function OnLocalPlayerSkillLevelChanged(skillType: number, level: number)
 	RefreshUpgradeValues()
 	if skillType == GameConfig.SkillType.RebirthLevel then
 		RefreshRebirthDisplay()
+		RefreshDecelerationButtonView()
 	end
 
 	if skillType == GameConfig.SkillType.RebirthLevel then
@@ -421,6 +491,7 @@ UIAdapter.AddAdaptiveFrame(lobbyFrame, UIAdapter.AdaptiveType.FullScreen)
 
 RefreshView()
 RefreshRebirthDisplay()
+RefreshDecelerationButtonView()
 RefreshRebirthRedPointView()
 
 ClientMsg.ConnectLocalPlayerCurrencyUpdate(OnLocalPlayerCoinCountChanged)
@@ -439,7 +510,6 @@ end)
 
 ClientMsg.ConnectCurrentGuideTypeChanged(function()
 	RefreshTeleportButtonsVisible()
-	ApplyLocalWalkSpeedFromSettings()
 	RefreshUpgradeValues()
 end)
 RefreshTeleportButtonsVisible()

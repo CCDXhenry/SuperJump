@@ -1272,7 +1272,7 @@ function RunwaySession.GetExpectedPlayerWalkSpeed(): number
 		return fallback
 	end
 	local level = info.shopInfo.walkSpeedLevel or 1
-	if ClientGameInfo.IsEffectiveDecelerationOn() then
+	if info.settingInfo.decelerationOn == true then
 		level = 1
 	end
 	local maxLevel = walkSpeedConfig.maxLevel
