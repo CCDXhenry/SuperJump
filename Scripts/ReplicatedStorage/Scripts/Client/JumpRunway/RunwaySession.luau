@@ -115,6 +115,8 @@ local BestDistanceWallTextXMaxNorm = 0.95
 local BestDistanceWallTextYMinNorm = 0.05
 local BestDistanceWallTextYMaxNorm = 0.95
 local ObstacleBounceProneSlideBlockMarginStuds = 0.6
+local ObstacleBounceWallStopLookAheadStuds = 2.5
+local ObstacleBounceWallStopRayHeightStuds = 1.2
 local JumpWindowStumblePulseFrequencyHz = 2.4
 local JumpWindowStumblePulseStrength = 0.18
 local JumpWindowStumbleMinSpeedScale = 0.72
@@ -2545,6 +2547,16 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 		end
 		-- 子阶段 B 仅由宝箱撞击流程结束，不因低速提前 slideEndClock
 		return
+	end
+	if localState.runwaySlideKind == SlideKindObstacleBounce then
+		local vBeforeWall = hrp.AssemblyLinearVelocity
+		local wallCheckDistance = math.max(
+			ObstacleBounceWallStopLookAheadStuds,
+			HorizontalVelocity(vBeforeWall).Magnitude * math.max(dt, 1 / 240) + ObstacleBounceProneSlideBlockMarginStuds
+		)
+		if RunwaySession.TryStopObstacleBounceAtWall(humanoid, hrp, fwdH, wallCheckDistance) then
+			return
+		end
 	end
 	if not localState.finalLandTumbleImpulseApplied then
 		local landingAlong, landingVy = RunwaySession.SampleFinalLandLandingAlongAndVy(hrp, fwdH)
@@ -5682,6 +5694,18 @@ function RunwaySession.ResolveObstacleBounceChestForward(hrp: BasePart): Vector3
 	return fwdH.Unit
 end
 
+function RunwaySession.BuildRunwayWallIncludeList(): { Instance }
+	local includeList: { Instance } = {}
+	local groundFolder = workspace:FindFirstChild("Ground")
+	if groundFolder ~= nil then
+		local wallFolder = groundFolder:FindFirstChild("Wall")
+		if wallFolder ~= nil then
+			table.insert(includeList, wallFolder)
+		end
+	end
+	return includeList
+end
+
 function RunwaySession.BuildObstacleBounceProneSlideBlockIncludeList(): { Instance }
 	local includeList: { Instance } = {}
 	local treeFolder = workspace:FindFirstChild("tree")
@@ -5692,14 +5716,79 @@ function RunwaySession.BuildObstacleBounceProneSlideBlockIncludeList(): { Instan
 	if obstacleFolder ~= nil then
 		table.insert(includeList, obstacleFolder)
 	end
-	local groundFolder = workspace:FindFirstChild("Ground")
-	if groundFolder ~= nil then
-		local wallFolder = groundFolder:FindFirstChild("Wall")
-		if wallFolder ~= nil then
-			table.insert(includeList, wallFolder)
-		end
+	for _, wall in ipairs(RunwaySession.BuildRunwayWallIncludeList()) do
+		table.insert(includeList, wall)
 	end
 	return includeList
+end
+
+function RunwaySession.RaycastObstacleBounceWallBlock(
+	hrp: BasePart,
+	moveDir: Vector3,
+	rayDistance: number
+): RaycastResult?
+	if rayDistance <= 1e-3 then
+		return nil
+	end
+	local includeList = RunwaySession.BuildRunwayWallIncludeList()
+	if #includeList == 0 then
+		return nil
+	end
+	local dirH = RunwaySession.NormalizeHorizontalForward(moveDir)
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Include
+	rayParams.FilterDescendantsInstances = includeList
+	local rayOrigin = hrp.Position + Vector3.new(0, ObstacleBounceWallStopRayHeightStuds, 0)
+	local hit = workspace:Raycast(rayOrigin, dirH * rayDistance, rayParams)
+	if hit == nil or not hit.Instance:IsA("BasePart") then
+		return nil
+	end
+	if not hit.Instance.CanCollide then
+		return nil
+	end
+	return hit
+end
+
+function RunwaySession.TryStopObstacleBounceAtWall(
+	humanoid: Humanoid,
+	hrp: BasePart,
+	moveDir: Vector3,
+	rayDistance: number
+): boolean
+	local hit = RunwaySession.RaycastObstacleBounceWallBlock(hrp, moveDir, rayDistance)
+	if hit == nil then
+		return false
+	end
+	local dirH = RunwaySession.NormalizeHorizontalForward(moveDir)
+	local stopDistance = math.max(0, hit.Distance - ObstacleBounceProneSlideBlockMarginStuds)
+	local stopPos = hrp.Position + dirH * stopDistance
+	local character = hrp:FindFirstAncestorOfClass("Model")
+	local groundedPos = RunwaySession.ComputeGroundedPronePosition(stopPos, character)
+	local faceForward = NormalizeRunwayForward(localState.runwayForward)
+	hrp.CFrame = RunwaySession.BuildProneRunwayCFrame(groundedPos, faceForward)
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	hrp.AssemblyAngularVelocity = Vector3.zero
+	local nowClock = os.clock()
+	if localState.finalLandSubPhase == 1 then
+		RunwaySession.StartFinalLandPronePhase(nowClock, hrp, dirH)
+	else
+		localState.finalLandSubPhase = 2
+	end
+	RunwaySession.ClearScriptedSlideMotion()
+	local stoppedMotion = RunwaySession.CreateScriptedSlideMotion(
+		nowClock,
+		groundedPos,
+		dirH,
+		0,
+		0,
+		RunwaySession.ResolveProneSlideDeceleration()
+	)
+	stoppedMotion.totalDistance = 0
+	stoppedMotion.lastDistance = 0
+	stoppedMotion.duration = 0
+	Refs.slideMotion = stoppedMotion
+	RunwaySession.HandleObstacleBounceSlideStop(humanoid, hrp)
+	return true
 end
 
 function RunwaySession.ResolveObstacleBounceProneSlideBlockedDistance(
