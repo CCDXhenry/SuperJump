@@ -8,6 +8,7 @@ local players = game:GetService("Players")
 local contextActionService = game:GetService("ContextActionService")
 local userInputService = game:GetService("UserInputService")
 local runService = game:GetService("RunService")
+local debris = game:GetService("Debris")
 local workspace = game:GetService("Workspace")
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local scripts = replicatedStorage:WaitForChild("Scripts")
@@ -90,6 +91,7 @@ local RunwayFinalTiltRenderStepName = RunwayConstants.RunwayFinalTiltRenderStepN
 local RunwayRingTemplateName = RunwayConstants.RunwayRingTemplateName
 local RunwaySlideTraceTemplateName = RunwayConstants.RunwaySlideTraceTemplateName
 local RunwaySlideTraceDestroyAfterEndSec = RunwayConstants.RunwaySlideTraceDestroyAfterEndSec
+local RunwayJumpSmokeTemplateName = RunwayConstants.RunwayJumpSmokeTemplateName
 
 local modelsFolder = replicatedStorage:WaitForChild("Models")
 local actualChests = modelsFolder:FindFirstChild("LittleElfChests")
@@ -206,6 +208,8 @@ local Refs: {
 	finalLandTumbleStartHrpCf: CFrame?,
 	platformStandSavedBeforeFinalLand: boolean?,
 	finalPitchSmoothedExtraDeg: number,
+	jumpSmokeTemplateWarned: boolean,
+	jumpSmokeCachedTemplate: BasePart?,
 	slideTraceTemplateWarned: boolean,
 	slideTraceCachedTemplate: Instance?,
 	slideTraceRootInstance: Instance?,
@@ -293,6 +297,7 @@ local Refs: {
 	bestDistanceWallDistance = nil,
 	bestDistanceWallPassed = false,
 	bestDistanceWallDestroyToken = 0,
+	jumpSmokeTemplateWarned = false,
 	slideTraceTemplateWarned = false,
 	slideTraceDestroyScheduleToken = 0,
 	prevGroundedHeartbeat = true,
@@ -3455,6 +3460,85 @@ function RunwaySession.GetJumpRunwayLocalFxFolder(): Folder
 	folder.Name = "JumpRunwayLocalFx"
 	folder.Parent = workspace
 	return folder
+end
+
+function RunwaySession.JumpSmokeGetTemplate(): BasePart?
+	local cached = Refs.jumpSmokeCachedTemplate
+	if cached ~= nil and cached.Parent ~= nil then
+		return cached
+	end
+	Refs.jumpSmokeCachedTemplate = nil
+	local models = replicatedStorage:FindFirstChild("Models")
+	if models == nil then
+		if not Refs.jumpSmokeTemplateWarned then
+			Refs.jumpSmokeTemplateWarned = true
+			warn(
+				"[RunwaySession] ReplicatedStorage.Models missing; JumpSmoke skipped. Add Models.JumpSmoke in Studio."
+			)
+		end
+		return nil
+	end
+	local template = models:FindFirstChild(RunwayJumpSmokeTemplateName)
+	if template == nil or not template:IsA("BasePart") then
+		if not Refs.jumpSmokeTemplateWarned then
+			Refs.jumpSmokeTemplateWarned = true
+			warn(
+				string.format(
+					"[RunwaySession] ReplicatedStorage.Models.%s missing or not a BasePart; jump takeoff smoke skipped.",
+					RunwayJumpSmokeTemplateName
+				)
+			)
+		end
+		return nil
+	end
+	local smoke = template:FindFirstChild("Smoke")
+	if smoke == nil or not smoke:IsA("ParticleEmitter") then
+		if not Refs.jumpSmokeTemplateWarned then
+			Refs.jumpSmokeTemplateWarned = true
+			warn(
+				string.format(
+					"[RunwaySession] ReplicatedStorage.Models.%s.Smoke missing or not a ParticleEmitter; jump takeoff smoke skipped.",
+					RunwayJumpSmokeTemplateName
+				)
+			)
+		end
+		return nil
+	end
+	Refs.jumpSmokeCachedTemplate = template
+	return Refs.jumpSmokeCachedTemplate
+end
+
+function RunwaySession.PlayJumpTakeoffSmokeFx(humanoid: Humanoid, hrp: BasePart)
+	local template = RunwaySession.JumpSmokeGetTemplate()
+	if template == nil then
+		return
+	end
+	local clone = template:Clone()
+	clone.Anchored = true
+	clone.CanCollide = false
+	clone.CanQuery = false
+	clone.CanTouch = false
+	local feetOffset = Vector3.new(0, -humanoid.HipHeight, 0)
+	local feetWorldPos = (hrp.CFrame * CFrame.new(feetOffset)).Position
+	local templatePivot = clone:GetPivot()
+	clone:PivotTo(CFrame.new(feetWorldPos) * (templatePivot - templatePivot.Position))
+	clone.Parent = RunwaySession.GetJumpRunwayLocalFxFolder()
+	local liftTime = 0
+	for _, descendant in clone:GetDescendants() do
+		if descendant:IsA("ParticleEmitter") then
+			local pe = descendant :: ParticleEmitter
+			local emitCountAttr = pe:GetAttribute("EmitCount")
+			local emitCount = if typeof(emitCountAttr) == "number" then emitCountAttr else 1
+			pe:Emit(emitCount)
+			if pe.Lifetime.Max > liftTime then
+				liftTime = pe.Lifetime.Max
+			end
+		end
+	end
+	if liftTime <= 0 then
+		liftTime = 2
+	end
+	debris:AddItem(clone, liftTime)
 end
 
 function RunwaySession.SlideTraceDisableTrailOnly()
@@ -7327,6 +7411,7 @@ function RunwaySession.JumpApplyTakeoff(
 	else
 		GameSoundManager.PlayJumpRunwayTakeoffSound()
 	end
+	RunwaySession.PlayJumpTakeoffSmokeFx(humanoid, hrp)
 	RunwaySession.JumpAdvancePhaseAfterImpulse(inAuto, inLineWindow, inChainWindow)
 	-- 冲量起跳后首帧 Raycast/Humanoid 仍常判贴地或 preland；若 prev* 为 false 会被当成「着地/快触地上升沿」
 	-- 立刻武装链式 T_WINDOW，约 1s 超时进 Slide。置 true 表示上升沿已消费，仅真实再落地时才武装。

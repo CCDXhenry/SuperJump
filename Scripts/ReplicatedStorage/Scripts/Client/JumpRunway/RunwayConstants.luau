@@ -30,6 +30,7 @@ RunwayConstants.RunwayCameraRenderStepName = "JumpRunwayCamera"
 RunwayConstants.RunwayFinalTiltRenderStepName = "JumpRunwayFinalBodyTilt"
 RunwayConstants.RunwayRingTemplateName = "JumpRunwayRing"
 RunwayConstants.RunwaySlideTraceTemplateName = "SlideTraceTrail"
+RunwayConstants.RunwayJumpSmokeTemplateName = "JumpSmoke"
 
 function RunwayConstants.IsRunwayActivePhase(phase: number): boolean
 	return phase ~= RunwayConstants.Ph.Idle and phase ~= RunwayConstants.Ph.Cleaning
