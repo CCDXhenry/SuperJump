@@ -1201,7 +1201,7 @@ end
 local function DestroyUpgradeUIsForPart(upgradePart: BasePart)
 	local childUI = upgradePart:FindFirstChild("UpgradeUI")
 	if childUI and childUI:IsA("SurfaceGui") then
-		childUI:Destroy()
+		childUI.Enabled = false
 	end
 
 	local playerGui = GetLocalPlayerGui()
