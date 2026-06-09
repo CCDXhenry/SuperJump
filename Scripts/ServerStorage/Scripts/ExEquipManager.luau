@@ -39,6 +39,9 @@ local activeExerciseWorldPivotMap: { [number]: CFrame } = {}
 local exerciseModelPivotLockConnection: RBXScriptConnection? = nil
 
 local function LogInfo(message: string)
+	if not GameConfig.Exercise.DEBUG then
+		return
+	end
 	print(string.format("%s %s", LOG_PREFIX, message))
 end
 

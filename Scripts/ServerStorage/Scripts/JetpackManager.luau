@@ -26,6 +26,9 @@ local currentJetpackIdChangedConnMap: { [number]: RBXScriptConnection } = {}
 local cfg = GameConfig.JumpRunway
 
 local function LogInfo(message: string)
+	if not GameConfig.JumpRunway.DEBUG then
+		return
+	end
 	print(string.format("%s %s", LOG_PREFIX, message))
 end
 

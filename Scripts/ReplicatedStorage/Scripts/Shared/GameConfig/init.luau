@@ -1549,6 +1549,10 @@ GameConfig.JumpRunway = {
 	RUNWAY_JUMP_WINDOW_GROUNDED_HOLD_SEC = 0.12,
 }
 
+GameConfig.Exercise = {
+	DEBUG = false,
+}
+
 --- 跑道单段跳跃水平限速：max = baseSpeed + cumulativeRatingBonus（clamp 至 ANTI_CHEAT_MAX_ALONG_SPEED）；min = max - reductionDelta。
 --- baseSpeed 可选参数，若传入则作为水平速度基准（来自 jumpPower）；不传时回退为 0。
 --- reductionDelta 可选参数，来自本次起跳前最终减速完的速度 * JUMP_SPEED_REDUCTION_RATIO；不传时回退为 0。
