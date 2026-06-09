@@ -87,9 +87,9 @@ local function RefreshInfoFrame()
 	if jumpHeightValue then
 		TranslationTool.CustomAutoLocalizeTextLabel(
 			jumpHeightValue,
-			GameTexts.YieldPerSecond.source,
-			GameTexts.YieldPerSecond.key,
-			{ "+" .. NumberExtension.FormatBigNumberAA(equipData.ability) }
+			GameTexts.PowerBonusWithNumber.source,
+			GameTexts.PowerBonusWithNumber.key,
+			{ NumberExtension.FormatBigNumberAA(equipData.ability) }
 		)
 	end
 
