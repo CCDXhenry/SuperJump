@@ -14,7 +14,7 @@ local serverStorage = game:GetService("ServerStorage")
 local serverScripts = serverStorage:WaitForChild("Scripts")
 
 local LOG_PREFIX = "[LeaderboardManager]"
-local SlowOperationWarnThresholdSeconds: number = 1
+local SlowOperationWarnThresholdSeconds: number = 10
 
 local httpService = game:GetService("HttpService")
 
