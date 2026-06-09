@@ -2,7 +2,18 @@
 
 local RunwayCameraController = {}
 
-local runService = game:GetService("RunService")
+local userInputService = game:GetService("UserInputService")
+
+type ReleaseTransitionContext = {
+	transitionToken: number,
+	camera: Camera,
+	restoreCameraType: Enum.CameraType?,
+	restoreSubject: Instance?,
+	restoreFov: number?,
+	getCharacterParts: () -> (Model?, Humanoid?, BasePart?),
+	onComplete: (() -> ())?,
+	completeInvoked: { boolean }?,
+}
 
 type CameraState = {
 	active: boolean,
@@ -13,6 +24,9 @@ type CameraState = {
 	smoothedCameraLookAt: Vector3?,
 	smoothedCameraFov: number?,
 	releaseTransitionToken: number,
+	releaseTransitionInProgress: boolean,
+	skipReleaseTransition: boolean,
+	pendingReleaseContext: ReleaseTransitionContext?,
 	chestOpenZoomActive: boolean,
 }
 
@@ -25,8 +39,28 @@ local state: CameraState = {
 	smoothedCameraLookAt = nil,
 	smoothedCameraFov = nil,
 	releaseTransitionToken = 0,
+	releaseTransitionInProgress = false,
+	skipReleaseTransition = false,
+	pendingReleaseContext = nil,
 	chestOpenZoomActive = false,
 }
+
+local TransitionPollIntervalSec = 0.03
+
+local function SetPendingReleaseContext(ctx: ReleaseTransitionContext?)
+	state.pendingReleaseContext = ctx
+end
+
+local function BeginReleaseTransition()
+	state.releaseTransitionInProgress = true
+	state.skipReleaseTransition = false
+end
+
+local function EndReleaseTransition()
+	state.releaseTransitionInProgress = false
+	state.skipReleaseTransition = false
+	SetPendingReleaseContext(nil)
+end
 
 local function ResolveReleaseTransitionDuration(cfg: any?): number
 	if cfg == nil then
@@ -124,20 +158,27 @@ local function PlayCameraTransition(
 	startFov: number,
 	targetFov: number
 ): boolean
-	local elapsed = 0
-	while elapsed < duration do
+	-- 使用 os.clock 计时 + 短轮询，避免失焦/最小化时渲染事件不触发导致过渡卡死
+	local startTime = os.clock()
+	while true do
 		if state.releaseTransitionToken ~= transitionToken then
 			return false
 		end
 		if camera.Parent == nil then
 			return false
 		end
-		local dt = runService.RenderStepped:Wait()
-		elapsed += dt
+		if state.skipReleaseTransition then
+			break
+		end
+		local elapsed = os.clock() - startTime
+		if elapsed >= duration then
+			break
+		end
 		local t = math.clamp(elapsed / duration, 0, 1)
 		local eased = t * t * (3 - 2 * t)
 		camera.CFrame = startCFrame:Lerp(targetCFrame, eased)
 		camera.FieldOfView = startFov + (targetFov - startFov) * eased
+		task.wait(TransitionPollIntervalSec)
 	end
 	if state.releaseTransitionToken ~= transitionToken then
 		return false
@@ -151,15 +192,18 @@ local function PlayCameraTransition(
 end
 
 local function PlayHold(camera: Camera, transitionToken: number, holdDuration: number): boolean
-	local elapsed = 0
-	while elapsed < holdDuration do
+	local startTime = os.clock()
+	while os.clock() - startTime < holdDuration do
 		if state.releaseTransitionToken ~= transitionToken then
 			return false
 		end
 		if camera.Parent == nil then
 			return false
 		end
-		elapsed += runService.RenderStepped:Wait()
+		if state.skipReleaseTransition then
+			break
+		end
+		task.wait(TransitionPollIntervalSec)
 	end
 	return state.releaseTransitionToken == transitionToken and camera.Parent ~= nil
 end
@@ -179,6 +223,7 @@ local function PlayReleaseTransition(
 	onComplete: (() -> ())?
 )
 	if not PlayCameraTransition(camera, transitionToken, releaseDuration, startCFrame, targetCFrame, startFov, targetFov) then
+		EndReleaseTransition()
 		return
 	end
 	RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
@@ -186,6 +231,7 @@ local function PlayReleaseTransition(
 		onComplete()
 	end
 	ClearRestoreSnapshot(transitionToken)
+	EndReleaseTransition()
 end
 
 local function InvokeOnCompleteOnce(onComplete: (() -> ())?, invoked: { boolean })
@@ -194,6 +240,63 @@ local function InvokeOnCompleteOnce(onComplete: (() -> ())?, invoked: { boolean 
 	end
 	invoked[1] = true
 	onComplete()
+end
+
+local function ForceCompletePendingRelease()
+	local ctx = state.pendingReleaseContext
+	if ctx == nil or not state.releaseTransitionInProgress then
+		return
+	end
+	if state.releaseTransitionToken ~= ctx.transitionToken then
+		return
+	end
+	if ctx.camera.Parent == nil then
+		EndReleaseTransition()
+		return
+	end
+	state.skipReleaseTransition = true
+	RestoreCameraControl(
+		ctx.camera,
+		ctx.restoreCameraType,
+		ctx.restoreSubject,
+		ctx.restoreFov,
+		ctx.getCharacterParts
+	)
+	if ctx.completeInvoked ~= nil then
+		InvokeOnCompleteOnce(ctx.onComplete, ctx.completeInvoked)
+	else
+		if ctx.onComplete ~= nil then
+			ctx.onComplete()
+		end
+	end
+	ClearRestoreSnapshot(ctx.transitionToken)
+	state.releaseTransitionToken += 1
+	EndReleaseTransition()
+end
+
+userInputService.WindowFocusReleased:Connect(ForceCompletePendingRelease)
+
+local function RegisterPendingReleaseContext(
+	transitionToken: number,
+	camera: Camera,
+	restoreCameraType: Enum.CameraType?,
+	restoreSubject: Instance?,
+	restoreFov: number?,
+	getCharacterParts: () -> (Model?, Humanoid?, BasePart?),
+	onComplete: (() -> ())?,
+	completeInvoked: { boolean }?
+)
+	BeginReleaseTransition()
+	SetPendingReleaseContext({
+		transitionToken = transitionToken,
+		camera = camera,
+		restoreCameraType = restoreCameraType,
+		restoreSubject = restoreSubject,
+		restoreFov = restoreFov,
+		getCharacterParts = getCharacterParts,
+		onComplete = onComplete,
+		completeInvoked = completeInvoked,
+	})
 end
 
 local function ResolveChestOpenBackOffset(cfg: any?): number
@@ -349,6 +452,16 @@ function RunwayCameraController.Disable(
 				local targetFov = restoreFov or startFov
 				camera.CameraType = Enum.CameraType.Scriptable
 				task.spawn(function()
+					RegisterPendingReleaseContext(
+						transitionToken,
+						camera,
+						restoreCameraType,
+						restoreSubject,
+						restoreFov,
+						getCharacterParts,
+						onFocusSequenceComplete,
+						completeInvoked
+					)
 					PlayReleaseTransition(
 						camera,
 						transitionToken,
@@ -434,8 +547,19 @@ function RunwayCameraController.FocusChaserThenDisable(
 	camera.CameraType = Enum.CameraType.Scriptable
 	local completeInvoked = { false }
 	task.spawn(function()
+		RegisterPendingReleaseContext(
+			transitionToken,
+			camera,
+			restoreCameraType,
+			restoreSubject,
+			restoreFov,
+			getCharacterParts,
+			onFocusSequenceComplete,
+			completeInvoked
+		)
 		if focusDuration > 0 then
 			if not PlayCameraTransition(camera, transitionToken, focusDuration, startCFrame, focusCFrame, startFov, cfg.RUNWAY_CAMERA_FOV) then
+				EndReleaseTransition()
 				return
 			end
 		else
@@ -443,6 +567,7 @@ function RunwayCameraController.FocusChaserThenDisable(
 			camera.FieldOfView = cfg.RUNWAY_CAMERA_FOV
 		end
 		if not PlayHold(camera, transitionToken, holdDuration) then
+			EndReleaseTransition()
 			return
 		end
 		local _releaseCharacter, _releaseHumanoid, releaseHrp = getCharacterParts()
@@ -478,11 +603,13 @@ function RunwayCameraController.FocusChaserThenDisable(
 				RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
 				InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
 				ClearRestoreSnapshot(transitionToken)
+				EndReleaseTransition()
 			end
 		else
 			RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
 			InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
 			ClearRestoreSnapshot(transitionToken)
+			EndReleaseTransition()
 		end
 	end)
 end

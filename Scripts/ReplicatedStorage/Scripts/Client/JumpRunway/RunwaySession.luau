@@ -154,6 +154,21 @@ local function ResolveChestCarryPresentHoldSec(): number
 	return ResolveChestHoldDelaySec(cfg.RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC, 0.5)
 end
 
+local DurationPollIntervalSec = 0.03
+
+local function WaitForDurationOrWindowUnfocused(duration: number)
+	if duration <= 0 then
+		return
+	end
+	local deadline = os.clock() + duration
+	while os.clock() < deadline do
+		if not userInputService.WindowFocused then
+			return
+		end
+		task.wait(DurationPollIntervalSec)
+	end
+end
+
 local Refs: {
 	screenGui: ScreenGui?,
 	phaseLabel: TextLabel?,
@@ -6132,9 +6147,7 @@ function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chest
 		RunwaySession.SetControlsEnabled(true)
 	end
 	local carryPresentHoldSec = ResolveChestCarryPresentHoldSec()
-	if carryPresentHoldSec > 0 then
-		task.wait(carryPresentHoldSec)
-	end
+	WaitForDurationOrWindowUnfocused(carryPresentHoldSec)
 	if Refs.chestPickedConfigId ~= chestConfigId or Refs.chestRewardPresentationStarted ~= true then
 		return
 	end

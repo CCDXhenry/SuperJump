@@ -3,7 +3,10 @@ local ChestOpenAnimationManager = {}
 
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local tweenService = game:GetService("TweenService")
+local userInputService = game:GetService("UserInputService")
 local workspace = game:GetService("Workspace")
+
+local AnimationPollIntervalSec = 0.03
 
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
@@ -64,10 +67,50 @@ local RunwayChestBrainrotLeftYawRad = math.rad(90)
 
 local playingUidMap: { [string]: boolean } = {}
 
+local function WaitDurationRespectingFocus(duration: number)
+	if duration <= 0 then
+		return
+	end
+	local deadline = os.clock() + duration
+	while os.clock() < deadline do
+		if not userInputService.WindowFocused then
+			return
+		end
+		task.wait(AnimationPollIntervalSec)
+	end
+end
+
+local function WaitForTweenOrWindowUnfocused(tween: Tween, onSkipApply: (() -> ())?)
+	local completed = false
+	local conn = tween.Completed:Connect(function()
+		completed = true
+	end)
+	while not completed do
+		if not userInputService.WindowFocused then
+			tween:Cancel()
+			if onSkipApply ~= nil then
+				onSkipApply()
+			end
+			conn:Disconnect()
+			return
+		end
+		if tween.PlaybackState == Enum.PlaybackState.Completed then
+			completed = true
+			break
+		end
+		task.wait(AnimationPollIntervalSec)
+	end
+	conn:Disconnect()
+end
+
 local function TweenProperty(target: Instance, tweenInfo: TweenInfo, props: { [string]: any })
 	local tween = tweenService:Create(target, tweenInfo, props)
 	tween:Play()
-	tween.Completed:Wait()
+	WaitForTweenOrWindowUnfocused(tween, function()
+		for key, value in props do
+			(target :: any)[key] = value
+		end
+	end)
 end
 
 local function TweenPropertyNoWait(target: Instance, tweenInfo: TweenInfo, props: { [string]: any })
@@ -87,7 +130,11 @@ local function TweenModelScale(model: Model, fromScale: number, toScale: number,
 	model:ScaleTo(fromScale)
 	local tween = tweenService:Create(driver, TweenInfo.new(duration, easingStyle, easingDir), { Value = toScale })
 	tween:Play()
-	tween.Completed:Wait()
+	WaitForTweenOrWindowUnfocused(tween, function()
+		if model.Parent then
+			model:ScaleTo(toScale)
+		end
+	end)
 	conn:Disconnect()
 	driver:Destroy()
 	if model.Parent then
@@ -554,9 +601,9 @@ local function PlayInWorld(
 				Enum.EasingDirection.Out
 			)
 			if postFinalRevealHoldSec > 0 then
-				task.wait(postFinalRevealHoldSec)
+				WaitDurationRespectingFocus(postFinalRevealHoldSec)
 			else
-				task.wait(0.08)
+				WaitDurationRespectingFocus(0.08)
 			end
 			TweenModelScale(
 				displayModel,
@@ -570,7 +617,7 @@ local function PlayInWorld(
 			displayModel = nil
 			displayRoot = nil
 		else
-			task.wait(0.05)
+			WaitDurationRespectingFocus(0.05)
 			TweenModelScale(
 				displayModel,
 				revealScale,
@@ -600,12 +647,15 @@ local function PlayInWorld(
 	if resolveFinalBrainrotId ~= nil then
 		local deadlineClock = startedClock + maxPlayTimeSec
 		while os.clock() < deadlineClock do
+			if not userInputService.WindowFocused then
+				break
+			end
 			local resolvedId = resolveFinalBrainrotId()
 			if resolvedId ~= nil then
 				resolvedFinalBrainrotId = resolvedId
 				break
 			end
-			task.wait(0.05)
+			task.wait(AnimationPollIntervalSec)
 		end
 		if resolvedFinalBrainrotId <= 0 then
 			resolvedFinalBrainrotId = GetSmallestRewardBrainrotId(rewardPool) or 0
@@ -614,12 +664,15 @@ local function PlayInWorld(
 	if resolveFinalVariantId ~= nil then
 		local deadlineClock = startedClock + maxPlayTimeSec
 		while os.clock() < deadlineClock do
+			if not userInputService.WindowFocused then
+				break
+			end
 			local resolvedVariant = resolveFinalVariantId()
 			if resolvedVariant ~= nil then
 				resolvedFinalVariantId = resolvedVariant
 				break
 			end
-			task.wait(0.05)
+			task.wait(AnimationPollIntervalSec)
 		end
 	end
 	if resolvedFinalBrainrotId > 0 then
@@ -732,7 +785,7 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 				Enum.EasingStyle.Back,
 				Enum.EasingDirection.Out
 			)
-			task.wait(0.05)
+			WaitDurationRespectingFocus(0.05)
 			TweenModelScale(
 				showModel,
 				revealScale,
