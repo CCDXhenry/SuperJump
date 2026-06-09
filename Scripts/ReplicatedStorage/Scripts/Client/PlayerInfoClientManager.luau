@@ -141,6 +141,13 @@ local function DestroyPlayerHeadUi(player: Player)
 	ClearPlayerHeadBillboard(player)
 end
 
+local function HideDefaultNameDisplay(character: Model)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid ~= nil then
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	end
+end
+
 local function AttachPlayerHeadUi(player: Player, character: Model)
 	ClearPlayerHeadBillboard(player)
 
@@ -189,6 +196,7 @@ local function BindPlayer(player: Player)
 	}
 
 	local function onCharacterAdded(character: Model)
+		HideDefaultNameDisplay(character)
 		AttachPlayerHeadUi(player, character)
 	end
 
