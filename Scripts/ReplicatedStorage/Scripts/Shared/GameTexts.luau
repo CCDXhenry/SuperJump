@@ -127,7 +127,6 @@ local GameTexts = {
 	JumpRunwayWindowRatingPerfect = { key = "", source = "Perfect" },
 	JumpRunwayWindowRatingLate = { key = "", source = "Late" },
 	JumpRunwayWindowRatingMiss = { key = "", source = "Miss" },
-	JumpHeightPerSecond = { key = "JumpHeightPerSecond", source = "+{1}/s" },
 	GroupRewardTipJoin = { key = "GroupRewardTipJoin", source = "Join the group to claim rewards!" },
 	GroupRewardTipClaimed = { key = "GroupRewardTipClaimed", source = "Joined! Reward granted." },
 	GroupRewardJoinHint = { key = "GroupRewardJoinHint", source = "Join the group to get a free exclusive brainrot!" },
