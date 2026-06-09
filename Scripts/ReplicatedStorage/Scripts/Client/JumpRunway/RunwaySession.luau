@@ -3147,7 +3147,11 @@ function RunwaySession.AppendParticleEmittersUnique(target: { ParticleEmitter },
 end
 
 function RunwaySession.SetJetpackDashParticlesEnabled(enabled: boolean)
-	if Refs.jetpackVisualRoot ~= nil and Refs.jetpackVisualRoot:GetAttribute(JumpRunwayJetpackServerCreatedAttr) == true then
+	-- 服务端创建的背包由服端开启粒子；客户端可在燃料耗尽时立即本地关闭，避免等待网络回包。
+	if enabled
+		and Refs.jetpackVisualRoot ~= nil
+		and Refs.jetpackVisualRoot:GetAttribute(JumpRunwayJetpackServerCreatedAttr) == true
+	then
 		return
 	end
 	for _, pe in Refs.jetpackDashParticleEmitters do
@@ -4254,10 +4258,18 @@ function RunwaySession.TryAdoptServerJumpRunwayJetpack(character: Model): boolea
 		if flame1 ~= nil then
 			Refs.jetpackFlame1Part = flame1
 			Refs.jetpackFlame1IdleColor = flame1.Color
+			RunwaySession.AppendParticleEmittersUnique(
+				Refs.jetpackDashParticleEmitters,
+				RunwaySession.CollectParticleEmittersUnderFlame(flame1)
+			)
 		end
 		if flame2 ~= nil then
 			Refs.jetpackFlame2Part = flame2
 			Refs.jetpackFlame2IdleColor = flame2.Color
+			RunwaySession.AppendParticleEmittersUnique(
+				Refs.jetpackDashParticleEmitters,
+				RunwaySession.CollectParticleEmittersUnderFlame(flame2)
+			)
 		end
 		return true
 	end
@@ -6895,14 +6907,18 @@ function RunwaySession.NetReportDashIfChanged()
 	if not NetMsg.JumpRunwayRemotesExist() then
 		return
 	end
-	if localState.dashHeld == localState.lastReportedDashHeld then
+	local finalDashThrustActive = RunwaySession.IsFinalDashThrustActive()
+	if localState.dashHeld == localState.lastReportedDashHeld
+		and finalDashThrustActive == localState.lastReportedFinalDashThrustActive
+	then
 		return
 	end
 	localState.lastReportedDashHeld = localState.dashHeld
+	localState.lastReportedFinalDashThrustActive = finalDashThrustActive
 	NetMsg.FireRequestJumpRunwayInput({
 		kind = Kind.Input,
 		dashHeld = localState.dashHeld,
-		finalDashThrustActive = RunwaySession.IsFinalDashThrustActive(),
+		finalDashThrustActive = finalDashThrustActive,
 		clientClock = os.clock(),
 		clientPhase = localState.phase,
 	})
@@ -7609,6 +7625,7 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	RunwaySession.StartDistanceLogStage("AutoRun", RunwaySession.CurrentAlongProgress(hrp), nowClock)
 	RunwayNetBridge.FireStartSession(NetMsg, Kind, forward, origin, scoreBaselineAlong)
 	localState.lastReportedDashHeld = localState.dashHeld
+	localState.lastReportedFinalDashThrustActive = RunwaySession.IsFinalDashThrustActive()
 	RunwaySession.ApplyRunwayHumanoidJumpState(humanoid, true)
 	humanoid.WalkSpeed = cfg.FIRST_TAKEOFF_AUTORUN_SPEED
 	local fwdH = Vector3.new(forward.X, 0, forward.Z)

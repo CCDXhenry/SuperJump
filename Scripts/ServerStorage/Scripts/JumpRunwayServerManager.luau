@@ -810,11 +810,11 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 		return
 	end
 	if kind == Kind.Sample then
+		if report.finalDashThrustActive ~= nil then
+			JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, report.finalDashThrustActive == true)
+		end
 		local ok = IngestSample(player, st, report, nowClock)
 		if ok then
-			if report.finalDashThrustActive ~= nil then
-				JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, report.finalDashThrustActive == true)
-			end
 			NotifyJumpRunway(
 				player,
 				Ph.AutoRun,
