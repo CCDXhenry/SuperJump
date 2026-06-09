@@ -26,15 +26,13 @@ function PlaceInstanceTeleportTool.IsPlayerTeleporting(playerId: number): boolea
 	return teleportingPlayers[playerId] == true
 end
 
-local function MarkPlayersTeleporting(targetPlayers: { Instance }, placeId: number, jobId: string)
+local function MarkPlayersTeleporting(targetPlayers: { Player }, placeId: number, jobId: string)
 	for _, player in targetPlayers do
-		if player:IsA("Player") then
-			teleportingPlayers[player.UserId] = true
-			teleportingPlayerMetaMap[player.UserId] = {
-				placeId = placeId,
-				jobId = jobId,
-			}
-		end
+		teleportingPlayers[player.UserId] = true
+		teleportingPlayerMetaMap[player.UserId] = {
+			placeId = placeId,
+			jobId = jobId,
+		}
 	end
 end
 
@@ -43,24 +41,34 @@ local function ClearPlayerTeleporting(playerId: number)
 	teleportingPlayerMetaMap[playerId] = nil
 end
 
+local function GetTeleportOptionsForPlaceInstance(jobId: string, teleportOptions: TeleportOptions?): TeleportOptions
+	local targetTeleportOptions = teleportOptions
+	if targetTeleportOptions == nil then
+		targetTeleportOptions = Instance.new("TeleportOptions")
+	end
+	targetTeleportOptions.ServerInstanceId = jobId
+	return targetTeleportOptions
+end
+
 function PlaceInstanceTeleportTool.SafeTeleportToPlaceInstance(
 	placeId: number,
 	jobId: string,
-	targetPlayers: { Instance },
-	teleportOptions: Instance?
+	targetPlayers: { Player },
+	teleportOptions: TeleportOptions?
 ): (boolean, any)
 	if jobId == "" then
 		return false, "empty jobId"
 	end
+	local targetTeleportOptions = GetTeleportOptionsForPlaceInstance(jobId, teleportOptions)
 	MarkPlayersTeleporting(targetPlayers, placeId, jobId)
 	return RetryAsync(function()
-		return teleportService:TeleportToPlaceInstance(placeId, jobId, targetPlayers, teleportOptions)
+		return teleportService:TeleportAsync(placeId, targetPlayers, targetTeleportOptions)
 	end, AttemptLimit, RetryDelay)
 end
 
 function PlaceInstanceTeleportTool.SafeTeleportToCurrentServer(
-	targetPlayers: { Instance },
-	teleportOptions: Instance?
+	targetPlayers: { Player },
+	teleportOptions: TeleportOptions?
 ): (boolean, any)
 	return PlaceInstanceTeleportTool.SafeTeleportToPlaceInstance(game.PlaceId, game.JobId, targetPlayers, teleportOptions)
 end
@@ -70,16 +78,15 @@ local function HandleFailedTeleport(
 	teleportResult: Enum.TeleportResult,
 	errorMessage: string,
 	_targetPlaceId: number,
-	teleportOptions: Instance?
+	teleportOptions: TeleportOptions?
 )
-	local meta: TeleportingPlayerMeta? = nil
-	if player:IsA("Player") then
-		meta = teleportingPlayerMetaMap[player.UserId]
+	if not player:IsA("Player") then
+		return
 	end
+
+	local meta: TeleportingPlayerMeta? = teleportingPlayerMetaMap[player.UserId]
 	if meta == nil then
-		if player:IsA("Player") then
-			ClearPlayerTeleporting(player.UserId)
-		end
+		ClearPlayerTeleporting(player.UserId)
 		return
 	end
 
@@ -88,9 +95,7 @@ local function HandleFailedTeleport(
 	elseif teleportResult == Enum.TeleportResult.Failure then
 		task.wait(RetryDelay)
 	else
-		if player:IsA("Player") then
-			ClearPlayerTeleporting(player.UserId)
-		end
+		ClearPlayerTeleporting(player.UserId)
 		error(("Invalid place instance teleport [%s]: %s"):format(teleportResult.Name, errorMessage))
 	end
 	PlaceInstanceTeleportTool.SafeTeleportToPlaceInstance(meta.placeId, meta.jobId, { player }, teleportOptions)
