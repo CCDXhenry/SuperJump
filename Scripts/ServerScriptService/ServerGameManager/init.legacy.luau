@@ -22,7 +22,6 @@ local PlayerInteractManager = require(serverScripts:FindFirstChild("PlayerIntera
 local ExEquipManager = require(serverScripts:FindFirstChild("ExEquipManager"))
 local JetpackManager = require(serverScripts:FindFirstChild("JetpackManager"))
 local GuideProgressManager = require(serverScripts:FindFirstChild("GuideProgressManager"))
-local BrainrotDisplayTestManager = require(serverScripts:FindFirstChild("BrainrotDisplayTestManager"))
 local replicatedStorage: ReplicatedStorage = game:GetService("ReplicatedStorage")
 local core = replicatedStorage:WaitForChild("Core")
 local coreScripts = core:WaitForChild("Scripts")
@@ -239,7 +238,10 @@ JumpRunwayServerManager.Init()
 ExEquipManager.Init()
 JetpackManager.Init()
 GuideProgressManager.Init()
-BrainrotDisplayTestManager.Init()
+if runService:IsStudio() then
+	local BrainrotDisplayTestManager = require(serverScripts:FindFirstChild("BrainrotDisplayTestManager"))
+	BrainrotDisplayTestManager.Init()
+end
 
 NetMsg.ConnectRequestSetDecelerationOn(function(player: Player, decelerationOn: boolean)
 	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
