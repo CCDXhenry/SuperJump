@@ -19,6 +19,7 @@ local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
 local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
 local serverScripts = serverStorage:WaitForChild("Scripts")
 local ServerGameInfo = require(serverScripts:FindFirstChild("ServerGameInfo"))
+local LeaderboardManager = require(serverScripts:FindFirstChild("LeaderboardManager"))
 local AnalyticsTool = require(serverScripts:FindFirstChild("AnalyticsTool"))
 local JetpackManager = require(serverScripts:FindFirstChild("JetpackManager"))
 
@@ -385,6 +386,10 @@ local function LockScoreAndTeleport(player: Player, st: RunState, nowClock: numb
 		print("[JumpRunwayServerManager] LockScoreAndTeleport for", player.Name, "capped", capped)
 	end
 	playerFinalScore[player.UserId] = capped
+	if capped > 0 then
+		ServerGameInfo.UpdateJumpRunwayBestDistance(player, capped)
+		LeaderboardManager.TryUpdateWeeklyDistance(player, capped)
+	end
 	player:SetAttribute("JumpRunwayCooldownUntil", nowClock + cfg.RUN_START_COOLDOWN)
 	NotifyJumpRunway(player, Ph.ScoreLocked, capped, capped, st.runwayForward, st.runwayOrigin, true)
 	local stSnapshot = st
@@ -876,6 +881,7 @@ function JumpRunwayServerManager.Init()
 			return
 		end
 		ServerGameInfo.UpdateJumpRunwayBestDistance(player, verifiedDistance)
+		LeaderboardManager.TryUpdateWeeklyDistance(player, verifiedDistance)
 	end)
 	NetMsg.ConnectRequestJumpRunwayLittleElfChestStartCarry(function(player: Player, brainrotId: number?, chestConfigId: number?)
 		HandleLittleElfChestStartCarry(player, brainrotId, chestConfigId)

@@ -230,6 +230,16 @@ GameConfig.ModelGetSource = {
 GameConfig.EnablePlayerGift = false
 GameConfig.PlayerRespawnTime = 1
 
+-- 排行榜
+GameConfig.LeaderboardCategory = {
+	WeeklyDistance = "WeeklyDistance",
+}
+GameConfig.LeaderboardUpdateInterval = 10 * 60
+GameConfig.LeaderboardDisplayCount = 20
+GameConfig.LeaderboardWeekStartUnixUtc = 1736226000 -- 2025-01-07 05:00:00 UTC (Tuesday 00:00 EST, fixed UTC-5)
+GameConfig.LeaderboardWeekDurationSeconds = 7 * 24 * 60 * 60
+GameConfig.LeaderboardDataVersion = "v1"
+
 -- 无操作自动重连当前服务器
 GameConfig.IdleWarnSec = 14 * 60 --开始提示“即将重连”
 GameConfig.IdleTeleportSec = 15 * 60 --无操作多久后触发重连
@@ -1888,6 +1898,8 @@ export type PlayerSaveInfo = {
 	jumpPower: JumpPowerInfo,
 	jumpRunwayBestDistance: number,
 	jumpRunwayJumpCount: number,
+	jumpRunwayWeeklyBestDistance: number,
+	jumpRunwayWeeklyBestDistanceWeekIndex: number,
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },
 	exEquipInventory: ExEquipInventory,
@@ -1908,6 +1920,7 @@ export type PlayerInfo = PlayerSaveInfo & {
 	homeSlot: string,
 	carriedInfo: PlayerCarriedInfo,
 	lastArrivedIslandId: number,
+	leaderboardChanges: { [string]: boolean }?,
 }
 
 export type ReceiptInfo = {
@@ -1953,6 +1966,8 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 		jumpPower = GameConfig.CreateDefaultJumpPowerInfo(),
 		jumpRunwayBestDistance = 0,
 		jumpRunwayJumpCount = 0,
+		jumpRunwayWeeklyBestDistance = 0,
+		jumpRunwayWeeklyBestDistanceWeekIndex = 0,
 		brainrotsInfo = {
 			ownedBrainrots = {},
 			equippedBrainrots = {},

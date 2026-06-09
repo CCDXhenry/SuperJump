@@ -137,5 +137,9 @@ local GameTexts = {
 	GroupRewardTip3 = { key = "GroupRewardTip3", source = "3. Claim group brainrot!" },
 	IdleTeleportWarning = { key = "IdleTeleportWarning", source = "No input detected. Auto-reconnecting to this server in {1}s." },
 	IdleTeleporting = { key = "IdleTeleporting", source = "Reconnecting you to this server..." },
+	LeaderboardRefreshCountdown = {
+		key = "LeaderboardRefreshCountdown",
+		source = "The leaderboard will refresh in {1}:{2}:{3}:{4}.",
+	},
 }
 return GameTexts

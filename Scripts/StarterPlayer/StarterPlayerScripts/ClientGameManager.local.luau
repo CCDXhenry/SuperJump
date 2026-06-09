@@ -26,6 +26,7 @@ local ExEquipManager = require(clientScripts:WaitForChild("ExEquipManager"))
 local JetpackClientManager = require(clientScripts:WaitForChild("JetpackClientManager"))
 local GroupRewardClientManager = require(clientScripts:WaitForChild("GroupRewardClientManager"))
 local PlayerInfoClientManager = require(clientScripts:WaitForChild("PlayerInfoClientManager"))
+local LeaderboardClient = require(clientScripts:WaitForChild("LeaderboardClient"))
 local IdleInputClientManager = require(clientScripts:FindFirstChild("IdleInputClientManager"))
 -- JumpRunway：尽早绑定 NotifyJumpRunwayState，避免服务端开局 FireClient 时客户端尚未 OnClientEvent 导致队列耗尽
 
@@ -93,6 +94,7 @@ local function InitUI()
 	JetpackClientManager.Init()
 	GroupRewardClientManager.Init()
 	PlayerInfoClientManager.Init()
+	LeaderboardClient.Init()
 	GuideManager.Init()
 	-- JumpRunwayClientManager 已在脚本加载时 Init（见上方），勿仅放在 InitUI 以免晚于服务端推送
 	-- 初始化背包输入控制

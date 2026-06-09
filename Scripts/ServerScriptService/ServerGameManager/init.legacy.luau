@@ -14,6 +14,7 @@ AnalyticsTool.SetDataAccess({
 	end,
 })
 local JumpRunwayServerManager = require(serverScripts:WaitForChild("JumpRunwayServerManager"))
+local LeaderboardManager = require(serverScripts:WaitForChild("LeaderboardManager"))
 local PlayerHomeServerManager = require(serverScripts:WaitForChild("PlayerHomeServerManager"))
 local LobbyTeleportServerManager = require(serverScripts:WaitForChild("LobbyTeleportServerManager"))
 local IdleTeleportServerManager = require(serverScripts:WaitForChild("IdleTeleportServerManager"))
@@ -114,6 +115,7 @@ end
 
 --保存玩家信息
 local function SavePlayerInfo(player: Player)
+	LeaderboardManager.SavePlayerStats(player)
 	local playerInfo: GameConfig.PlayerInfo = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo ~= nil and playerInfo.playerInfoChanged then
 		local playerSaveInfo: GameConfig.PlayerSaveInfo = ServerGameInfo.CreatePlayerSaveInfoByPlayerInfo(playerInfo)
@@ -185,12 +187,16 @@ local function OnPlayerAdded(player: Player)
 		ServerGameInfo.ApplyWalkSpeed(player)
 	end)
 
+	LeaderboardManager.CheckWeeklyReset(player)
+	LeaderboardManager.OnPlayerAdded(player)
+
 	--埋点添加玩家
 	AnalyticsTool.AddPlayer(player)
 end
 
 --玩家离开事件
 local function OnPlayerRemoving(player: Player)
+	LeaderboardManager.SavePlayerStats(player)
 	--埋点移除玩家
 	AnalyticsTool.RemovePlayer(player)
 	ServerGameInfo.MarkPlayerLastOnlineNow(player)
@@ -235,6 +241,7 @@ LobbyTeleportServerManager.Init()
 IdleTeleportServerManager.Init()
 BrainrotHomeManager.Init()
 JumpRunwayServerManager.Init()
+LeaderboardManager.Init()
 ExEquipManager.Init()
 JetpackManager.Init()
 GuideProgressManager.Init()

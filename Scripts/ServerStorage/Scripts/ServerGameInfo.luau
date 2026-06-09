@@ -176,6 +176,8 @@ function ServerGameInfo.InitPlayerInfo(
 		jumpPower = playerSaveInfo.jumpPower,
 		jumpRunwayBestDistance = playerSaveInfo.jumpRunwayBestDistance or 0,
 		jumpRunwayJumpCount = playerSaveInfo.jumpRunwayJumpCount or 0,
+		jumpRunwayWeeklyBestDistance = playerSaveInfo.jumpRunwayWeeklyBestDistance or 0,
+		jumpRunwayWeeklyBestDistanceWeekIndex = playerSaveInfo.jumpRunwayWeeklyBestDistanceWeekIndex or 0,
 		brainrotsInfo = playerSaveInfo.brainrotsInfo,
 		brainrotQueue = playerSaveInfo.brainrotQueue or {},
 		exEquipInventory = playerSaveInfo.exEquipInventory or {
@@ -327,6 +329,8 @@ function ServerGameInfo.CreatePlayerSaveInfoByPlayerInfo(playerInfo: GameConfig.
 		jumpPower = playerInfo.jumpPower,
 		jumpRunwayBestDistance = playerInfo.jumpRunwayBestDistance,
 		jumpRunwayJumpCount = playerInfo.jumpRunwayJumpCount,
+		jumpRunwayWeeklyBestDistance = playerInfo.jumpRunwayWeeklyBestDistance,
+		jumpRunwayWeeklyBestDistanceWeekIndex = playerInfo.jumpRunwayWeeklyBestDistanceWeekIndex,
 		brainrotsInfo = playerInfo.brainrotsInfo,
 		brainrotQueue = playerInfo.brainrotQueue,
 		guideProgressInfo = playerInfo.guideProgressInfo,

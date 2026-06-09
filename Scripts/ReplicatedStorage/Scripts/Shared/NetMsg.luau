@@ -96,6 +96,8 @@ local notifyPlayerCurrencyUpdateEvent: RemoteEvent = remoteEventsFolder:FindFirs
 local requestClaimOfflineRewardEvent: RemoteEvent? = GetOrCreateRemoteEvent("RequestClaimOfflineReward")
 local notifyOfflineRewardInfoEvent: RemoteEvent? = GetOrCreateRemoteEvent("NotifyOfflineRewardInfo")
 local notifyPlayerBuffInfoUpdateEvent: RemoteEvent? = GetOrCreateRemoteEvent("NotifyPlayerBuffInfoUpdate")
+local notifyLeaderboardUpdateEvent: RemoteEvent? = GetOrCreateRemoteEvent("NotifyLeaderboardUpdate")
+local notifyLeaderboardResetTimeEvent: RemoteEvent? = GetOrCreateRemoteEvent("NotifyLeaderboardResetTime")
 
 -- Gifting
 local requestSendGiftEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestSendGift") :: RemoteEvent
@@ -1218,6 +1220,49 @@ function NetMsg.ConnectRequestClaimJetpackGroupReward(callback: (player: Player,
 		return
 	end
 	requestClaimJetpackGroupRewardEvent.OnServerEvent:Connect(callback)
+end
+
+function NetMsg.FireNotifyLeaderboardUpdate(
+	player: Player?,
+	category: string,
+	topList: { { userId: number, value: number, name: string } },
+	resetTimestamp: number
+)
+	if notifyLeaderboardUpdateEvent == nil then
+		return
+	end
+	if player then
+		notifyLeaderboardUpdateEvent:FireClient(player, category, topList, resetTimestamp)
+	else
+		notifyLeaderboardUpdateEvent:FireAllClients(category, topList, resetTimestamp)
+	end
+end
+
+function NetMsg.ConnectNotifyLeaderboardUpdate(
+	callback: (category: string, topList: { { userId: number, value: number, name: string } }, resetTimestamp: number) -> ()
+)
+	if notifyLeaderboardUpdateEvent == nil then
+		return
+	end
+	notifyLeaderboardUpdateEvent.OnClientEvent:Connect(callback)
+end
+
+function NetMsg.FireNotifyLeaderboardResetTime(player: Player?, resetTimestamp: number)
+	if notifyLeaderboardResetTimeEvent == nil then
+		return
+	end
+	if player then
+		notifyLeaderboardResetTimeEvent:FireClient(player, resetTimestamp)
+	else
+		notifyLeaderboardResetTimeEvent:FireAllClients(resetTimestamp)
+	end
+end
+
+function NetMsg.ConnectNotifyLeaderboardResetTime(callback: (resetTimestamp: number) -> ())
+	if notifyLeaderboardResetTimeEvent == nil then
+		return
+	end
+	notifyLeaderboardResetTimeEvent.OnClientEvent:Connect(callback)
 end
 
 return NetMsg
