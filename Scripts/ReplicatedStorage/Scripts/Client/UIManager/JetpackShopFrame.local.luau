@@ -42,6 +42,19 @@ if localPlayerInfo == nil then
 	return
 end
 
+local function LocalizeJetpackShopBundleName(textLabel: TextLabel, jetpackId: number)
+	local bundleConfig = GameConfig.GetJetpackShopBundleConfig(jetpackId)
+	if bundleConfig ~= nil then
+		TranslationTool.CustomAutoLocalizeTextLabel(textLabel, bundleConfig.name_t, "")
+	else
+		TranslationTool.CustomAutoLocalizeTextLabel(
+			textLabel,
+			GameTexts.JetpackShopRewardShop.source,
+			GameTexts.JetpackShopRewardShop.key
+		)
+	end
+end
+
 local function IsJetpackAffordable(jetpackData: GameConfig.JetpackData): boolean
 	local coinCount = localPlayerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
 
@@ -140,11 +153,7 @@ local function RefreshInfoFrame()
 				GameTexts.JetpackShopStorePurchaseHint.source,
 				GameTexts.JetpackShopStorePurchaseHint.key
 			)
-			TranslationTool.CustomAutoLocalizeTextLabel(
-				rewardBtnText,
-				GameTexts.JetpackShopRewardShop.source,
-				GameTexts.JetpackShopRewardShop.key
-			)
+			LocalizeJetpackShopBundleName(rewardBtnText, equipIdLookAt)
 		elseif jetpackData.costType == GameConfig.CostType.CoinOrRb then
 			buyBtn.Visible = false
 			buyBtn31.Visible = true
@@ -298,11 +307,7 @@ local function CreateSelectEquipBtn(jetpackId: number, jetpackData: GameConfig.J
 				groupReward.Visible = true
 			elseif jetpackData.costType == GameConfig.CostType.StorePurchase then
 				groupReward.Visible = true
-				TranslationTool.CustomAutoLocalizeTextLabel(
-					groupReward,
-					GameTexts.JetpackShopRewardShop.source,
-					GameTexts.JetpackShopRewardShop.key
-				)
+				LocalizeJetpackShopBundleName(groupReward, jetpackId)
 			else
 				coin.Visible = true
 				price.Visible = true
