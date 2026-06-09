@@ -152,20 +152,31 @@ local function CreateOrUpdateInfoUI(
 	local offsetY = if model then ModelBillboardOffsetTool.GetVisualOffsetY(model, adornee, 1) else 2
 	ui.StudsOffset = Vector3.new(0, offsetY, 0)
 
-	local controller = ui:FindFirstChild("ControllerFrame")
+	local controller = ui:FindFirstChild("Controller") or ui:FindFirstChild("ControllerFrame")
 	if not controller then
 		return
 	end
 
-	local nameLabel = controller:FindFirstChild("NameText") :: TextLabel?
-	local levelText = controller:FindFirstChild("LevelText") :: TextLabel?
+	local nameLabel = controller:FindFirstChild("NameLabel") :: TextLabel?
+	local qualityLabel = controller:FindFirstChild("QualityLabel") :: TextLabel?
+	local levelText = controller:FindFirstChild("LvLabel") :: TextLabel?
 	local abilityText = controller:FindFirstChild("AbilityText") :: TextLabel?
 	local sellPriceText = controller:FindFirstChild("SellPriceText") :: TextLabel?
 
 	if nameLabel then
 		nameLabel.Text = brainrotData.name_t or ""
+		nameLabel.TextColor3 = Color3.new(1, 1, 1)
+	end
+	if qualityLabel then
+		local qualityTextName = GameConfig.BrainrotQualityTextMap[brainrotData.quality]
+		local qualityTextData = if qualityTextName then ((GameTexts :: any)[qualityTextName] :: { source: string, key: string }?) else nil
+		if qualityTextData then
+			TranslationTool.CustomAutoLocalizeTextLabel(qualityLabel, qualityTextData.source, qualityTextData.key, {})
+		else
+			TranslationTool.CustomAutoLocalizeTextLabel(qualityLabel, "", "", {})
+		end
 		if qualityCfg then
-			nameLabel.TextColor3 = qualityCfg.textColor
+			qualityLabel.TextColor3 = qualityCfg.textColor
 		end
 	end
 	if levelText then
