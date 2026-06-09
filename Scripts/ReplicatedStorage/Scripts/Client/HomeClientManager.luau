@@ -1093,6 +1093,49 @@ local function SetVisuals(inst: Instance, visible: boolean, isPlaceholder: boole
 	end
 end
 
+local function DisablePlaceModelLightEmitters(lightEmitter: ParticleEmitter?, lightEffectEmitter: ParticleEmitter?)
+	if lightEmitter then
+		if lightEmitter.Enabled then
+			lightEmitter.Enabled = false
+		end
+		lightEmitter:Clear()
+	end
+	if lightEffectEmitter then
+		if lightEffectEmitter.Enabled then
+			lightEffectEmitter.Enabled = false
+		end
+		lightEffectEmitter:Clear()
+	end
+end
+
+local function UpdatePlaceModelLightEmitters(
+	lightEmitter: ParticleEmitter?,
+	lightEffectEmitter: ParticleEmitter?,
+	shouldEnable: boolean,
+	lightColor: Color3?
+)
+	if not shouldEnable or not lightEmitter or not lightColor then
+		DisablePlaceModelLightEmitters(lightEmitter, lightEffectEmitter)
+		return
+	end
+
+	local colorSequence = ColorSequence.new(lightColor)
+	if not lightEmitter.Enabled then
+		lightEmitter:Clear()
+		if lightEffectEmitter then
+			lightEffectEmitter:Clear()
+		end
+		lightEmitter.Color = colorSequence
+		lightEmitter.Enabled = true
+		if lightEffectEmitter then
+			lightEffectEmitter.Enabled = true
+		end
+		return
+	end
+
+	lightEmitter.Color = colorSequence
+end
+
 -- UpgradeHome/HomePart/InfoUI 的 Enabled 由 RefreshLocalHomeInteractionFocus 按距离控制，不能用 SetVisuals 覆盖
 local function IsUpgradeHomePartInfoUI(desc: Instance): boolean
 	return desc:IsA("BillboardGui")
@@ -1300,25 +1343,14 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 		SetSellButtonVisibility(sellAttachment, isOccupied and isLocalPlayer, pointIndex, slotName, not deferPromptEnabled)
 	end
 
-	if lightEmitter then
-		lightEmitter.Enabled = false
-	end
-	if lightEffectEmitter then
-		lightEffectEmitter.Enabled = false
-	end
-
+	local lightColor: Color3? = nil
 	if isOccupied and placedData then
 		local brainrotData = GameConfig.BrainrotIdMap[placedData.configId]
 		if brainrotData then
 			local levelIdx = placedData.level or 1
 			local qualityCfg = GameConfig.BrainrotQualityConfig[brainrotData.quality]
-
-			if lightEmitter and qualityCfg then
-				lightEmitter.Color = ColorSequence.new(qualityCfg.textColor)
-				lightEmitter.Enabled = true
-				if lightEffectEmitter then
-					lightEffectEmitter.Enabled = true
-				end
+			if qualityCfg then
+				lightColor = qualityCfg.textColor
 			end
 
 			local sellPrompt = sellAttachment and sellAttachment:FindFirstChildOfClass("ProximityPrompt")
@@ -1329,6 +1361,7 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 			end
 		end
 	end
+	UpdatePlaceModelLightEmitters(lightEmitter, lightEffectEmitter, lightColor ~= nil, lightColor)
 
 	-- 5. Collection Touch Detection (Client-Side)
 	if collectPart and not collectPart:GetAttribute("TouchBound") then
