@@ -101,8 +101,14 @@ local function IsEscapeHudExemptGui(gui: GuiObject): boolean
 	return false
 end
 
-local function FormatTickMeters(meters: number): string
-	return string.format("%dm", math.max(0, math.floor(meters + 0.5)))
+local function LocalizeDistanceMeters(label: TextLabel, meters: number)
+	local metersWhole = math.max(0, math.floor(meters + 0.5))
+	TranslationTool.CustomAutoLocalizeTextLabel(
+		label,
+		GameTexts.JumpRunwayDistanceMeters.source,
+		GameTexts.JumpRunwayDistanceMeters.key,
+		{ tostring(metersWhole) }
+	)
 end
 
 local function GetTickSpacingPx(): number
@@ -185,7 +191,11 @@ local function UpdateTickRuler(distanceStuds: number, canvasX: number)
 		label.AnchorPoint = Vector2.new(0.5, 0.5)
 		label.Position = UDim2.fromScale(meters / canvasSpanM, tickPosYScale)
 		label.Size = tickSize
-		label.Text = if meters <= 0 then "" else FormatTickMeters(meters)
+		if meters <= 0 then
+			label.Text = ""
+		else
+			LocalizeDistanceMeters(label, meters)
+		end
 		label.Visible = true
 	end
 
@@ -675,7 +685,7 @@ local function RefreshRunwayStats(
 	if distanceValue ~= nil then
 		distanceValue.Visible = distanceHudVisible
 		if distanceHudVisible then
-			distanceValue.Text = string.format("%dm", math.max(0, math.floor(distanceStuds + 0.5)))
+			LocalizeDistanceMeters(distanceValue, distanceStuds)
 		end
 	end
 	if speedLabel ~= nil then

@@ -172,7 +172,7 @@ local function CreateSlot(index: number, item: GameConfig.BrainrotQueueItem): Im
 	
 	-- 设置名称
 	if toolNameText then
-		toolNameText.Text = GetNameForConfigId(item.configId, item.itemType)
+		TranslationTool.CustomAutoLocalizeTextLabel(toolNameText, GetNameForConfigId(item.configId, item.itemType), "")
 		local qualityColor = GetQualityColor(GetDisplayQuality(item))
 		toolNameText.TextColor3 = qualityColor
 	end
@@ -183,7 +183,12 @@ local function CreateSlot(index: number, item: GameConfig.BrainrotQueueItem): Im
 		if typeVal == GameConfig.ItemType.Coil then
 			toolLvText.Text = ""
 		else
-			toolLvText.Text = "Lv." .. tostring(item.level or 1)
+			TranslationTool.CustomAutoLocalizeTextLabel(
+				toolLvText,
+				GameTexts.LevelWithNumber.source,
+				GameTexts.LevelWithNumber.key,
+				{ tostring(item.level or 1) }
+			)
 		end
 	end
 
@@ -207,7 +212,12 @@ local function CreateSlot(index: number, item: GameConfig.BrainrotQueueItem): Im
 		toolUsageEffectFrame.Visible = false
 	end
 	if toolUsageEffectText then
-		toolUsageEffectText.Text = if isCoil then GetCoilDescription(item.configId) else ""
+		local coilDescription = if isCoil then GetCoilDescription(item.configId) else ""
+		if coilDescription == "" then
+			toolUsageEffectText.Text = ""
+		else
+			TranslationTool.CustomAutoLocalizeTextLabel(toolUsageEffectText, coilDescription, "")
+		end
 	end
 
 	-- 存储 uid和索引
@@ -259,7 +269,7 @@ local function CreateExEquipSlot(index: number, equipData: GameConfig.ExEquipDat
 		toolIconImage.Image = equipData.iconImageId
 	end
 	if toolNameText then
-		toolNameText.Text = equipData.name_t
+		TranslationTool.CustomAutoLocalizeTextLabel(toolNameText, equipData.name_t, "")
 		toolNameText.TextColor3 = qualityColor
 	end
 	if toolLvText then

@@ -7,6 +7,7 @@ local TranslationTool = require(coreClientScripts:FindFirstChild("TranslationToo
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
+local GameTexts = require(sharedScripts:FindFirstChild("GameTexts"))
 local clientScripts = scripts:WaitForChild("Client")
 local ClientGameInfo = require(clientScripts:FindFirstChild("ClientGameInfo"))
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))

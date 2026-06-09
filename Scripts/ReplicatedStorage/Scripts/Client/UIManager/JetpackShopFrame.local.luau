@@ -82,12 +82,17 @@ local function RefreshInfoFrame()
 
 	local infoFrame: Frame = thisFrame:FindFirstChild("InfoFrame") :: Frame
 	local equipName: TextLabel = infoFrame:FindFirstChild("EquipName") :: TextLabel
-	equipName.Text = jetpackData.name_t
+	TranslationTool.CustomAutoLocalizeTextLabel(equipName, jetpackData.name_t, "")
 	local icon: ImageLabel = infoFrame:FindFirstChild("Icon") :: ImageLabel
 	icon.Image = jetpackData.iconImageId
 	local fuelValue: TextLabel = infoFrame:FindFirstChild("FuelValue") :: TextLabel
 	if fuelValue then
-		fuelValue.Text = tostring(jetpackData.fuel)
+		TranslationTool.CustomAutoLocalizeTextLabel(
+			fuelValue,
+			GameTexts.FuelWithNumber.source,
+			GameTexts.FuelWithNumber.key,
+			{ tostring(jetpackData.fuel) }
+		)
 	end
 	local thrustValue: TextLabel = infoFrame:FindFirstChild("ThrustValue") :: TextLabel
 	if thrustValue then
@@ -264,7 +269,7 @@ local function CreateSelectEquipBtn(jetpackId: number, jetpackData: GameConfig.J
 	end
 
 	local name: TextLabel = equipBtn:FindFirstChild("Name") :: TextLabel
-	name.Text = jetpackData.name_t
+	TranslationTool.CustomAutoLocalizeTextLabel(name, jetpackData.name_t, "")
 	local icon: ImageLabel = equipBtn:FindFirstChild("Icon") :: ImageLabel
 	icon.Image = jetpackData.iconImageId
 	local costFrame: Frame = equipBtn:FindFirstChild("CostFrame") :: Frame
@@ -403,7 +408,7 @@ local function InitFrame()
 			if localPlayerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] >= jetpackData.costCoin then
 				NetMsg.FireRequestBuyJetpack(equipIdLookAt)
 			else
-				ClientMsg.FireShowGameTip(GameTexts.InsufficientCoin.source, GameConfig.GameTipTweenType.FlyUp)
+				ClientMsg.FireShowGameTip(GameTexts.InsufficientCoin.source, GameConfig.GameTipTweenType.FlyUp, GameTexts.InsufficientCoin.key)
 			end
 		elseif currencyType == GameConfig.CurrencyType.Rb then
 			if jetpackData.productId and jetpackData.productId > 0 then
@@ -467,7 +472,11 @@ local function InitFrame()
 				local canClaim = success and isInGroup
 				NetMsg.FireRequestClaimJetpackGroupReward(canClaim)
 				if not canClaim then
-					ClientMsg.FireShowGameTip(GameTexts.JetpackGroupRewardJoinHint.source, GameConfig.GameTipTweenType.FlyUp)
+					ClientMsg.FireShowGameTip(
+						GameTexts.JetpackGroupRewardJoinHint.source,
+						GameConfig.GameTipTweenType.FlyUp,
+						GameTexts.JetpackGroupRewardJoinHint.key
+					)
 				end
 			end)
 		end)

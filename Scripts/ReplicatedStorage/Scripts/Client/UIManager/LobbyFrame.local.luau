@@ -367,7 +367,12 @@ function RefreshUpgradeValues()
 		and not ClientGameInfo.IsInJumpRunwayEscapePhase()
 	if isRunwayMode then
 		local currentFuel = RunwaySession.GetCurrentFuel()
-		maxFuelText.Text = string.format("%.1fs/%.0fs", currentFuel, maxFuelValue)
+		TranslationTool.CustomAutoLocalizeTextLabel(
+			maxFuelText,
+			GameTexts.FuelProgress.source,
+			GameTexts.FuelProgress.key,
+			{ string.format("%.1f", currentFuel), string.format("%.0f", maxFuelValue) }
+		)
 		-- 按燃料比例设置颜色：>66% 绿, >33% 黄, <=33% 红
 		local fuelRatio = if maxFuelValue > 0 then currentFuel / maxFuelValue else 0
 		if fuelRatio > 0.66 then
@@ -378,7 +383,13 @@ function RefreshUpgradeValues()
 			maxFuelText.TextColor3 = Color3.fromRGB(255, 60, 60) -- 红色
 		end
 	else
-		maxFuelText.Text = string.format("%.0fs/%.0fs", maxFuelValue, maxFuelValue)
+		local maxFuelStr = string.format("%.0f", maxFuelValue)
+		TranslationTool.CustomAutoLocalizeTextLabel(
+			maxFuelText,
+			GameTexts.FuelProgress.source,
+			GameTexts.FuelProgress.key,
+			{ maxFuelStr, maxFuelStr }
+		)
 		maxFuelText.TextColor3 = defaultWalkSpeedColor
 	end
 

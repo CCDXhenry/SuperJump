@@ -80,7 +80,7 @@ local function RefreshInfoFrame()
 
 	local infoFrame: Frame = thisFrame:FindFirstChild("InfoFrame") :: Frame
 	local equipName: TextLabel = infoFrame:FindFirstChild("EquipName") :: TextLabel
-	equipName.Text = equipData.name_t
+	TranslationTool.CustomAutoLocalizeTextLabel(equipName, equipData.name_t, "")
 	local icon: ImageLabel = infoFrame:FindFirstChild("Icon") :: ImageLabel
 	icon.Image = equipData.iconImageId
 	local jumpHeightValue: TextLabel = infoFrame:FindFirstChild("JumpHeightValue") :: TextLabel
@@ -236,7 +236,7 @@ local function CreateSelectEquipBtn(equipId: number, equipData: GameConfig.ExEqu
 	end
 
 	local name: TextLabel = equipBtn:FindFirstChild("Name") :: TextLabel
-	name.Text = equipData.name_t
+	TranslationTool.CustomAutoLocalizeTextLabel(name, equipData.name_t, "")
 	local icon: ImageLabel = equipBtn:FindFirstChild("Icon") :: ImageLabel
 	icon.Image = equipData.iconImageId
 	local costFrame: Frame = equipBtn:FindFirstChild("CostFrame") :: Frame
@@ -368,7 +368,7 @@ local function InitFrame()
 			if localPlayerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] >= equipData.costCoin then
 				NetMsg.FireRequestBuyExEquip(equipIdLookAt)
 			else
-				ClientMsg.FireShowGameTip(GameTexts.InsufficientCoin.source, GameConfig.GameTipTweenType.FlyUp)
+				ClientMsg.FireShowGameTip(GameTexts.InsufficientCoin.source, GameConfig.GameTipTweenType.FlyUp, GameTexts.InsufficientCoin.key)
 			end
 		elseif currencyType == GameConfig.CurrencyType.Rb then
 			if equipData.productId and equipData.productId > 0 then
@@ -395,7 +395,11 @@ local function InitFrame()
 			local canClaim = success and isInGroup
 			NetMsg.FireRequestClaimGroupReward(canClaim)
 			if not canClaim then
-				ClientMsg.FireShowGameTip("Join the group to get the exclusive equipment for free!", GameConfig.GameTipTweenType.FlyUp)
+				ClientMsg.FireShowGameTip(
+					GameTexts.ExEquipGroupRewardJoinHint.source,
+					GameConfig.GameTipTweenType.FlyUp,
+					GameTexts.ExEquipGroupRewardJoinHint.key
+				)
 			end
 		end)
 	end

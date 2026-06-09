@@ -145,7 +145,7 @@ local function setRewardText(textLabel: TextLabel, reward: GameConfig.RewardInfo
 
 	if reward.rewardType == GameConfig.RewardType.Coil then
 		local coilData = GameConfig.CoilIdMap[reward.rewardId]
-		local coilName = if coilData then coilData.name_t else "Coil"
+		local coilName = if coilData then coilData.name_t else GameTexts.RewardFallbackCoil.source
 		localizeText(textLabel, coilName)
 		return
 	end
@@ -228,27 +228,27 @@ local function getRewardDisplayName(reward: GameConfig.RewardInfo): string
 
 	if reward.rewardType == GameConfig.RewardType.Coil then
 		local coilData = GameConfig.CoilIdMap[reward.rewardId]
-		return if coilData then coilData.name_t else "Coil"
+		return if coilData then coilData.name_t else GameTexts.RewardFallbackCoil.source
 	end
 
 	if reward.rewardType == GameConfig.RewardType.Brainrot then
 		local brainrotData = GameConfig.BrainrotIdMap[reward.rewardId]
-		return if brainrotData then brainrotData.name_t else "Brainrot"
+		return if brainrotData then brainrotData.name_t else GameTexts.RewardFallbackBrainrot.source
 	end
 
 	if reward.rewardType == GameConfig.RewardType.LittleElfChest then
 		local chestData = GameConfig.LittleElfChestIdMap[reward.rewardId]
-		return if chestData then chestData.name_t else "Chest"
+		return if chestData then chestData.name_t else GameTexts.RewardFallbackChest.source
 	end
 
 	if reward.rewardType == GameConfig.RewardType.Buff then
 		local buffData = GameConfig.BuffIdMap[reward.rewardId]
-		return if buffData then buffData.name_t else "Buff"
+		return if buffData then buffData.name_t else GameTexts.RewardFallbackBuff.source
 	end
 
 	if reward.rewardType == GameConfig.RewardType.Jetpack then
 		local jetpackData = GameConfig.JetpackDataMap[reward.rewardId]
-		return if jetpackData then jetpackData.name_t else "Jetpack"
+		return if jetpackData then jetpackData.name_t else GameTexts.RewardFallbackJetpack.source
 	end
 
 	return NumberExtension.FormatBigNumberAA(reward.rewardCount)

@@ -294,10 +294,14 @@ local function RefreshExerciseInfoLabels(jumpPowerInfo: GameConfig.JumpPowerInfo
 		)
 	end
 	if expLabel ~= nil then
-		expLabel.Text = string.format(
-			"%s/%s",
-			NumberExtension.FormatBigNumberAA(jumpPowerInfo.exp),
-			NumberExtension.FormatBigNumberAA(requiredExp)
+		TranslationTool.CustomAutoLocalizeTextLabel(
+			expLabel,
+			GameTexts.ChestWorkbenchExpProgress.source,
+			GameTexts.ChestWorkbenchExpProgress.key,
+			{
+				NumberExtension.FormatBigNumberAA(jumpPowerInfo.exp),
+				NumberExtension.FormatBigNumberAA(requiredExp),
+			}
 		)
 	end
 end

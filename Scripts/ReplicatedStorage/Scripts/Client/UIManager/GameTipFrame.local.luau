@@ -377,7 +377,12 @@ local function StartPopUpCountdown(targetTimeLabel: TextLabel?, timeoutCallback:
 	end
 	local newCoroutine = coroutine.create(function()
 		for i = GIFT_POPUP_COUNTDOWN_TIME, 0, -1 do
-			TranslationTool.CustomAutoLocalizeTextLabel(targetTimeLabel, string.gsub(GameTexts.CountdownFormat.source, "{1}", tostring(i)), GameTexts.CountdownFormat.key, {tostring(i)})
+			TranslationTool.CustomAutoLocalizeTextLabel(
+				targetTimeLabel,
+				GameTexts.CountdownFormat.source,
+				GameTexts.CountdownFormat.key,
+				{ tostring(i) }
+			)
 			task.wait(1)
 		end
 		timeoutCallback()

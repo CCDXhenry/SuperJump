@@ -81,8 +81,13 @@ function PlayerInteractClientManager.Init()
 
 		NetMsg.ConnectNotifyGiftResult(function(isSuccess: boolean, message: string?)
 			if not isSuccess then
-				local source = string.gsub(GameTexts.GiftFailedFormat.source, "{1}", message or "error")
-				ClientMsg.FireShowTopTipText(source, FAILURE_TIPS_COLOR, FAILURE_TIPS_DURATION, {message or "error"}, GameTexts.GiftFailedFormat.key)
+				ClientMsg.FireShowTopTipText(
+					GameTexts.GiftFailedFormat.source,
+					FAILURE_TIPS_COLOR,
+					FAILURE_TIPS_DURATION,
+					{ message or "error" },
+					GameTexts.GiftFailedFormat.key
+				)
 			end
 		end)
 	end

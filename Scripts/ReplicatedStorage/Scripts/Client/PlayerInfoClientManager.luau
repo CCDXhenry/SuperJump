@@ -10,7 +10,11 @@ local coreSharedScripts = coreScripts:WaitForChild("Shared")
 local NumberExtension = require(coreSharedScripts:WaitForChild("NumberExtension"))
 
 local scripts = replicatedStorage:WaitForChild("Scripts")
+local sharedScripts = scripts:WaitForChild("Shared")
 local clientScripts = scripts:WaitForChild("Client")
+local coreClientScripts = coreScripts:WaitForChild("Client")
+local GameTexts = require(sharedScripts:WaitForChild("GameTexts"))
+local TranslationTool = require(coreClientScripts:WaitForChild("TranslationTool"))
 local ClientGameInfo = require(clientScripts:WaitForChild("ClientGameInfo"))
 local ClientMsg = require(clientScripts:WaitForChild("ClientMsg"))
 local BillboardManager = require(clientScripts:WaitForChild("BillboardManager"))
@@ -76,11 +80,6 @@ local function GetPlayerBestDistance(player: Player): number
 	return 0
 end
 
-local function FormatBestDistanceText(distance: number): string
-	local displayDistance = math.max(0, math.floor(distance + 0.5))
-	return string.format("%sm", NumberExtension.FormatBigNumberAA(displayDistance))
-end
-
 local function GetPlayerDisplayName(player: Player): string
 	if player.DisplayName ~= "" then
 		return player.DisplayName
@@ -104,7 +103,13 @@ local function UpdatePlayerInfoLabels(player: Player, billboardGui: BillboardGui
 		then distanceFrame:FindFirstChild("MaxDistance") :: TextLabel?
 		else nil
 	if maxDistanceLabel ~= nil then
-		maxDistanceLabel.Text = FormatBestDistanceText(GetPlayerBestDistance(player))
+		local displayDistance = math.max(0, math.floor(GetPlayerBestDistance(player) + 0.5))
+		TranslationTool.CustomAutoLocalizeTextLabel(
+			maxDistanceLabel,
+			GameTexts.JumpRunwayDistanceMeters.source,
+			GameTexts.JumpRunwayDistanceMeters.key,
+			{ NumberExtension.FormatBigNumberAA(displayDistance) }
+		)
 	end
 end
 
