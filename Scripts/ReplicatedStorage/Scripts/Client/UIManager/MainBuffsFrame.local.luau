@@ -7,7 +7,6 @@ local TranslationTool = require(coreClientScripts:FindFirstChild("TranslationToo
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
-local GameTexts = require(sharedScripts:FindFirstChild("GameTexts"))
 local clientScripts = scripts:WaitForChild("Client")
 local ClientGameInfo = require(clientScripts:FindFirstChild("ClientGameInfo"))
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
@@ -108,6 +107,7 @@ local function RefreshBuffIcons(playFlyInBuffId: number?)
 			iconFrameWrapper.iconImage.Image = buffData.iconImageId
 			iconFrameWrapper.textLabel.Text = string.format("X%d", buffData.buffValue)
 			hintFrameWrapper.hintFrame.Parent = buffHints2Frame
+			localizeText(hintFrameWrapper.hintText, buffData.describe_t)
 		end
 	end
 	if playFlyInBuffId ~= nil and IsBuffOwned(playFlyInBuffId) then
@@ -132,6 +132,7 @@ end
 local function CreateHintFrame(): HintFrameWrapper
 	local hintFrame: Frame = buffHintFrameOrigin:Clone()
 	local hintText: TextLabel = hintFrame:FindFirstChild("BuffHintText") :: TextLabel
+	hintText.AutoLocalize = false
 	return {
 		hintFrame = hintFrame,
 		hintText = hintText,
@@ -148,7 +149,6 @@ local function InitBuffHintsFrame()
 		layoutOrder += 1
 		local hintFrameWrapper = CreateHintFrame()
 		hintFrameWrapper.hintFrame.LayoutOrder = layoutOrder
-		localizeText(hintFrameWrapper.hintText, buffData.describe_t)
 		buffHintFrameWrapperMap[buffId] = hintFrameWrapper
 	end
 end
