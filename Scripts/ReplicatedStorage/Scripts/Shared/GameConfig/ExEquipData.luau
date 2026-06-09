@@ -7,7 +7,7 @@ return {
 		["iconImageId"] = "rbxassetid://109696861846778",
 		["name_t"] = "Velocity Tread",
 		["Column14"] = 0,
-		["costCoin"] = 0,
+		["costCoin"] = 10,
 		["productId"] = 0,
 		["costRb"] = 0,
 		["ability"] = 1,
