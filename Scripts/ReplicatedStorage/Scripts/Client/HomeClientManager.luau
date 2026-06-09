@@ -165,6 +165,7 @@ local COLLECT_YIELD_TEXT_REFRESH_INTERVAL = 0.12
 local CLAIM_REQUEST_COOLDOWN_SEC = 0.8
 local lastCollectYieldTextRefreshAt = 0.0
 local BILLBOARD_TRACKED_ATTR = "BillboardTracked"
+local COLLECT_YIELD_TEXT_MANUAL_ATTR = "CollectYieldTextManual"
 local PLACE_MODEL_INFO_UI_BASE_STUDS_OFFSET_Y_ATTR = "BaseStudsOffsetY"
 local LOCAL_SLOT_RECOVERY_DELAY = 0.25
 local LOCAL_SLOT_RECOVERY_MAX_ATTEMPTS = 24
@@ -257,7 +258,10 @@ local function setCollectYieldText(
 	pointIndexStr: string?,
 	displayAmount: number?
 )
-	TranslationTool.RemoveCustomAutoLocalizeGui(collectText)
+	if collectText:GetAttribute(COLLECT_YIELD_TEXT_MANUAL_ATTR) ~= true then
+		TranslationTool.RemoveCustomAutoLocalizeGui(collectText)
+		collectText:SetAttribute(COLLECT_YIELD_TEXT_MANUAL_ATTR, true)
+	end
 	if text == "0" and collectText.Text ~= "0" then
 		local debugKey = tostring(ownerUserId) .. ":" .. tostring(pointIndexStr) .. ":" .. tostring(source)
 		local now = os.clock()

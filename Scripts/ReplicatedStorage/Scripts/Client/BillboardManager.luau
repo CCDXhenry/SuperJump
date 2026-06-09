@@ -4,6 +4,7 @@ local runService = game:GetService("RunService")
 local BillboardManager = {}
 local infoGuis: { BillboardGui } = {}
 local infoGuiIndexMap: { [BillboardGui]: number } = {}
+local MAX_INFO_UI_SCALE = 1.2
 
 local function RemoveInfoGuiByIndex(index: number)
 	local lastIndex = #infoGuis
@@ -39,10 +40,14 @@ local function UpdateSingleInfoScale(infoUI: BillboardGui)
 	if controllerWidth <= 0 or controllerHeight <= 0 then
 		return
 	end
-	uiScale.Scale = math.min(
+	local rawScale = math.min(
 		infoUI.AbsoluteSize.X / controllerWidth,
 		infoUI.AbsoluteSize.Y / controllerHeight
 	)
+	local nextScale = math.min(rawScale, MAX_INFO_UI_SCALE)
+	if math.abs(uiScale.Scale - nextScale) > 0.001 then
+		uiScale.Scale = nextScale
+	end
 end
 
 local function UpdateAllInfoScales()
