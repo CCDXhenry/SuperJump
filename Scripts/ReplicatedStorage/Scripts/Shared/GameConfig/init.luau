@@ -1166,15 +1166,15 @@ GameConfig.JumpRunwayDesigner = {
 	-- 与追击者水平距离：最远参考（stud）；≥ 此值按最远档闪烁
 	ESCAPE_RED_SCREEN_FAR_DISTANCE_STUDS = 200,
 	-- 最近档（≤ NEAR_DISTANCE）正弦脉冲周期（秒）
-	ESCAPE_RED_SCREEN_PULSE_PERIOD_NEAR_SEC = 1,
+	ESCAPE_RED_SCREEN_PULSE_PERIOD_NEAR_SEC = 0.5,
 	-- 最远档（≥ FAR_DISTANCE）正弦脉冲周期（秒）
-	ESCAPE_RED_SCREEN_PULSE_PERIOD_FAR_SEC = 2,
+	ESCAPE_RED_SCREEN_PULSE_PERIOD_FAR_SEC = 1,
 	-- 最近档闪烁透明度区间 [MIN, MAX]
 	ESCAPE_RED_SCREEN_PULSE_TRANSPARENCY_MIN_NEAR = 0,
-	ESCAPE_RED_SCREEN_PULSE_TRANSPARENCY_MAX_NEAR = 0.6,
+	ESCAPE_RED_SCREEN_PULSE_TRANSPARENCY_MAX_NEAR = 0.3,
 	-- 最远档闪烁透明度区间 [MIN, MAX]（随距离从最近档区间线性平移到此）
-	ESCAPE_RED_SCREEN_PULSE_TRANSPARENCY_MIN_FAR = 0.6,
-	ESCAPE_RED_SCREEN_PULSE_TRANSPARENCY_MAX_FAR = 1,
+	ESCAPE_RED_SCREEN_PULSE_TRANSPARENCY_MIN_FAR = 0.3,
+	ESCAPE_RED_SCREEN_PULSE_TRANSPARENCY_MAX_FAR = 0.6,
 }
 
 local jumpRunwayDesigner = GameConfig.JumpRunwayDesigner
@@ -1792,6 +1792,24 @@ end)
 
 for _, bundleConfig in ipairs(sortedShopBundleConfigs) do
 	table.insert(GameConfig.ShopBundleList, bundleConfig.id)
+end
+
+GameConfig.JetpackShopBundleIdByJetpackId = {} :: { [number]: number }
+for bundleId, bundleData in pairs(GameConfig.ShopBundleById) do
+	for _, reward in ipairs(bundleData.rewards) do
+		if reward.rewardType == GameConfig.RewardType.Jetpack then
+			GameConfig.JetpackShopBundleIdByJetpackId[reward.rewardId] = bundleId
+		end
+	end
+end
+
+function GameConfig.GetJetpackShopBundleConfig(jetpackId: number): ShopBundleConfigurationData?
+	local bundleId = GameConfig.JetpackShopBundleIdByJetpackId[jetpackId]
+	if bundleId == nil then
+		return nil
+	end
+	local bundleData = GameConfig.ShopBundleById[bundleId]
+	return if bundleData ~= nil then bundleData.config else nil
 end
 
 export type ShopPaidConfig = {
