@@ -26,9 +26,20 @@ local FINGER_PULSE_TWEEN_INFO: TweenInfo =
 	TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
 local FINGER_CLONE_NAME = "GuideFingerClone"
 local FINGER_ZINDEX_BOOST = 50
+local FINGER_PARENT_ZINDEX = 99
 
 local fingerPulseTween: Tween? = nil
 local fingerClone: ImageLabel? = nil
+local fingerZIndexTarget: GuiObject? = nil
+local fingerZIndexOriginal: number? = nil
+
+local function RestoreFingerParentZIndex()
+	if fingerZIndexTarget ~= nil and fingerZIndexOriginal ~= nil then
+		fingerZIndexTarget.ZIndex = fingerZIndexOriginal
+	end
+	fingerZIndexTarget = nil
+	fingerZIndexOriginal = nil
+end
 
 local function StopGuideAni()
 	if fingerPulseTween ~= nil then
@@ -39,6 +50,7 @@ local function StopGuideAni()
 		fingerClone:Destroy()
 		fingerClone = nil
 	end
+	RestoreFingerParentZIndex()
 	fingerImage.Visible = false
 	fingerImageScale.Scale = 1
 end
@@ -56,6 +68,9 @@ end
 -- 将 FingerImage 克隆到 target 子级，在目标局部中心做缩放动画
 local function MountFingerCloneUnder(target: GuiObject)
 	StopGuideAni()
+	fingerZIndexTarget = target
+	fingerZIndexOriginal = target.ZIndex
+	target.ZIndex = FINGER_PARENT_ZINDEX
 	local clone = fingerImage:Clone()
 	clone.Name = FINGER_CLONE_NAME
 	clone.Visible = true
