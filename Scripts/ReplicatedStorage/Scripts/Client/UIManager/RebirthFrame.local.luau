@@ -60,14 +60,6 @@ local function getRebirthMultiplier(rebirthCount: number): number
 	return rebirthData.collectMultiple
 end
 
-local function formatTemplate(sourceText: string, args: { string }): string
-	local formattedText = sourceText
-	for i, value in args do
-		formattedText = string.gsub(formattedText, "{" .. tostring(i) .. "}", value)
-	end
-	return formattedText
-end
-
 local function checkRebirthRequirements(localPlayerInfo: GameConfig.ClientLocalPlayerInfo): boolean
 	local currentRebirthLevel = localPlayerInfo.shopInfo.rebirthLevel or 0
 	local nextRebirthData = GameConfig.RebirthMap[currentRebirthLevel + 1]
@@ -81,8 +73,9 @@ local function checkRebirthRequirements(localPlayerInfo: GameConfig.ClientLocalP
 	if currentJumpPowerLevel < nextRebirthData.jumppowerLv then
 		table.insert(
 			missingRequirements,
-			formatTemplate(
+			TranslationTool.FormatByKey(
 				GameTexts.JumpPowerLevelProgress.source,
+				GameTexts.JumpPowerLevelProgress.key,
 				{ tostring(currentJumpPowerLevel), tostring(nextRebirthData.jumppowerLv) }
 			)
 		)

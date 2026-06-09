@@ -7,10 +7,16 @@ local replicatedStorage = game:GetService("ReplicatedStorage")
 local tweenService = game:GetService("TweenService")
 local runService = game:GetService("RunService")
 
+local core = replicatedStorage:WaitForChild("Core")
+local coreScripts = core:WaitForChild("Scripts")
+local coreSharedScripts = coreScripts:WaitForChild("Shared")
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local clientScripts = scripts:WaitForChild("Client")
+local NumberExtension = require(coreSharedScripts:WaitForChild("NumberExtension"))
 local GameConfig = require(sharedScripts:WaitForChild("GameConfig"))
+local GameTexts = require(sharedScripts:WaitForChild("GameTexts"))
+local TranslationTool = require(coreScripts:WaitForChild("Client"):WaitForChild("TranslationTool"))
 local NetMsg = require(sharedScripts:WaitForChild("NetMsg"))
 local ClientMsg = require(clientScripts:WaitForChild("ClientMsg"))
 local ClientGameInfo = require(clientScripts:WaitForChild("ClientGameInfo"))
@@ -272,7 +278,12 @@ local function CreateExEquipSlot(index: number, equipData: GameConfig.ExEquipDat
 		toolUsageEffectFrame.Visible = false
 	end
 	if toolUsageEffectText then
-		toolUsageEffectText.Text = string.format("+%s Speed", tostring(equipData.ability))
+		TranslationTool.CustomAutoLocalizeTextLabel(
+			toolUsageEffectText,
+			GameTexts.PowerBonusWithNumber.source,
+			GameTexts.PowerBonusWithNumber.key,
+			{ NumberExtension.FormatBigNumberAA(equipData.ability) }
+		)
 	end
 
 	slot:SetAttribute("equipId", equipData.id)

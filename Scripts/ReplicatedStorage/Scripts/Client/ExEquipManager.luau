@@ -20,7 +20,9 @@ local NumberExtension = require(coreSharedScripts:FindFirstChild("NumberExtensio
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
+local GameTexts = require(sharedScripts:FindFirstChild("GameTexts"))
 local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
+local TranslationTool = require(coreScripts:WaitForChild("Client"):WaitForChild("TranslationTool"))
 local clientScripts = scripts:WaitForChild("Client")
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
 local ClientGameInfo = require(clientScripts:FindFirstChild("ClientGameInfo"))
@@ -284,7 +286,12 @@ local function RefreshExerciseInfoLabels(jumpPowerInfo: GameConfig.JumpPowerInfo
 	local lvLabel = expImage:FindFirstChild("LvLabel") :: TextLabel?
 	local expLabel = expImage:FindFirstChild("ExpLabel") :: TextLabel?
 	if lvLabel ~= nil then
-		lvLabel.Text = string.format("Lv%d", jumpPowerInfo.lv)
+		TranslationTool.CustomAutoLocalizeTextLabel(
+			lvLabel,
+			GameTexts.LevelWithNumberCompact.source,
+			GameTexts.LevelWithNumberCompact.key,
+			{ tostring(jumpPowerInfo.lv) }
+		)
 	end
 	if expLabel ~= nil then
 		expLabel.Text = string.format(
@@ -306,7 +313,12 @@ local function UpdateExerciseInfoView()
 	local speedLabel = equipFrame:FindFirstChild("ExSpeedLabel") :: TextLabel?
 	if speedLabel ~= nil then
 		local speedValue = if equipData ~= nil then equipData.ability else 0
-		speedLabel.Text = string.format("%s Speed", NumberExtension.FormatBigNumberAA(speedValue))
+		TranslationTool.CustomAutoLocalizeTextLabel(
+			speedLabel,
+			GameTexts.PowerBonusWithNumber.source,
+			GameTexts.PowerBonusWithNumber.key,
+			{ NumberExtension.FormatBigNumberAA(speedValue) }
+		)
 	end
 
 	local jumpPowerInfo = localPlayerInfo.jumpPower
