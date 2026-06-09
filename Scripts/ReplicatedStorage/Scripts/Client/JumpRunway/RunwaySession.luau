@@ -1107,7 +1107,8 @@ function RunwaySession.RefreshJumpRunWayFrameStats(hrp: BasePart?)
 	local fuelVisible = localState.phase == Ph.Airborne
 		and localState.takeoffCount >= cfg.N_TOTAL_JUMPS
 		and maxFuel > 0
-	local distanceVisible = distanceStuds > 0
+	local suppressDistanceHudForChestOpen = Refs.chestRewardWaitPose == true or Refs.chestAnimPlaying == true
+	local distanceVisible = distanceStuds > 0 and not suppressDistanceHudForChestOpen
 	ClientMsg.FireJumpRunWayRefreshStats(distanceStuds, localState.fuel, maxFuel, fuelVisible, distanceVisible, horizontalSpeed)
 end
 

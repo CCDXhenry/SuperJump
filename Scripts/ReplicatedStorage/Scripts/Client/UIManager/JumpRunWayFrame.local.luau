@@ -555,6 +555,8 @@ local function ResolveSpeedValue()
 		return
 	end
 	speedValue = value :: TextLabel
+	speedLabel.Visible = cfg.DEBUG
+	speedValue.Visible = cfg.DEBUG
 end
 
 local function ResolveTipText()
@@ -664,22 +666,24 @@ local function RefreshRunwayStats(
 	end
 
 	local isEscapePhase = ClientGameInfo.IsInJumpRunwayEscapePhase()
-	local movementBarVisible = ClientGameInfo.IsInJumpRunway() and not isEscapePhase and distanceStuds > 0
+	local inRunwayHud = ClientGameInfo.IsInJumpRunway() and not isEscapePhase and distanceStuds > 0
+	local distanceHudVisible = inRunwayHud and distanceVisible
+	local speedHudVisible = inRunwayHud and cfg.DEBUG
 	if distanceLabel ~= nil then
-		distanceLabel.Visible = movementBarVisible
+		distanceLabel.Visible = distanceHudVisible
 	end
 	if distanceValue ~= nil then
-		distanceValue.Visible = movementBarVisible
-		if movementBarVisible then
+		distanceValue.Visible = distanceHudVisible
+		if distanceHudVisible then
 			distanceValue.Text = string.format("%dm", math.max(0, math.floor(distanceStuds + 0.5)))
 		end
 	end
 	if speedLabel ~= nil then
-		speedLabel.Visible = movementBarVisible
+		speedLabel.Visible = speedHudVisible
 	end
 	if speedValue ~= nil then
-		speedValue.Visible = movementBarVisible
-		if movementBarVisible then
+		speedValue.Visible = speedHudVisible
+		if speedHudVisible then
 			TranslationTool.CustomAutoLocalizeTextLabel(
 				speedValue,
 				GameTexts.JumpRunwaySpeedMetersPerSecond.source,
@@ -690,7 +694,7 @@ local function RefreshRunwayStats(
 	end
 
 	if movementBarBg ~= nil then
-		if movementBarVisible then
+		if distanceHudVisible then
 			movementBarBg.Visible = true
 			UpdateMovementBar(distanceStuds)
 		else
