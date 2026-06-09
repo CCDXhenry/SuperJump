@@ -1208,7 +1208,7 @@ GameConfig.ExerciseClickReward = {
 GameConfig.JumpRunway = {
 	-- —— 会话与诊断 ——
 	-- 开发诊断：为 true 时客户端显示调试 HUD、服务端节流打印状态；发布务必保持 false（零额外 GUI/打印开销）
-	DEBUG = true,
+	DEBUG = false,
 	-- 分阶段真实位移日志：独立于 DEBUG，用于公式校准
 	RUNWAY_DISTANCE_LOG_ENABLED = jumpRunwayDesigner.RUNWAY_DISTANCE_LOG_ENABLED,
 	N_TOTAL_JUMPS = jumpRunwayDesigner.N_TOTAL_JUMPS,

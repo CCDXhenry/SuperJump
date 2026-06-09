@@ -7058,15 +7058,17 @@ function RunwaySession.ResolveAutoBeforeLineRating(jumpIndex: number, hrp: BaseP
 	if typeof(perfectDistance) ~= "number" or perfectDistance ~= perfectDistance or perfectDistance < 0 then
 		perfectDistance = 3
 	end
+	if cfg.DEBUG then
 	print(
 		string.format(
 			"[JumpRunwayBeginLineDistance] jump=%d distToBegin=%.2f perfectDistance=%.2f maxDist=%.2f",
 			jumpIndex,
 			distToBegin,
 			perfectDistance,
-			maxDist
+				maxDist
+			)
 		)
-	)
+	end
 	if distToBegin <= perfectDistance then
 		local progress = math.clamp((perfectDistance - distToBegin) / math.max(perfectDistance, 1e-4), 0, 1)
 		return 1, RunwaySession.LerpNumber(okRatio, perfectRatio, progress), "AutoBeforeLine"
@@ -7396,7 +7398,7 @@ function RunwaySession.JumpTry(): boolean
 		end
 	end
 	local okDist, distFeet = RunwaySession.RaycastFeet(humanoid)
-	if okDist then
+	if okDist and cfg.RUNWAY_DISTANCE_LOG_ENABLED then
 		local deltaT = if localState.tHudStart ~= nil then nowClock - (localState.tHudStart :: number) else -1
 		local okBegin, distToBegin, _maxDist = RunwaySession.ResolveBeginLineAlongMetrics(hrp)
 		local distToBeginText = if okBegin then string.format("%.2f", distToBegin) else "n/a"

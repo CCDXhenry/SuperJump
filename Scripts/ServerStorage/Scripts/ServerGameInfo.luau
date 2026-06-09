@@ -1434,7 +1434,9 @@ end
 
 -- 更新玩家 JumpRunway 最远距离记录（仅当新距离更远时写入）
 function ServerGameInfo.UpdateJumpRunwayBestDistance(player: Player, distance: number)
-	print("ServerGameInfo.UpdateJumpRunwayBestDistance", player.Name, distance)
+	if GameConfig.JumpRunway.DEBUG then
+		print("ServerGameInfo.UpdateJumpRunwayBestDistance", player.Name, distance)
+	end
 	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
 	if playerInfo == nil then
 		return

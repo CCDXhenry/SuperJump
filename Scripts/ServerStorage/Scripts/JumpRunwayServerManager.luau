@@ -381,7 +381,9 @@ local function LockScoreAndTeleport(player: Player, st: RunState, nowClock: numb
 		scoreSource = math.max(0, finalAlongOpt :: number)
 	end
 	local capped = math.min(scoreSource, cfg.ANTI_CHEAT_DISTANCE_HARD_CAP)
-	print("[JumpRunwayServerManager] LockScoreAndTeleport for", player.Name, "capped", capped)
+	if cfg.DEBUG then
+		print("[JumpRunwayServerManager] LockScoreAndTeleport for", player.Name, "capped", capped)
+	end
 	playerFinalScore[player.UserId] = capped
 	player:SetAttribute("JumpRunwayCooldownUntil", nowClock + cfg.RUN_START_COOLDOWN)
 	NotifyJumpRunway(player, Ph.ScoreLocked, capped, capped, st.runwayForward, st.runwayOrigin, true)
@@ -826,7 +828,9 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 			)
 		end
 	elseif kind == Kind.Final then
-		print("[JumpRunwayServerManager] Final report for", player.Name, "distance", report.finalAlong or maxAlongByUserId[player.UserId])
+		if cfg.DEBUG then
+			print("[JumpRunwayServerManager] Final report for", player.Name, "distance", report.finalAlong or maxAlongByUserId[player.UserId])
+		end
 		JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, false)
 		LockScoreAndTeleport(player, st, nowClock, report.finalAlong)
 	elseif kind == Kind.Input then
