@@ -255,7 +255,12 @@ local function ShowGameTip(tipContentSource: string, tweenType: number, tipConte
 		gameTipText.TextTransparency = 0
 		gameTipTextTweens.twinkleTween2:Play()
 	end
-	TranslationTool.CustomAutoLocalizeTextLabel(gameTipText, tipContentSource, tipContentKey, tipContentArgs)
+	local localizedArgs = tipContentArgs
+	if tipContentKey == GameTexts.ReceivedReward.key and tipContentArgs ~= nil and tipContentArgs[1] ~= nil then
+		localizedArgs = table.clone(tipContentArgs)
+		localizedArgs[1] = TranslationTool.Translate(gameTipText, tipContentArgs[1])
+	end
+	TranslationTool.CustomAutoLocalizeTextLabel(gameTipText, tipContentSource, tipContentKey, localizedArgs)
 end
 
 local function ShowAddRewardsTip(rewardIcon: string, rewardCount: number)
