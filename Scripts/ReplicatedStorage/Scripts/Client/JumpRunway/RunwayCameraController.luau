@@ -46,6 +46,10 @@ local state: CameraState = {
 }
 
 local TransitionPollIntervalSec = 0.03
+local DeferredSubjectRestorePollIntervalSec = 0.05
+local DeferredSubjectRestoreMaxAttempts = 100
+
+local deferredSubjectRestoreToken = 0
 
 local function SetPendingReleaseContext(ctx: ReleaseTransitionContext?)
 	state.pendingReleaseContext = ctx
@@ -106,6 +110,50 @@ local function ResolveChaserReturnHomeTransitionDuration(cfg: any?): number
 	return duration
 end
 
+local function ResolveLiveCameraSubject(
+	restoreSubject: Instance?,
+	getCharacterParts: () -> (Model?, Humanoid?, BasePart?)
+): Humanoid?
+	local _character, humanoid, _ = getCharacterParts()
+	if humanoid ~= nil and humanoid.Health > 0 then
+		return humanoid
+	end
+	if restoreSubject ~= nil and restoreSubject.Parent ~= nil and restoreSubject:IsA("Humanoid") then
+		local restoredHumanoid = restoreSubject :: Humanoid
+		if restoredHumanoid.Health > 0 then
+			return restoredHumanoid
+		end
+	end
+	return nil
+end
+
+local function ScheduleDeferredCameraSubjectRestore(
+	camera: Camera,
+	getCharacterParts: () -> (Model?, Humanoid?, BasePart?)
+)
+	deferredSubjectRestoreToken += 1
+	local token = deferredSubjectRestoreToken
+	task.spawn(function()
+		for _ = 1, DeferredSubjectRestoreMaxAttempts do
+			if deferredSubjectRestoreToken ~= token then
+				return
+			end
+			if camera.Parent == nil then
+				return
+			end
+			local liveSubject = ResolveLiveCameraSubject(nil, getCharacterParts)
+			if liveSubject ~= nil then
+				camera.CameraSubject = liveSubject
+				if camera.CameraType == Enum.CameraType.Scriptable then
+					camera.CameraType = Enum.CameraType.Custom
+				end
+				return
+			end
+			task.wait(DeferredSubjectRestorePollIntervalSec)
+		end
+	end)
+end
+
 local function RestoreCameraControl(
 	camera: Camera,
 	restoreCameraType: Enum.CameraType?,
@@ -113,13 +161,9 @@ local function RestoreCameraControl(
 	restoreFov: number?,
 	getCharacterParts: () -> (Model?, Humanoid?, BasePart?)
 )
-	if restoreSubject ~= nil and restoreSubject.Parent ~= nil then
-		camera.CameraSubject = restoreSubject
-	else
-		local _, humanoid, _ = getCharacterParts()
-		if humanoid ~= nil then
-			camera.CameraSubject = humanoid
-		end
+	local liveSubject = ResolveLiveCameraSubject(restoreSubject, getCharacterParts)
+	if liveSubject ~= nil then
+		camera.CameraSubject = liveSubject
 	end
 	if restoreFov ~= nil then
 		camera.FieldOfView = restoreFov
@@ -128,6 +172,9 @@ local function RestoreCameraControl(
 		camera.CameraType = restoreCameraType
 	else
 		camera.CameraType = Enum.CameraType.Custom
+	end
+	if liveSubject == nil then
+		ScheduleDeferredCameraSubjectRestore(camera, getCharacterParts)
 	end
 end
 
@@ -223,6 +270,9 @@ local function PlayReleaseTransition(
 	onComplete: (() -> ())?
 )
 	if not PlayCameraTransition(camera, transitionToken, releaseDuration, startCFrame, targetCFrame, startFov, targetFov) then
+		if state.releaseTransitionToken == transitionToken then
+			RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+		end
 		EndReleaseTransition()
 		return
 	end
@@ -430,6 +480,9 @@ function RunwayCameraController.Disable(
 	state.smoothedCameraFov = nil
 	state.chestOpenZoomActive = false
 	if not state.active then
+		if state.releaseTransitionInProgress then
+			ForceCompletePendingRelease()
+		end
 		return
 	end
 	state.active = false
@@ -559,6 +612,9 @@ function RunwayCameraController.FocusChaserThenDisable(
 		)
 		if focusDuration > 0 then
 			if not PlayCameraTransition(camera, transitionToken, focusDuration, startCFrame, focusCFrame, startFov, cfg.RUNWAY_CAMERA_FOV) then
+				if state.releaseTransitionToken == transitionToken then
+					RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+				end
 				EndReleaseTransition()
 				return
 			end
@@ -567,6 +623,9 @@ function RunwayCameraController.FocusChaserThenDisable(
 			camera.FieldOfView = cfg.RUNWAY_CAMERA_FOV
 		end
 		if not PlayHold(camera, transitionToken, holdDuration) then
+			if state.releaseTransitionToken == transitionToken then
+				RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+			end
 			EndReleaseTransition()
 			return
 		end
