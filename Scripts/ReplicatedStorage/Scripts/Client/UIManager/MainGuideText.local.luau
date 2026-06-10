@@ -13,6 +13,7 @@ local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
 local clientScripts = scripts:WaitForChild("Client")
 local ClientGameInfo = require(clientScripts:FindFirstChild("ClientGameInfo"))
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
+local GuideManager = require(clientScripts:FindFirstChild("GuideManager"))
 
 local guideText: TextLabel = script.Parent
 
@@ -27,7 +28,8 @@ end
 
 local guideTextPulseConn: RBXScriptConnection? = nil
 local guideTextPulsePhase = 0
-local lastAnimatedGuideType = GameConfig.GuideType.None
+local lastAnimatedGuideTextKey = -1
+local lastTeleShopGuideTextActive: boolean? = nil
 
 local function CancelGuideTextPulse()
 	if guideTextPulseConn ~= nil then
@@ -45,7 +47,24 @@ local function StopGuideTextAni()
 	if uiStroke then
 		uiStroke.Transparency = 0
 	end
-	lastAnimatedGuideType = GameConfig.GuideType.None
+	lastAnimatedGuideTextKey = -1
+end
+
+local function IsShopTutorialGuideType(guideType: number): boolean
+	return guideType == GameConfig.GuideType.TutorialJetpackBuy
+		or guideType == GameConfig.GuideType.TutorialExEquipBuy
+		or guideType == GameConfig.GuideType.TutorialWalkSpeedUpgrade
+end
+
+local function IsShowingTeleShopGuideText(guideType: number): boolean
+	return IsShopTutorialGuideType(guideType) and GuideManager.ShouldGuideTeleShopFirst(guideType)
+end
+
+local function GetGuideTextAnimationKey(guideType: number): number
+	if IsShowingTeleShopGuideText(guideType) then
+		return guideType * 10 + 1
+	end
+	return guideType * 10
 end
 
 local function UpdateGuideTextPulse(dt: number)
@@ -93,6 +112,9 @@ local function GetCurrentInputSuffix(): string
 end
 
 local function GetGuideTextConfig(currentGuideType: number): { source: string, key: string }?
+	if IsShowingTeleShopGuideText(currentGuideType) then
+		return GameTexts.GuideTutorialTeleShop
+	end
 	if currentGuideType == GameConfig.GuideType.TutorialBeginLineJump then
 		return GameTexts["GuideTutorialBeginLineJump" .. GetCurrentInputSuffix()] :: { source: string, key: string }?
 	end
@@ -133,9 +155,10 @@ local function RefreshGuideText()
 
 	guideText.Visible = true
 	TranslationTool.CustomAutoLocalizeTextLabel(guideText, textConfig.source, textConfig.key)
-	if lastAnimatedGuideType ~= currentGuideType then
+	local animationKey = GetGuideTextAnimationKey(currentGuideType)
+	if lastAnimatedGuideTextKey ~= animationKey then
 		StartGuideTextAni()
-		lastAnimatedGuideType = currentGuideType
+		lastAnimatedGuideTextKey = animationKey
 	end
 end
 
@@ -154,6 +177,20 @@ userInputService.LastInputTypeChanged:Connect(function()
 end)
 
 ClientMsg.ConnectLocalPlayerCurrencyUpdate(function()
+	RefreshGuideText()
+end)
+
+runService.RenderStepped:Connect(function()
+	local currentGuideType = ClientGameInfo.GetCurrentGuideType()
+	if not IsShopTutorialGuideType(currentGuideType) then
+		lastTeleShopGuideTextActive = nil
+		return
+	end
+	local teleShopGuideTextActive = IsShowingTeleShopGuideText(currentGuideType)
+	if teleShopGuideTextActive == lastTeleShopGuideTextActive then
+		return
+	end
+	lastTeleShopGuideTextActive = teleShopGuideTextActive
 	RefreshGuideText()
 end)
 

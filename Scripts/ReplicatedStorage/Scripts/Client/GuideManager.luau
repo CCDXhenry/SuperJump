@@ -785,6 +785,31 @@ local function ResolveWorldTargetForGuide(guideType: number): Vector3?
 	return nil
 end
 
+local function IsTeleShopGuideType(guideType: number): boolean
+	return guideType == GameConfig.GuideType.TutorialJetpackBuy
+		or guideType == GameConfig.GuideType.TutorialExEquipBuy
+		or guideType == GameConfig.GuideType.TutorialWalkSpeedUpgrade
+end
+
+local function IsPlayerFarFromShopGuideTarget(guideType: number): boolean
+	if not IsTeleShopGuideType(guideType) then
+		return false
+	end
+	local target = ResolveWorldTargetForGuide(guideType)
+	if target == nil then
+		return false
+	end
+	local hrp = GetLocalPlayerHrp()
+	if hrp == nil then
+		return false
+	end
+	return (hrp.Position - target).Magnitude > GameConfig.GuideShopTeleportDistanceThreshold
+end
+
+function GuideManager.ShouldGuideTeleShopFirst(guideType: number): boolean
+	return IsPlayerFarFromShopGuideTarget(guideType)
+end
+
 local function IsRunwayGuideType(guideType: number): boolean
 	return guideType == GameConfig.GuideType.TutorialBeginLineJump
 		or guideType == GameConfig.GuideType.TutorialLandingJump
@@ -850,6 +875,10 @@ local function UpdateGuideArrow()
 		or guideType == GameConfig.GuideType.TutorialJetpackBuy
 		or guideType == GameConfig.GuideType.TutorialExEquipBuy
 	if not needsWorldArrow then
+		guideArrowModel.Parent = nil
+		return
+	end
+	if IsPlayerFarFromShopGuideTarget(guideType) then
 		guideArrowModel.Parent = nil
 		return
 	end

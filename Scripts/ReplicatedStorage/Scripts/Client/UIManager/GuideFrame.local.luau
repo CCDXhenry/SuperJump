@@ -13,6 +13,7 @@ local tweenService: TweenService = game:GetService("TweenService")
 local clientScripts = scripts:WaitForChild("Client")
 local ClientGameInfo = require(clientScripts:FindFirstChild("ClientGameInfo"))
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
+local GuideManager = require(clientScripts:FindFirstChild("GuideManager"))
 
 local guideFrame: Frame = script.Parent
 guideFrame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -414,6 +415,46 @@ local function FindExEquipGuideButton(): GuiButton?
 	return nil
 end
 
+local function FindTeleShopButton(): GuiButton?
+	local screenGui = FindGameScreenGui()
+	if screenGui == nil then
+		return nil
+	end
+	local lobby = screenGui:FindFirstChild("LobbyFrame") :: Frame?
+	if lobby == nil then
+		return nil
+	end
+	local teleShopBtn = lobby:FindFirstChild("TeleShopButton")
+	if teleShopBtn ~= nil and teleShopBtn:IsA("GuiButton") then
+		return teleShopBtn
+	end
+	return nil
+end
+
+local function FindTeleShopGuideButton(guideType: number): GuiButton?
+	if not GuideManager.ShouldGuideTeleShopFirst(guideType) then
+		return nil
+	end
+	return FindTeleShopButton()
+end
+
+local function ResolveShopTutorialGuideButton(guideType: number): GuiButton?
+	local teleShopBtn = FindTeleShopGuideButton(guideType)
+	if teleShopBtn ~= nil then
+		return teleShopBtn
+	end
+	if guideType == GameConfig.GuideType.TutorialJetpackBuy then
+		return FindJetpackGuideButton()
+	end
+	if guideType == GameConfig.GuideType.TutorialExEquipBuy then
+		return FindExEquipGuideButton()
+	end
+	if guideType == GameConfig.GuideType.TutorialWalkSpeedUpgrade then
+		return FindUpgradeShopWalkSpeedButton()
+	end
+	return nil
+end
+
 local function FindExEquipBackpackSlotButton(): GuiButton?
 	local screenGui = FindGameScreenGui()
 	if screenGui == nil then
@@ -509,20 +550,10 @@ local function RefreshGuideFrame()
 		return
 	end
 
-	if guideType == GameConfig.GuideType.TutorialJetpackBuy then
-		local guideBtn = FindJetpackGuideButton()
-		if guideBtn == nil or not IsGuiVisibleChain(guideBtn) then
-			guideFrame.Visible = false
-			StopGuideAni()
-			return
-		end
-		MountFingerCloneUnder(guideBtn)
-		guideFrame.Visible = false
-		return
-	end
-
-	if guideType == GameConfig.GuideType.TutorialExEquipBuy then
-		local guideBtn = FindExEquipGuideButton()
+	if guideType == GameConfig.GuideType.TutorialJetpackBuy
+		or guideType == GameConfig.GuideType.TutorialExEquipBuy
+	then
+		local guideBtn = ResolveShopTutorialGuideButton(guideType)
 		if guideBtn == nil or not IsGuiVisibleChain(guideBtn) then
 			guideFrame.Visible = false
 			StopGuideAni()
@@ -546,7 +577,7 @@ local function RefreshGuideFrame()
 	end
 
 	if guideType == GameConfig.GuideType.TutorialWalkSpeedUpgrade then
-		local guideBtn = FindUpgradeShopWalkSpeedButton()
+		local guideBtn = ResolveShopTutorialGuideButton(guideType)
 		if guideBtn == nil or not IsGuiVisibleChain(guideBtn) then
 			guideFrame.Visible = false
 			StopGuideAni()
@@ -600,6 +631,7 @@ end)
 local function UpdateFingerOnTrackedButton(resolveButton: () -> GuiButton?)
 	local btn = resolveButton()
 	if btn == nil or not IsGuiVisibleChain(btn) then
+		StopGuideAni()
 		return
 	end
 	if fingerClone == nil or fingerClone.Parent ~= btn then
@@ -622,14 +654,15 @@ runService.RenderStepped:Connect(function()
 	end
 	if t == GameConfig.GuideType.TutorialBrainrotPlaceSlot then
 		UpdateFingerOnTrackedButton(FindLobbyBrainrotSlotButton)
-	elseif t == GameConfig.GuideType.TutorialJetpackBuy then
-		UpdateFingerOnTrackedButton(FindJetpackGuideButton)
-	elseif t == GameConfig.GuideType.TutorialExEquipBuy then
-		UpdateFingerOnTrackedButton(FindExEquipGuideButton)
+	elseif t == GameConfig.GuideType.TutorialJetpackBuy
+		or t == GameConfig.GuideType.TutorialExEquipBuy
+		or t == GameConfig.GuideType.TutorialWalkSpeedUpgrade
+	then
+		UpdateFingerOnTrackedButton(function()
+			return ResolveShopTutorialGuideButton(t)
+		end)
 	elseif t == GameConfig.GuideType.TutorialExEquipUse then
 		UpdateFingerOnTrackedButton(FindExEquipBackpackSlotButton)
-	elseif t == GameConfig.GuideType.TutorialWalkSpeedUpgrade then
-		UpdateFingerOnTrackedButton(FindUpgradeShopWalkSpeedButton)
 	elseif t == GameConfig.GuideType.TutorialBrainrotUpgrade then
 		UpdateFingerOnTrackedButton(FindBrainrotUpgradeClickButton)
 	end

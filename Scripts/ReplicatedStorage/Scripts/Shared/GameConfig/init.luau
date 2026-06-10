@@ -84,6 +84,8 @@ GameConfig.GuideTargetJetpackId = 1
 GameConfig.GuideTargetExEquipId = 1
 -- 升级速度引导：最远跳跃距离需超过该值（与跑道 HUD 同 stud 语义，显示后缀 m）
 GameConfig.GuideWalkSpeedUpgradeMinBestDistance = 300
+-- 商城引导：与目标商城距离超过该值时，先引导点击 Lobby TeleShopButton 传送
+GameConfig.GuideShopTeleportDistanceThreshold = 100
 
 -- 工厂玩法停用
 -- GameConfig.GuideWorldAnchorName = {
