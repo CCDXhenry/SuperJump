@@ -50,7 +50,7 @@ local LOGIN_DAY_CHECK_INTERVAL = 5
 local gameTimeAccumulator = 0
 local loginDayCheckAccumulator = 0
 
-local autoSaveThreads: { [number]: thread } = {}
+local autoSaveThreads: { [Player]: thread } = {}
 
 local function SplitVersion(version: string): { number }
 	local result: { number } = {}
@@ -114,6 +114,10 @@ local function CheckOwnedGamePasses(player: Player)
 	end
 end
 
+local function IsPlayerConnected(player: Player): boolean
+	return player.Parent == players
+end
+
 --保存玩家信息
 local function SavePlayerInfo(player: Player)
 	LeaderboardManager.SavePlayerStats(player)
@@ -129,6 +133,9 @@ end
 local function OnPlayerAdded(player: Player)
 	--读取玩家存档
 	local success: boolean, result: any = DataStoreTool.SafeGet(playerInfoDataStore, tostring(player.UserId))
+	if not IsPlayerConnected(player) then
+		return
+	end
 	--如果没有读取成功，将玩家踢出服务器，提示玩家读取存档失败
 	if not success then
 		player:Kick(result)
@@ -146,6 +153,9 @@ local function OnPlayerAdded(player: Player)
 	success, result = RetryAsync(function()
 		return localizationService:GetCountryRegionForPlayerAsync(player)
 	end, 5, 1)
+	if not IsPlayerConnected(player) then
+		return
+	end
 	local countryRegion: string = success and result or "unknown"
 	--远程配置
 	local _config: ConfigSnapshot
@@ -155,18 +165,30 @@ local function OnPlayerAdded(player: Player)
 		--老玩家不参与AB测试
 		_config = configService:GetConfigAsync()
 	end
+	if not IsPlayerConnected(player) then
+		return
+	end
 	-- PolicyService：付费随机物品策略；pcall 失败时视为受限（偏合规）
 	local arePaidRandomItemsRestricted = true
 	local policyOk, policyInfo = pcall(function()
 		return policyService:GetPolicyInfoForPlayerAsync(player)
 	end)
+	if not IsPlayerConnected(player) then
+		return
+	end
 	if policyOk and typeof(policyInfo) == "table" then
 		arePaidRandomItemsRestricted = policyInfo.ArePaidRandomItemsRestricted == true
 	end
 	local playerConfigInfo: GameConfig.PlayerConfigInfo = {
 		arePaidRandomItemsRestricted = arePaidRandomItemsRestricted,
 	}
+	if not IsPlayerConnected(player) then
+		return
+	end
 	ServerGameInfo.InitPlayerInfo(player, playerSaveInfo, countryRegion, playerConfigInfo)
+	if ServerGameInfo.GetPlayerInfo(player) == nil then
+		return
+	end
 	--检查登录天数
 	local nowDate: DateTimeExtension.DateTimeTable = DateTimeExtension.GetNowDate()
 	CheckPlayerLoginDays(player, nowDate)
@@ -181,7 +203,7 @@ local function OnPlayerAdded(player: Player)
 		end
 	end)
 	coroutine.resume(autoSaveThread)
-	autoSaveThreads[player.UserId] = autoSaveThread
+	autoSaveThreads[player] = autoSaveThread
 
 	-- 角色生成时重新应用行走速度
 	player.CharacterAdded:Connect(function()
@@ -206,10 +228,10 @@ local function OnPlayerRemoving(player: Player)
 	--移除玩家数据
 	ServerGameInfo.RemovePlayerInfo(player)
 	--停止自动保存玩家数据协程
-	local autoSaveThread = autoSaveThreads[player.UserId]
+	local autoSaveThread = autoSaveThreads[player]
 	if autoSaveThread ~= nil then
 		coroutine.close(autoSaveThread)
-		autoSaveThreads[player.UserId] = nil
+		autoSaveThreads[player] = nil
 	end
 end
 

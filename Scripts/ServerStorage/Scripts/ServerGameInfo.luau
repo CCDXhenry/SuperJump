@@ -19,6 +19,8 @@ local workspace = game:GetService("Workspace")
 local requireAnyForDeferredModules = require :: any
 
 local playerInfoMap: { [number]: GameConfig.PlayerInfo } = {}
+local playerInfoByPlayer: { [Player]: GameConfig.PlayerInfo } = {}
+local activePlayerByUserId: { [number]: Player } = {}
 local lastBroadcastModelYieldMap: { [number]: { [string]: number } } = {}
 local DebugModelYieldLogEnabled = false
 local ModelYieldAccrueDebugIntervalSec = 10
@@ -146,6 +148,10 @@ local function IsPlayerOnWorkspaceGround(player: Player): boolean
 	return workspace:Raycast(rayOrigin, rayDirection, raycastParams) ~= nil
 end
 
+local function IsPlayerConnected(player: Player): boolean
+	return player.Parent == players
+end
+
 --初始化玩家信息
 function ServerGameInfo.InitPlayerInfo(
 	player: Player,
@@ -153,6 +159,15 @@ function ServerGameInfo.InitPlayerInfo(
 	countryRegion: string,
 	playerConfigInfo: GameConfig.PlayerConfigInfo
 )
+	if not IsPlayerConnected(player) then
+		return
+	end
+	local currentActivePlayer = activePlayerByUserId[player.UserId]
+	if currentActivePlayer ~= nil and currentActivePlayer ~= player and IsPlayerConnected(currentActivePlayer) then
+		warn("[ServerGameInfo] InitPlayerInfo ignored stale session for", player.Name, "userId", player.UserId)
+		return
+	end
+
 	local playerInfo: GameConfig.PlayerInfo = {
 		dataVersion = playerSaveInfo.dataVersion,
 		firstEnterTime = playerSaveInfo.firstEnterTime,
@@ -207,7 +222,14 @@ function ServerGameInfo.InitPlayerInfo(
 	if ClampShopAndHomeLevelsFromConfig(playerInfo.shopInfo, playerInfo.homeInfo) then
 		playerInfo.playerInfoChanged = true
 	end
+	local previousActivePlayer = currentActivePlayer
+	if previousActivePlayer ~= nil and previousActivePlayer ~= player then
+		warn("[ServerGameInfo] InitPlayerInfo replacing active session for", player.Name, "userId", player.UserId)
+		playerInfoByPlayer[previousActivePlayer] = nil
+	end
 	playerInfoMap[player.UserId] = playerInfo
+	playerInfoByPlayer[player] = playerInfo
+	activePlayerByUserId[player.UserId] = player
 	player:SetAttribute("LastArrivedIslandId", playerInfo.lastArrivedIslandId)
 	player:SetAttribute("CurrentJetpackId", playerInfo.jetpackInventory.currentId)
 	player:SetAttribute("JumpRunwayBestDistance", playerInfo.jumpRunwayBestDistance)
@@ -297,7 +319,13 @@ end
 
 --移除玩家信息
 function ServerGameInfo.RemovePlayerInfo(player: Player)
+	playerInfoByPlayer[player] = nil
+	if activePlayerByUserId[player.UserId] ~= player then
+		warn("[ServerGameInfo] RemovePlayerInfo ignored stale session for", player.Name, "userId", player.UserId)
+		return
+	end
 	playerInfoMap[player.UserId] = nil
+	activePlayerByUserId[player.UserId] = nil
 	lastBroadcastModelYieldMap[player.UserId] = nil
 	pendingPaidShopItemByUserId[player.UserId] = nil
 	pendingOfflineRewardByUserId[player.UserId] = nil
@@ -306,7 +334,10 @@ end
 
 --获取玩家信息
 function ServerGameInfo.GetPlayerInfo(player: Player)
-	return playerInfoMap[player.UserId]
+	if activePlayerByUserId[player.UserId] ~= player then
+		return nil
+	end
+	return playerInfoByPlayer[player] or playerInfoMap[player.UserId]
 end
 
 --创建玩家存档信息
@@ -524,7 +555,7 @@ end
 
 --增加玩家游戏时间
 function ServerGameInfo.AddPlayerGameTime(player: Player, addGameTime: number)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		--warn("[ServerGameInfo] AddPlayerGameTime failed: playerInfo not found for", player.Name)
 		return
@@ -535,7 +566,7 @@ end
 
 --改变玩家登录天数
 function ServerGameInfo.ChangePlayerLoginDays(player: Player, loginDays: number, lastOnlineDate: DateTimeExtension.DateTimeTable)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		--warn("[ServerGameInfo] ChangePlayerLoginDays failed: playerInfo not found for", player.Name)
 		return
@@ -548,7 +579,7 @@ end
 
 --设置玩家通行证为已获得
 function ServerGameInfo.SetPlayerGamePassAcquired(player: Player, gamePassId: number)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		warn("[ServerGameInfo] SetPlayerGamePassAcquired failed: playerInfo not found for", player.Name)
 		return
@@ -640,7 +671,7 @@ end
 
 --更新玩家家园展示位模型信息
 function ServerGameInfo.UpdatePlayerPlacedModel(player: Player, pointIndex: number, modelInfo: GameConfig.ModelInfo)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		warn("[ServerGameInfo] UpdatePlayerPlacedModel failed: playerInfo not found for", player.Name)
 		return
@@ -701,7 +732,7 @@ end
 
 --设置玩家家园槽位
 function ServerGameInfo.SetPlayerHomeSlot(player: Player, slotName: string)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		warn("[ServerGameInfo] SetPlayerHomeSlot failed: playerInfo not found for", player.Name)
 		return
@@ -768,7 +799,7 @@ end
 
 --更新/设置玩家家园模型未领取收益
 function ServerGameInfo.UpdateModelUnclaimedYield(player: Player, pointIndex: number, amount: number, isSet: boolean?)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		warn("[ServerGameInfo] UpdateModelUnclaimedYield failed: playerInfo not found for", player.Name)
 		return
@@ -870,12 +901,16 @@ end
 
 -- 领取指定模型的收益
 function ServerGameInfo.ClaimModelYield(player: Player, targetPlayerId: number, pointIndex: number)
+	if ServerGameInfo.GetPlayerInfo(player) == nil then
+		return
+	end
+
 	local targetPlayer = players:GetPlayerByUserId(targetPlayerId)
 	if not targetPlayer then
 		return
 	end
 
-	local targetInfo = playerInfoMap[targetPlayerId]
+	local targetInfo = ServerGameInfo.GetPlayerInfo(targetPlayer)
 	if not targetInfo then
 		return
 	end
@@ -942,7 +977,7 @@ end
 
 --升级模型
 function ServerGameInfo.UpgradePlacedModel(player: Player, pointIndex: number)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		warn("[ServerGameInfo] UpgradePlacedModel failed: playerInfo not found for", player.Name)
 		return
@@ -958,7 +993,7 @@ end
 
 -- 一次性将展台模型等级提升指定层数（不扣币，供付费路径使用）
 function ServerGameInfo.UpgradePlacedModelByLevelAdd(player: Player, pointIndex: number, levelAdd: number)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		warn("[ServerGameInfo] UpgradePlacedModelByLevelAdd failed: playerInfo not found for", player.Name)
 		return
@@ -1067,7 +1102,7 @@ end
 
 --设置减速状态
 function ServerGameInfo.UpdateDecelerationOn(player: Player, decelerationOn: boolean)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		warn("[ServerGameInfo] UpdateDecelerationOn failed: playerInfo not found for", player.Name)
 		return
@@ -1079,7 +1114,7 @@ end
 
 --更新行走速度等级
 function ServerGameInfo.UpdateWalkSpeedLevel(player: Player, levelAdd: number)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		warn("[ServerGameInfo] UpdateWalkSpeedLevel failed: playerInfo not found for", player.Name)
 		return
@@ -1223,7 +1258,7 @@ end
 
 --更新家园等级
 function ServerGameInfo.UpdateHomeLevel(player: Player, levelAdd: number)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		warn("[ServerGameInfo] UpdateHomeLevel failed: playerInfo not found for", player.Name)
 		return
@@ -1238,7 +1273,7 @@ end
 
 --添加模型到库存
 function ServerGameInfo.AddModelToInventory(player: Player, modelInfo: GameConfig.ModelInfo)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		warn("[ServerGameInfo] AddModelToInventory failed: playerInfo not found for", player.Name)
 		return
@@ -1253,7 +1288,7 @@ end
 
 --设置背景音乐音量
 function ServerGameInfo.UpdateBGMVolume(player: Player, volume: number)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		warn("[ServerGameInfo] UpdateBGMVolume failed: playerInfo not found for", player.Name)
 		return
@@ -1265,7 +1300,7 @@ end
 
 --设置音效音量
 function ServerGameInfo.UpdateSoundEffectVolume(player: Player, volume: number)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		warn("[ServerGameInfo] UpdateSoundEffectVolume failed: playerInfo not found for", player.Name)
 		return
@@ -1277,7 +1312,7 @@ end
 
 --设置震动状态
 function ServerGameInfo.UpdateVibrationOn(player: Player, vibrationOn: boolean)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		warn("[ServerGameInfo] UpdateVibrationOn failed: playerInfo not found for", player.Name)
 		return
@@ -1316,7 +1351,7 @@ function ServerGameInfo.TryMarkIslandDiscovered(player: Player, islandId: number
 	if islandId <= 0 then
 		return
 	end
-	local playerInfo = playerInfoMap[player.UserId]
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
 	if not playerInfo then
 		return
 	end
@@ -1333,7 +1368,7 @@ end
 
 -- 添加器材到玩家库存
 function ServerGameInfo.AddExEquipToInventory(player: Player, equipId: string)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil or playerInfo.exEquipInventory.ownedList[equipId] then
 		return
 	end
@@ -1345,7 +1380,7 @@ end
 
 -- 设置当前装备的器材
 function ServerGameInfo.SetCurrentExEquip(player: Player, equipId: string)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil or not playerInfo.exEquipInventory.ownedList[equipId] then
 		return
 	end
@@ -1357,7 +1392,7 @@ end
 
 -- 添加火箭背包到玩家库存
 function ServerGameInfo.AddJetpackToInventory(player: Player, jetpackId: string)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil or playerInfo.jetpackInventory.ownedList[jetpackId] then
 		return
 	end
@@ -1369,7 +1404,7 @@ end
 
 -- 设置当前装备的火箭背包
 function ServerGameInfo.SetCurrentJetpack(player: Player, jetpackId: string)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil or not playerInfo.jetpackInventory.ownedList[jetpackId] then
 		return
 	end
@@ -1382,7 +1417,7 @@ end
 
 -- 更新玩家 JumpPower 值
 function ServerGameInfo.UpdatePlayerJumpPowerExp(player: Player, addExp: number)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		return
 	end
@@ -1416,7 +1451,7 @@ function ServerGameInfo.UpdatePlayerJumpPower(player: Player, addAmount: number)
 end
 
 function ServerGameInfo.SetPlayerJumpPowerLevel(player: Player, level: number)
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		return
 	end
@@ -1441,7 +1476,7 @@ function ServerGameInfo.UpdateJumpRunwayBestDistance(player: Player, distance: n
 	if GameConfig.JumpRunway.DEBUG then
 		print("ServerGameInfo.UpdateJumpRunwayBestDistance", player.Name, distance)
 	end
-	local playerInfo: GameConfig.PlayerInfo = playerInfoMap[player.UserId]
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		return
 	end
