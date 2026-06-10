@@ -1165,8 +1165,10 @@ GameConfig.JumpRunwayDesigner = {
 	RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC = 0.5,
 	-- 开箱时摄像机向后拉远距离（stud）；↑ 镜头更远
 	RUNWAY_CHEST_CAMERA_BACK_OFFSET = 60,
+	-- 开箱时摄像机俯仰角度（度）；正数俯视、负数仰视；绝对值 ↑ 俯仰越明显
+	RUNWAY_CHEST_CAMERA_PITCH_DEG = 10,
 	-- 开箱时摄像机 FOV；↑ 视野更广
-	RUNWAY_CHEST_CAMERA_FOV = 70,
+	RUNWAY_CHEST_CAMERA_FOV = 50,
 
 	-- ═══════════════════════════════════════
 	-- —— ⑧ 逃生红屏 ——
@@ -1499,6 +1501,7 @@ GameConfig.JumpRunway = {
 	RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC = jumpRunwayDesigner.RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC,
 	RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC = jumpRunwayDesigner.RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC,
 	RUNWAY_CHEST_CAMERA_BACK_OFFSET = jumpRunwayDesigner.RUNWAY_CHEST_CAMERA_BACK_OFFSET,
+	RUNWAY_CHEST_CAMERA_PITCH_DEG = jumpRunwayDesigner.RUNWAY_CHEST_CAMERA_PITCH_DEG,
 	RUNWAY_CHEST_CAMERA_FOV = jumpRunwayDesigner.RUNWAY_CHEST_CAMERA_FOV,
 	-- 旧字段：B 段不再追宝箱，保留字段避免配置兼容问题
 	RUNWAY_CHEST_SLIDE_MIN_CHASE_SPEED = 16,

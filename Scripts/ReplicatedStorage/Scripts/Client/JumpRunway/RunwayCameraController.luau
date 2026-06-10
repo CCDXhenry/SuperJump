@@ -366,6 +366,17 @@ local function ResolveChestOpenFov(cfg: any?): number
 	return fov
 end
 
+local function ResolveChestOpenPitchDeg(cfg: any?): number
+	if cfg == nil then
+		return 0
+	end
+	local pitchDeg = cfg.RUNWAY_CHEST_CAMERA_PITCH_DEG
+	if typeof(pitchDeg) ~= "number" or pitchDeg ~= pitchDeg then
+		return 0
+	end
+	return math.clamp(pitchDeg, -89, 89)
+end
+
 function RunwayCameraController.SetChestOpenZoomActive(active: boolean)
 	state.chestOpenZoomActive = active
 end
@@ -387,6 +398,16 @@ function RunwayCameraController.CalculateTargets(
 	local backOffset = if useChestOpenZoom == true then ResolveChestOpenBackOffset(cfg) else cfg.RUNWAY_CAMERA_BACK_OFFSET
 	local targetLookAt = hrp.Position + forward * cfg.RUNWAY_CAMERA_LOOK_AHEAD + Vector3.new(0, cfg.RUNWAY_CAMERA_LOOK_HEIGHT, 0)
 	local targetPosition = hrp.Position - forward * backOffset + right * cfg.RUNWAY_CAMERA_RIGHT_OFFSET + Vector3.new(0, cfg.RUNWAY_CAMERA_HEIGHT_OFFSET, 0)
+	if useChestOpenZoom == true then
+		local pitchDeg = ResolveChestOpenPitchDeg(cfg)
+		if pitchDeg ~= 0 then
+			local horizontalOffset = Vector3.new(targetPosition.X - targetLookAt.X, 0, targetPosition.Z - targetLookAt.Z)
+			local horizontalDist = horizontalOffset.Magnitude
+			if horizontalDist > 1e-3 then
+				targetPosition += Vector3.new(0, horizontalDist * math.tan(math.rad(pitchDeg)), 0)
+			end
+		end
+	end
 	if (targetLookAt - targetPosition).Magnitude < 1e-3 then
 		targetLookAt += forward
 	end
