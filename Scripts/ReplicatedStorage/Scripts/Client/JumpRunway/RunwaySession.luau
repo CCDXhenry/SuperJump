@@ -117,16 +117,15 @@ local BestDistanceWallTextYMaxNorm = 0.95
 local ObstacleBounceProneSlideBlockMarginStuds = 0.6
 local ObstacleBounceWallStopLookAheadStuds = 2.5
 local ObstacleBounceWallStopRayHeightStuds = 1.2
-local JumpWindowStumblePulseFrequencyHz = 2.4
-local JumpWindowStumblePulseStrength = 0.18
-local JumpWindowStumbleMinSpeedScale = 0.72
 local JumpWindowR15WalkAnimationId = "rbxassetid://507777826"
 local JumpWindowR6WalkAnimationId = "rbxassetid://180426354"
+local JumpWindowWalkAnimationSpeed = 0.9
 local FinalLandPhaseALeftGroundMinVy = 1.5
 local RunwayMovementInputSinkActionName = "JumpRunwayMovementInputSink"
 local RunwayMovementInputSinkPriority = 10000
 local GuideSlowMotionSpeedScale = 0.15
 local GuideSlowMotionAnimRenderStepName = "JumpRunwayGuideSlowMotionAnim"
+local MaxRunwayVisualOrientationDt = 1 / 30
 local GuideSlowMotionAnimPriorities: { [Enum.AnimationPriority]: boolean } = {
 	[Enum.AnimationPriority.Movement] = true,
 	[Enum.AnimationPriority.Core] = true,
@@ -1410,7 +1409,7 @@ function RunwaySession.StopJumpWindowWalkAnimation()
 	Refs.jumpWindowWalkAnimId = nil
 end
 
-function RunwaySession.EnsureJumpWindowWalkAnimation(humanoid: Humanoid, speedScale: number)
+function RunwaySession.EnsureJumpWindowWalkAnimation(humanoid: Humanoid)
 	local animator = humanoid:FindFirstChildOfClass("Animator")
 	if animator == nil then
 		animator = Instance.new("Animator")
@@ -1435,11 +1434,10 @@ function RunwaySession.EnsureJumpWindowWalkAnimation(humanoid: Humanoid, speedSc
 		return
 	end
 	if not track.IsPlaying then
-		track:Play(0.08, 1, 0.9)
+		track:Play(0.08, 1, JumpWindowWalkAnimationSpeed)
 	end
 	local guideAnimScale = RunwaySession.GetGuideSlowMotionScale()
-	local stumbleAnimSpeed = math.clamp(0.85 + (1 - speedScale) * 1.4, 0.75, 1.25)
-	track:AdjustSpeed(math.max(stumbleAnimSpeed * guideAnimScale, 0.05))
+	track:AdjustSpeed(math.max(JumpWindowWalkAnimationSpeed * guideAnimScale, 0.05))
 end
 
 function RunwaySession.ClearJumpBoostIfNeeded(phase: number)
@@ -1571,13 +1569,11 @@ function RunwaySession.ApplyJumpWindowWalkPhysics(humanoid: Humanoid, hrp: BaseP
 		return
 	end
 	fwdH = fwdH.Unit
-	local stumbleWave = math.abs(math.sin(os.clock() * math.pi * 2 * JumpWindowStumblePulseFrequencyHz))
-	local speedScale = math.max(JumpWindowStumbleMinSpeedScale, 1 - stumbleWave * JumpWindowStumblePulseStrength)
 	local guideSlowMotionScale = RunwaySession.GetGuideSlowMotionScale()
 	RunwaySession.EnsureHumanoidWalkingState(humanoid)
-	RunwaySession.EnsureJumpWindowWalkAnimation(humanoid, speedScale)
+	RunwaySession.EnsureJumpWindowWalkAnimation(humanoid)
 	humanoid:Move(fwdH, false)
-	local walkSpeed = cfg.JUMP_WINDOW_WALK_SPEED * speedScale * guideSlowMotionScale
+	local walkSpeed = cfg.JUMP_WINDOW_WALK_SPEED * guideSlowMotionScale
 	hrp.AssemblyLinearVelocity = fwdH * walkSpeed + Vector3.new(0, vy * guideSlowMotionScale, 0)
 end
 
@@ -1665,11 +1661,12 @@ function RunwaySession.ApplyRunwayYawCorrection(hrp: BasePart, forward: Vector3,
 	if typeof(rate) ~= "number" or rate ~= rate then
 		rate = 18
 	end
-	local alpha = if rate <= 0 then 1 else 1 - math.exp(-rate * dt)
+	local visualDt = math.min(math.max(dt, 0), MaxRunwayVisualOrientationDt)
+	local alpha = if rate <= 0 then 1 else 1 - math.exp(-rate * visualDt)
 	local blendedRot = hrp.CFrame.Rotation:Lerp(targetCf.Rotation, alpha)
 	hrp.CFrame = CFrame.fromMatrix(pos, blendedRot.XVector, blendedRot.YVector, blendedRot.ZVector)
 	hrp.AssemblyLinearVelocity = linVel
-	hrp.AssemblyAngularVelocity = hrp.AssemblyAngularVelocity * math.exp(-math.max(0, rate) * dt)
+	hrp.AssemblyAngularVelocity = hrp.AssemblyAngularVelocity * math.exp(-math.max(0, rate) * visualDt)
 end
 
 function RunwaySession.BuildProneRunwayCFrame(pos: Vector3, runwayForward: Vector3): CFrame
@@ -4281,11 +4278,12 @@ function RunwaySession.ApplyRunwayFinalBodyPitch(hrp: BasePart, forward: Vector3
 		extraDegTarget = cfg.RUNWAY_FINAL_DASH_EXTRA_PITCH_DEG
 	end
 	local pitchRate = cfg.RUNWAY_FINAL_PITCH_SMOOTH_RATE
+	local visualDt = math.min(math.max(dt, 0), MaxRunwayVisualOrientationDt)
 	local pitchAlpha: number
 	if pitchRate <= 0 then
 		pitchAlpha = 1
 	else
-		pitchAlpha = 1 - math.exp(-pitchRate * dt)
+		pitchAlpha = 1 - math.exp(-pitchRate * visualDt)
 	end
 	Refs.finalPitchSmoothedExtraDeg += (extraDegTarget - Refs.finalPitchSmoothedExtraDeg) * pitchAlpha
 	local totalDeg = cfg.RUNWAY_FINAL_PITCH_DEG + Refs.finalPitchSmoothedExtraDeg
@@ -4303,7 +4301,7 @@ function RunwaySession.ApplyRunwayFinalBodyPitch(hrp: BasePart, forward: Vector3
 	if rate <= 0 then
 		alpha = 1
 	else
-		alpha = 1 - math.exp(-rate * dt)
+		alpha = 1 - math.exp(-rate * visualDt)
 	end
 	-- 对旋转做球面插值，位置固定为 hrp 当前位置
 	local blendedRot = hrp.CFrame.Rotation:Lerp(targetCf.Rotation, alpha)
@@ -4311,7 +4309,7 @@ function RunwaySession.ApplyRunwayFinalBodyPitch(hrp: BasePart, forward: Vector3
 	hrp.AssemblyLinearVelocity = linVel
 	local dampRate = cfg.RUNWAY_FINAL_PITCH_ANGULAR_DAMP_RATE
 	if dampRate > 1e-6 then
-		local k = math.exp(-dampRate * dt)
+		local k = math.exp(-dampRate * visualDt)
 		hrp.AssemblyAngularVelocity = hrp.AssemblyAngularVelocity * k
 	else
 		hrp.AssemblyAngularVelocity = Vector3.zero
