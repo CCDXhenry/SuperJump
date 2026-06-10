@@ -94,6 +94,7 @@ local exerciseHrp: BasePart? = nil
 local exerciseForward: Vector3 = Vector3.zero
 local exerciseRunServiceConnection: RBXScriptConnection? = nil
 local exerciseInputConnection: RBXScriptConnection? = nil
+local exerciseJumpRequestConnection: RBXScriptConnection? = nil
 local exercisePrompt: ProximityPrompt? = nil
 local exerciseBikeAnimTrack: AnimationTrack? = nil
 local exerciseTreadmillAnimTrack: AnimationTrack? = nil
@@ -107,6 +108,7 @@ local exerciseScaleBarRatioConnection: RBXScriptConnection? = nil
 local exerciseScaleBarSequenceId: number = 0
 local exerciseScaleBarTweenStartRatio: number = 0
 local exerciseDisplayLv: number? = nil
+local exerciseControlsDisabled: boolean = false
 local clickRewardRandom = Random.new()
 local clickRewardSequenceId: number = 0
 local clickRewardButtonConnection: RBXScriptConnection? = nil
@@ -1102,18 +1104,25 @@ local function StopExerciseInternal()
 		exerciseInputConnection:Disconnect()
 		exerciseInputConnection = nil
 	end
+	if exerciseJumpRequestConnection ~= nil then
+		exerciseJumpRequestConnection:Disconnect()
+		exerciseJumpRequestConnection = nil
+	end
 
 	ReleaseExerciseCharacterPhysics()
 
 	-- 延迟一帧恢复控制，避免 PlatformStand 解除瞬间与输入/动画冲突
-	task.defer(function()
-		local controls = GetPlayerControls()
-		if controls ~= nil then
-			pcall(function()
-				controls:Enable()
-			end)
-		end
-	end)
+	if exerciseControlsDisabled then
+		task.defer(function()
+			local controls = GetPlayerControls()
+			if controls ~= nil then
+				pcall(function()
+					controls:Enable()
+				end)
+			end
+		end)
+	end
+	exerciseControlsDisabled = false
 
 	-- 恢复器材 Prompt 按钮（模型由服务端销毁，仅做兜底）
 	if exercisePrompt ~= nil and exercisePrompt.Parent ~= nil then
@@ -1363,15 +1372,19 @@ local function StartExercise(equipId: number)
 	-- 参考 RunwaySession 控制方式
 	humanoid.AutoRotate = false
 	humanoid.PlatformStand = true
-	humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, userInputService.TouchEnabled)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
 
-	-- 禁用玩家输入，禁止 WASD/跳跃/移动
-	local controls = GetPlayerControls()
-	if controls ~= nil then
-		pcall(function()
-			controls:Disable()
-		end)
+	-- 移动端需要保留 Roblox 默认跳跃按钮，用跳跃按钮触发退出锻炼。
+	exerciseControlsDisabled = false
+	if not userInputService.TouchEnabled then
+		local controls = GetPlayerControls()
+		if controls ~= nil then
+			pcall(function()
+				controls:Disable()
+				exerciseControlsDisabled = true
+			end)
+		end
 	end
 
 	-- 进入锻炼时收起所有 Tool
@@ -1474,8 +1487,14 @@ local function StartExercise(equipId: number)
 		end
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Space then
 			if isExercising then
-				NetMsg.FireRequestStopExercise()
+				StopExerciseWithServerRequest()
 			end
+		end
+	end)
+
+	exerciseJumpRequestConnection = userInputService.JumpRequest:Connect(function()
+		if isExercising then
+			StopExerciseWithServerRequest()
 		end
 	end)
 end
