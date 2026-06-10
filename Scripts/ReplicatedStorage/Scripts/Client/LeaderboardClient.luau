@@ -28,6 +28,11 @@ local categoryFrames: { [string]: ScrollingFrame } = {}
 local itemTemplates: { [string]: Frame } = {}
 local countdownLabel: TextLabel? = nil
 local resetTargetTimestamp: number = 0
+local listenersBound = false
+local initDone = false
+local countdownLoopStarted = false
+local pendingTopLists: { [string]: { { userId: number, value: number, name: string } } } = {}
+local pendingResetTimestamp: number? = nil
 
 local function GetFallbackNextRefreshTimestamp(): number
 	local nowTimestamp = math.floor(workspace:GetServerTimeNow())
@@ -145,6 +150,7 @@ function LeaderboardClient.UpdateList(
 	local template = itemTemplates[category]
 	local config = CATEGORY_CONFIG[category]
 	if not scroll or not template or not config then
+		pendingTopLists[category] = topList
 		return
 	end
 
@@ -197,22 +203,47 @@ function LeaderboardClient.UpdateList(
 	scroll.CanvasSize = UDim2.new(0, 0, 0, #topList * (template.Size.Y.Offset + 8))
 end
 
-function LeaderboardClient.Init()
-	InitLeaderboards()
-	if resetTargetTimestamp <= 0 then
-		resetTargetTimestamp = GetFallbackNextRefreshTimestamp()
+local function BindNetworkListeners()
+	if listenersBound then
+		return
 	end
-
+	listenersBound = true
 	NetMsg.ConnectNotifyLeaderboardUpdate(function(category, topList, resetTimestamp)
 		LeaderboardClient.UpdateList(category, topList, resetTimestamp)
 	end)
 
 	NetMsg.ConnectNotifyLeaderboardResetTime(function(resetTimestamp)
 		if resetTimestamp > 0 then
+			pendingResetTimestamp = resetTimestamp
 			resetTargetTimestamp = resetTimestamp
 		end
 	end)
+end
 
+local function ApplyPendingState()
+	if pendingResetTimestamp ~= nil and pendingResetTimestamp > 0 then
+		resetTargetTimestamp = pendingResetTimestamp
+	end
+	for category, topList in pairs(pendingTopLists) do
+		LeaderboardClient.UpdateList(category, topList, nil)
+	end
+end
+
+function LeaderboardClient.Init()
+	if initDone then
+		return
+	end
+	initDone = true
+	InitLeaderboards()
+	if resetTargetTimestamp <= 0 then
+		resetTargetTimestamp = GetFallbackNextRefreshTimestamp()
+	end
+	ApplyPendingState()
+
+	if countdownLoopStarted then
+		return
+	end
+	countdownLoopStarted = true
 	task.spawn(function()
 		while true do
 			UpdateCountdownDisplay()
@@ -222,5 +253,7 @@ function LeaderboardClient.Init()
 
 	print("[LeaderboardClient] Initialized weekly distance leaderboard")
 end
+
+BindNetworkListeners()
 
 return LeaderboardClient
