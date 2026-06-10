@@ -8,6 +8,7 @@ local BrainrotIslandManager = require(serverScripts:WaitForChild("BrainrotIsland
 
 local scripts = ReplicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
+local GameConfig = require(sharedScripts:WaitForChild("GameConfig"))
 local NetMsg = require(sharedScripts:WaitForChild("NetMsg"))
 
 local LobbyTeleportServerManager = {}
@@ -18,6 +19,12 @@ local SHOP_TELEPORT_POINT_NAME = "ShopTeleportPoint"
 
 local function IsTeleportBlockedByJumpRunway(player: Player): boolean
 	return player:GetAttribute("JumpRunwayActive") == true
+end
+
+local function BuildLobbyTeleportCFrame(spawnLocation: SpawnLocation): CFrame
+	local position = (spawnLocation.CFrame * TELEPORT_Y_OFFSET).Position
+	local facing = GameConfig.LobbyTeleportFacingDirection
+	return CFrame.lookAt(position, position + facing, Vector3.yAxis)
 end
 
 local function TeleportCharacterToSpawnLocation(player: Player, spawnLocation: SpawnLocation): boolean
@@ -35,7 +42,8 @@ local function TeleportCharacterToSpawnLocation(player: Player, spawnLocation: S
 		return false
 	end
 
-	hrp.CFrame = spawnLocation.CFrame * TELEPORT_Y_OFFSET
+	hrp.CFrame = BuildLobbyTeleportCFrame(spawnLocation)
+	NetMsg.FireNotifyLobbyTeleportFacing(player)
 	return true
 end
 

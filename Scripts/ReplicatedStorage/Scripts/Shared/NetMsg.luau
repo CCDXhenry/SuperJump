@@ -67,6 +67,7 @@ local requestSetVibrationsOnOffStateEvent: RemoteEvent = remoteEventsFolder:Find
 local requestSetDecelerationOnEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestSetDecelerationOn") :: RemoteEvent
 local requestTeleportToHomeEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestTeleportToHome") :: RemoteEvent
 local requestTeleportToShopEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("RequestTeleportToShop") :: RemoteEvent
+local notifyLobbyTeleportFacingEvent: RemoteEvent? = GetOrCreateRemoteEvent("NotifyLobbyTeleportFacing")
 local requestIdleServerTeleportEvent: RemoteEvent? = GetOrCreateRemoteEvent("RequestIdleServerTeleport")
 local notifyPlayerInfoInitEvent = remoteEventsFolder:FindFirstChild("NotifyPlayerInfoInit") :: RemoteEvent
 local notifyPlayersOtherPlayerInfoInitEvent: RemoteEvent = remoteEventsFolder:FindFirstChild("NotifyPlayersOtherPlayerInfoInit") :: RemoteEvent
@@ -216,6 +217,21 @@ end
 
 function NetMsg.ConnectRequestTeleportToShop(callback: (player: Player) -> ())
 	requestTeleportToShopEvent.OnServerEvent:Connect(callback)
+end
+
+-- 服务端通知客户端 Lobby 传送后对齐朝向
+function NetMsg.FireNotifyLobbyTeleportFacing(player: Player)
+	if notifyLobbyTeleportFacingEvent == nil then
+		return
+	end
+	notifyLobbyTeleportFacingEvent:FireClient(player)
+end
+
+function NetMsg.ConnectNotifyLobbyTeleportFacing(callback: () -> ())
+	if notifyLobbyTeleportFacingEvent == nil then
+		return
+	end
+	notifyLobbyTeleportFacingEvent.OnClientEvent:Connect(callback)
 end
 
 -- 客户端请求无操作重连当前服务器

@@ -247,6 +247,9 @@ GameConfig.IdleWarnSec = 14 * 60 --开始提示“即将重连”
 GameConfig.IdleTeleportSec = 15 * 60 --无操作多久后触发重连
 GameConfig.IdleTeleportCooldownSec = 20 --两次重连请求/执行之间的最短间隔
 
+-- Lobby 传送（Home / Shop）落地后角色与摄像机朝向
+GameConfig.LobbyTeleportFacingDirection = Vector3.new(-1, 0, 0)
+
 GameConfig.CoilType = {
 	Speed = 1,
 	DoubleJump = 2,
