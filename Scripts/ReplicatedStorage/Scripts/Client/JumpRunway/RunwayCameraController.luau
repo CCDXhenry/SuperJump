@@ -2,6 +2,7 @@
 
 local RunwayCameraController = {}
 
+local runService = game:GetService("RunService")
 local userInputService = game:GetService("UserInputService")
 
 type ReleaseTransitionContext = {
@@ -45,7 +46,7 @@ local state: CameraState = {
 	chestOpenZoomActive = false,
 }
 
-local TransitionPollIntervalSec = 0.03
+local TransitionFallbackPollIntervalSec = 0.03
 local DeferredSubjectRestorePollIntervalSec = 0.05
 local DeferredSubjectRestoreMaxAttempts = 100
 
@@ -110,10 +111,7 @@ local function ResolveChaserReturnHomeTransitionDuration(cfg: any?): number
 	return duration
 end
 
-local function ResolveLiveCameraSubject(
-	restoreSubject: Instance?,
-	getCharacterParts: () -> (Model?, Humanoid?, BasePart?)
-): Humanoid?
+local function ResolveLiveCameraSubject(restoreSubject: Instance?, getCharacterParts: () -> (Model?, Humanoid?, BasePart?)): Humanoid?
 	local _character, humanoid, _ = getCharacterParts()
 	if humanoid ~= nil and humanoid.Health > 0 then
 		return humanoid
@@ -127,10 +125,7 @@ local function ResolveLiveCameraSubject(
 	return nil
 end
 
-local function ScheduleDeferredCameraSubjectRestore(
-	camera: Camera,
-	getCharacterParts: () -> (Model?, Humanoid?, BasePart?)
-)
+local function ScheduleDeferredCameraSubjectRestore(camera: Camera, getCharacterParts: () -> (Model?, Humanoid?, BasePart?))
 	deferredSubjectRestoreToken += 1
 	local token = deferredSubjectRestoreToken
 	task.spawn(function()
@@ -179,9 +174,7 @@ local function RestoreCameraControl(
 end
 
 local function HasRestoreSnapshot(): boolean
-	return state.cameraTypeBeforeRunway ~= nil
-		or state.cameraSubjectBeforeRunway ~= nil
-		or state.cameraFovBeforeRunway ~= nil
+	return state.cameraTypeBeforeRunway ~= nil or state.cameraSubjectBeforeRunway ~= nil or state.cameraFovBeforeRunway ~= nil
 end
 
 local function ClearRestoreSnapshot(transitionToken: number?)
@@ -196,6 +189,14 @@ local function ClearRestoreSnapshot(transitionToken: number?)
 	state.cameraFovBeforeRunway = nil
 end
 
+local function WaitForNextTransitionFrame()
+	if userInputService.WindowFocused then
+		runService.RenderStepped:Wait()
+	else
+		task.wait(TransitionFallbackPollIntervalSec)
+	end
+end
+
 local function PlayCameraTransition(
 	camera: Camera,
 	transitionToken: number,
@@ -205,7 +206,7 @@ local function PlayCameraTransition(
 	startFov: number,
 	targetFov: number
 ): boolean
-	-- 使用 os.clock 计时 + 短轮询，避免失焦/最小化时渲染事件不触发导致过渡卡死
+	-- 聚焦时跟随渲染帧推进；失焦时保留短轮询，避免渲染事件暂停导致过渡卡死。
 	local startTime = os.clock()
 	while true do
 		if state.releaseTransitionToken ~= transitionToken then
@@ -225,7 +226,7 @@ local function PlayCameraTransition(
 		local eased = t * t * (3 - 2 * t)
 		camera.CFrame = startCFrame:Lerp(targetCFrame, eased)
 		camera.FieldOfView = startFov + (targetFov - startFov) * eased
-		task.wait(TransitionPollIntervalSec)
+		WaitForNextTransitionFrame()
 	end
 	if state.releaseTransitionToken ~= transitionToken then
 		return false
@@ -250,7 +251,7 @@ local function PlayHold(camera: Camera, transitionToken: number, holdDuration: n
 		if state.skipReleaseTransition then
 			break
 		end
-		task.wait(TransitionPollIntervalSec)
+		WaitForNextTransitionFrame()
 	end
 	return state.releaseTransitionToken == transitionToken and camera.Parent ~= nil
 end
@@ -305,13 +306,7 @@ local function ForceCompletePendingRelease()
 		return
 	end
 	state.skipReleaseTransition = true
-	RestoreCameraControl(
-		ctx.camera,
-		ctx.restoreCameraType,
-		ctx.restoreSubject,
-		ctx.restoreFov,
-		ctx.getCharacterParts
-	)
+	RestoreCameraControl(ctx.camera, ctx.restoreCameraType, ctx.restoreSubject, ctx.restoreFov, ctx.getCharacterParts)
 	if ctx.completeInvoked ~= nil then
 		InvokeOnCompleteOnce(ctx.onComplete, ctx.completeInvoked)
 	else
@@ -389,14 +384,9 @@ function RunwayCameraController.CalculateTargets(
 	else
 		right = right.Unit
 	end
-	local backOffset = if useChestOpenZoom == true
-		then ResolveChestOpenBackOffset(cfg)
-		else cfg.RUNWAY_CAMERA_BACK_OFFSET
-	local targetLookAt = hrp.Position + forward * cfg.RUNWAY_CAMERA_LOOK_AHEAD
-		+ Vector3.new(0, cfg.RUNWAY_CAMERA_LOOK_HEIGHT, 0)
-	local targetPosition = hrp.Position - forward * backOffset
-		+ right * cfg.RUNWAY_CAMERA_RIGHT_OFFSET
-		+ Vector3.new(0, cfg.RUNWAY_CAMERA_HEIGHT_OFFSET, 0)
+	local backOffset = if useChestOpenZoom == true then ResolveChestOpenBackOffset(cfg) else cfg.RUNWAY_CAMERA_BACK_OFFSET
+	local targetLookAt = hrp.Position + forward * cfg.RUNWAY_CAMERA_LOOK_AHEAD + Vector3.new(0, cfg.RUNWAY_CAMERA_LOOK_HEIGHT, 0)
+	local targetPosition = hrp.Position - forward * backOffset + right * cfg.RUNWAY_CAMERA_RIGHT_OFFSET + Vector3.new(0, cfg.RUNWAY_CAMERA_HEIGHT_OFFSET, 0)
 	if (targetLookAt - targetPosition).Magnitude < 1e-3 then
 		targetLookAt += forward
 	end
@@ -411,7 +401,6 @@ function RunwayCameraController.CalculateChaserFocusTarget(
 	normalizeForward: (Vector3) -> Vector3
 ): CFrame
 	local chaserHead = chaser:FindFirstChild("Head") :: BasePart?
-	print("chaserHead", chaserHead)
 	local centerPos = if chaserHead ~= nil then chaserHead.Position else chaser:GetPivot().Position
 	local lookAt = centerPos
 	local toPlayer = if hrp ~= nil then Vector3.new(hrp.Position.X - centerPos.X, 0, hrp.Position.Z - centerPos.Z) else Vector3.zero
@@ -563,14 +552,7 @@ function RunwayCameraController.FocusChaserThenDisable(
 	onFocusSequenceComplete: (() -> ())?
 )
 	if chaser == nil or chaser.Parent == nil then
-		RunwayCameraController.Disable(
-			workspaceRef,
-			getCharacterParts,
-			releaseForward,
-			cfg,
-			normalizeForward,
-			onFocusSequenceComplete
-		)
+		RunwayCameraController.Disable(workspaceRef, getCharacterParts, releaseForward, cfg, normalizeForward, onFocusSequenceComplete)
 		return
 	end
 	state.smoothedCameraPosition = nil
@@ -631,12 +613,7 @@ function RunwayCameraController.FocusChaserThenDisable(
 		end
 		local _releaseCharacter, _releaseHumanoid, releaseHrp = getCharacterParts()
 		if releaseHrp ~= nil then
-			local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(
-				releaseHrp,
-				releaseForward,
-				cfg,
-				normalizeForward
-			)
+			local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(releaseHrp, releaseForward, cfg, normalizeForward)
 			local targetCFrame = CFrame.lookAt(targetPosition, targetLookAt, Vector3.yAxis)
 			local targetFov = restoreFov or camera.FieldOfView
 			if releaseDuration > 0 then
@@ -701,13 +678,7 @@ function RunwayCameraController.Update(
 		return
 	end
 	local useChestOpenZoom = state.chestOpenZoomActive
-	local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(
-		hrp,
-		runwayForward,
-		cfg,
-		normalizeForward,
-		useChestOpenZoom
-	)
+	local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(hrp, runwayForward, cfg, normalizeForward, useChestOpenZoom)
 	local targetFov = if useChestOpenZoom then ResolveChestOpenFov(cfg) else cfg.RUNWAY_CAMERA_FOV
 	local currentPosition: Vector3 = state.smoothedCameraPosition or targetPosition
 	local currentLookAt: Vector3 = state.smoothedCameraLookAt or targetLookAt
