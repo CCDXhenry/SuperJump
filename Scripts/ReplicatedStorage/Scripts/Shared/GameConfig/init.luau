@@ -1004,7 +1004,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- 链式 Perfect 近地区起点高度（stud）；PRELAND 到此为 Ok 插值，此高度到贴地为 Perfect 插值
 	RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS = 3.5,
 	-- 起跳窗慢漂 WalkSpeed；↑ 窗内更易微调站位
-	JUMP_WINDOW_WALK_SPEED = 10,
+	JUMP_WINDOW_WALK_SPEED = 2,
 
 	-- ═══════════════════════════════════════
 	-- —— ② 沿轴水平速度 ——
@@ -1018,7 +1018,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- JumpRunway 分阶段真实位移日志；用于公式校准，发布默认关闭
 	RUNWAY_DISTANCE_LOG_ENABLED = false,
 	-- 首跳前线前 AutoRun 沿轴速；↑ 起跳前冲更快
-	FIRST_TAKEOFF_AUTORUN_SPEED = 20,
+	FIRST_TAKEOFF_AUTORUN_SPEED = 16,
 	-- max 到 min 的降速比例（相对本次起跳前最终减速完的速度）；↑ 段内减速幅度更大
 	JUMP_SPEED_REDUCTION_RATIO = 0.3,
 	-- 每跳评级速度 bonus；外层 [jumpIndex]，内层 [1]=Perfect,[2]=Ok,[3]=Late。
