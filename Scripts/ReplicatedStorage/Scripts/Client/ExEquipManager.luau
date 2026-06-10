@@ -368,7 +368,16 @@ local function RefreshExerciseScaleBarForIntervalChange()
 	TweenExerciseScaleBarToTarget(ratioValue, targetRatio, remainingDuration, nil)
 end
 
-local function UpdateExerciseInfoView()
+local function ApplyExerciseScaleBarInstant(targetRatio: number)
+	exerciseScaleBarSequenceId += 1
+	StopExerciseScaleBarTween()
+	ApplyExerciseScaleBarRatio(targetRatio)
+	if exerciseScaleBarRatioValue ~= nil then
+		exerciseScaleBarRatioValue.Value = targetRatio
+	end
+end
+
+local function UpdateExerciseInfoView(instantScaleBarUpdate: boolean?)
 	local equipFrame = GetExerciseEquipFrame()
 	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
 	if equipFrame == nil or localPlayerInfo == nil then
@@ -402,6 +411,10 @@ local function UpdateExerciseInfoView()
 	if jumpPowerInfo.lv > exerciseDisplayLv then
 		exerciseDisplayLv = jumpPowerInfo.lv
 		RefreshExerciseInfoLabels(jumpPowerInfo, requiredExp)
+		if instantScaleBarUpdate then
+			ApplyExerciseScaleBarInstant(targetRatio)
+			return
+		end
 		exerciseScaleBarSequenceId += 1
 		ApplyExerciseScaleBarRatio(0)
 		if targetRatio <= 1e-5 then
@@ -416,6 +429,10 @@ local function UpdateExerciseInfoView()
 
 	exerciseDisplayLv = jumpPowerInfo.lv
 	RefreshExerciseInfoLabels(jumpPowerInfo, requiredExp)
+	if instantScaleBarUpdate then
+		ApplyExerciseScaleBarInstant(targetRatio)
+		return
+	end
 	exerciseScaleBarSequenceId += 1
 	local ratioValue = EnsureExerciseScaleBarRatioValue()
 	if math.abs(targetRatio - exerciseScaleBarRatio) <= 1e-5 then
@@ -1537,8 +1554,9 @@ function ExEquipManager.Init()
 	NetMsg.ConnectNotifyPlayerJumpPowerUpdate(function(jumpPowerInfo: GameConfig.JumpPowerInfo, addExp: number)
 		local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
 		local previousLv = if localPlayerInfo ~= nil then localPlayerInfo.jumpPower.lv else jumpPowerInfo.lv
+		local isClickRewardUpdate = clickRewardExpectedServerAddExp > 0 and addExp >= clickRewardExpectedServerAddExp
 		ClientGameInfo.UpdateJumpPower(jumpPowerInfo, addExp)
-		UpdateExerciseInfoView()
+		UpdateExerciseInfoView(isClickRewardUpdate)
 		if not TryShowExerciseClickRewardPopup(addExp) then
 			ShowExerciseJumpPowerPopup(addExp)
 		end
