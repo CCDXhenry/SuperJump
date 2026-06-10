@@ -309,6 +309,30 @@ local RECOVERY = 0.8
 local MAX_PAYBACK = 60
 local COST_RATE = 1.3
 
+export type RebirthData = {
+	id: number,
+	count: number,
+	collectMultiple: number,
+	jumppowerLv: number,
+}
+
+GameConfig.Rebirth = {} :: { RebirthData }
+GameConfig.RebirthMap = {} :: { [number]: RebirthData }
+
+for _, rawData in pairs(RebirthDataModule) do
+	local rebirthData: RebirthData = {
+		id = rawData.id,
+		count = rawData.count,
+		collectMultiple = rawData.collectMultiple,
+		jumppowerLv = rawData.jumppowerLv,
+	}
+	GameConfig.RebirthMap[rebirthData.id] = rebirthData
+	table.insert(GameConfig.Rebirth, rebirthData)
+end
+table.sort(GameConfig.Rebirth, function(a, b)
+	return a.id < b.id
+end)
+
 function GameConfig.GetBrainrotAbility(baseAbility: number, level: number): number
 	local linear = level + baseAbility - 1
 	local expo = math.ceil(baseAbility * (1.2 ^ (level - 1)))
@@ -827,30 +851,6 @@ GameConfig.IslandConfigMap = {} :: { [number]: IslandData }
 GameConfig.IslandEarthquakeConfigMap = {} :: { [number]: IslandEarthquakeData }
 GameConfig.IslandSpawnerMap = {} :: { [number]: { IslandSpawnerData } }
 
-export type RebirthData = {
-	id: number,
-	count: number,
-	collectMultiple: number,
-	jumppowerLv: number,
-}
-
-GameConfig.Rebirth = {} :: { RebirthData }
-GameConfig.RebirthMap = {} :: { [number]: RebirthData }
-
-for _, rawData in pairs(RebirthDataModule) do
-	local rebirthData: RebirthData = {
-		id = rawData.id,
-		count = rawData.count,
-		collectMultiple = rawData.collectMultiple,
-		jumppowerLv = rawData.jumppowerLv,
-	}
-	GameConfig.RebirthMap[rebirthData.id] = rebirthData
-	table.insert(GameConfig.Rebirth, rebirthData)
-end
-table.sort(GameConfig.Rebirth, function(a, b)
-	return a.id < b.id
-end)
-
 GameConfig.BrainrotQualityConfig = {
 	[1] = { rarity = "Common", image = "rbxassetid://16865599320", textColor = Color3.fromRGB(255, 255, 255) },
 	[2] = { rarity = "Uncommon", image = "rbxassetid://16865599320", textColor = Color3.fromRGB(73, 230, 0) },
@@ -901,8 +901,10 @@ function GameConfig.GetBrainrotTemplateBaseScale(template: Instance): number
 end
 
 function GameConfig.ApplyBrainrotModelScale(model: Model, level: number, templateBaseScale: number?)
-	local baseScale = templateBaseScale
-	if baseScale == nil then
+	local baseScale: number
+	if templateBaseScale ~= nil then
+		baseScale = templateBaseScale
+	else
 		local stored = model:GetAttribute(GameConfig.BrainrotTemplateBaseScaleAttributeName)
 		if typeof(stored) == "number" and stored > 0 then
 			baseScale = stored
@@ -1133,6 +1135,8 @@ GameConfig.JumpRunwayDesigner = {
 	RUNWAY_TREE_HIT_DIRECT_OPEN_CHEST_AHEAD_STUDS = 15,
 	-- 撞树反弹趴滑：HRP 中心离地高度（stud）；越大趴滑时人物越高
 	RUNWAY_OBSTACLE_BOUNCE_SLIDE_PRONE_HRP_GROUND_HEIGHT = 1.7,
+	-- 最远距离记录墙体 Y 轴高度（stud）
+	BEST_DISTANCE_WALL_HEIGHT_Y = 1.14,
 
 	-- ═══════════════════════════════════════
 	-- —— ⑥ 玩法摄像机 ——
@@ -1164,9 +1168,9 @@ GameConfig.JumpRunwayDesigner = {
 	-- 玩家举起最终 brainrot 后的展示停留时长（秒）；结束后才创建追击者
 	RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC = 0.5,
 	-- 开箱时摄像机向后拉远距离（stud）；↑ 镜头更远
-	RUNWAY_CHEST_CAMERA_BACK_OFFSET = 60,
+	RUNWAY_CHEST_CAMERA_BACK_OFFSET = 50,
 	-- 开箱时摄像机俯仰角度（度）；正数俯视、负数仰视；绝对值 ↑ 俯仰越明显
-	RUNWAY_CHEST_CAMERA_PITCH_DEG = 10,
+	RUNWAY_CHEST_CAMERA_PITCH_DEG = 2,
 	-- 开箱时摄像机 FOV；↑ 视野更广
 	RUNWAY_CHEST_CAMERA_FOV = 50,
 
@@ -1534,9 +1538,7 @@ GameConfig.JumpRunway = {
 	RUNWAY_TREE_HIT_DIRECT_OPEN_CHEST_AHEAD_STUDS = jumpRunwayDesigner.RUNWAY_TREE_HIT_DIRECT_OPEN_CHEST_AHEAD_STUDS,
 	RUNWAY_OBSTACLE_BOUNCE_SLIDE_PRONE_HRP_GROUND_HEIGHT = jumpRunwayDesigner.RUNWAY_OBSTACLE_BOUNCE_SLIDE_PRONE_HRP_GROUND_HEIGHT,
 	-- 最远距离记录墙体 Y 轴高度（stud）
-	BEST_DISTANCE_WALL_HEIGHT_Y = if typeof(jumpRunwayDesigner.BEST_DISTANCE_WALL_HEIGHT_Y) == "number"
-		then jumpRunwayDesigner.BEST_DISTANCE_WALL_HEIGHT_Y
-		else 1.14,
+	BEST_DISTANCE_WALL_HEIGHT_Y = jumpRunwayDesigner.BEST_DISTANCE_WALL_HEIGHT_Y,
 
 	-- —— 追擊者 Chaser ——
 	-- 追击者基础移动速度（stud/s）
