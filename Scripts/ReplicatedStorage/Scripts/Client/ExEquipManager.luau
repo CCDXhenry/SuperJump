@@ -28,6 +28,7 @@ local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
 local ClientGameInfo = require(clientScripts:FindFirstChild("ClientGameInfo"))
 local UIManager = require(clientScripts:FindFirstChild("UIManager"))
 local BillboardManager = require(clientScripts:FindFirstChild("BillboardManager"))
+local GameSoundManager = require(clientScripts:FindFirstChild("GameSoundManager"))
 
 local function GetPlayerControls(): any
 	local playerScripts = localPlayer:FindFirstChildOfClass("PlayerScripts")
@@ -769,6 +770,7 @@ local function OnExerciseClickRewardButtonActivated()
 		return
 	end
 
+	GameSoundManager.PlayExClickSound()
 	clickRewardPendingPopupPosition = imageButton.Position
 	local rewardAddExp = equipData.ability * ClickRewardConfig.RewardMultiplier
 	clickRewardPendingMinAddExp = rewardAddExp
@@ -807,6 +809,7 @@ local function ShowExerciseClickRewardButton()
 	end
 
 	HideExerciseClickRewardButton()
+	imageButton:SetAttribute("SkipButtonClickSound", true)
 	local randomX = clickRewardRandom:NextNumber(ClickRewardConfig.EdgePaddingScale, 1 - ClickRewardConfig.EdgePaddingScale)
 	local randomY = clickRewardRandom:NextNumber(ClickRewardConfig.EdgePaddingScale, 1 - ClickRewardConfig.EdgePaddingScale)
 	imageButton.AnchorPoint = Vector2.new(0.5, 0.5)
