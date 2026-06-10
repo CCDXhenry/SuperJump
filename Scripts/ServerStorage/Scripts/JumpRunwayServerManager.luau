@@ -60,8 +60,10 @@ type PendingLittleElfChestReward = {
 local pendingLittleElfChestRewardMap: { [number]: PendingLittleElfChestReward } = {}
 
 local JumpRunwayLittleElfChestCarryAttr = "JumpRunwayLittleElfChestCarry"
+local JumpRunwayEscapeActiveAttr = "JumpRunwayEscapeActive"
 local ExercisingAttr = "Exercising"
 local EndTriggerCloseEnoughMinStuds = 24
+local PortalItselfCloseEnoughMinStuds = 24
 
 local function EnsureCollisionGroup(groupName: string)
 	pcall(function()
@@ -513,6 +515,23 @@ local function ClearLittleElfChestPending(player: Player)
 	pendingLittleElfChestRewardMap[player.UserId] = nil
 end
 
+local function ClearJumpRunwayEscapeActive(player: Player)
+	player:SetAttribute(JumpRunwayEscapeActiveAttr, false)
+end
+
+local function IsPlayerNearPortalItself(player: Player, portalItself: BasePart): boolean
+	local character = player.Character
+	if character == nil then
+		return false
+	end
+	local hrp = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if hrp == nil then
+		return false
+	end
+	return (hrp.Position - portalItself.Position).Magnitude
+		< math.max(portalItself.Size.Magnitude * 2, PortalItselfCloseEnoughMinStuds)
+end
+
 local function ResolveEndTrigger(): Part?
 	local startPoint = workspaceInst:FindFirstChild("StartPoint")
 	local startModel = if startPoint then startPoint:FindFirstChild("StartPointModel") else nil
@@ -784,7 +803,50 @@ local function HandleLittleElfChestGrant(player: Player)
 		return
 	end
 	GetBrainrotCarryingManager().StopCarrying(player)
+	ClearJumpRunwayEscapeActive(player)
 	EndRunwaySessionWithoutTeleport(player)
+end
+
+local brainrotIslandManagerMod: any = nil
+local function GetBrainrotIslandManager(): any
+	if brainrotIslandManagerMod == nil then
+		brainrotIslandManagerMod = require(serverScripts:WaitForChild("BrainrotIslandManager"))
+	end
+	return brainrotIslandManagerMod
+end
+
+local function HandleEnterEscapePhase(player: Player)
+	if GetRunwayLittleElfChestCarrying(player) == nil and GetBrainrotCarryingManager().GetCarryingBrainrot(player) == nil then
+		return
+	end
+	player:SetAttribute(JumpRunwayEscapeActiveAttr, true)
+end
+
+function JumpRunwayServerManager.TryCompleteEscapeViaTeleportPortal(player: Player, portalItself: BasePart): boolean
+	if player:GetAttribute(JumpRunwayEscapeActiveAttr) ~= true then
+		return false
+	end
+	if not IsPlayerNearPortalItself(player, portalItself) then
+		return false
+	end
+
+	local littleElfCarrying = GetRunwayLittleElfChestCarrying(player)
+	if littleElfCarrying ~= nil then
+		if pendingLittleElfChestRewardMap[player.UserId] == nil then
+			return false
+		end
+		if not GrantLittleElfChestPendingToPlayer(player) then
+			return false
+		end
+		GetBrainrotCarryingManager().StopCarrying(player)
+	else
+		GetBrainrotIslandManager().TryConvertCarryingToQueue(player)
+	end
+
+	ClearJumpRunwayEscapeActive(player)
+	EndRunwaySessionWithoutTeleport(player)
+	TeleportPlayerToHomeSlot(player)
+	return true
 end
 
 local function BindLittleElfChestDeathHandler(player: Player)
@@ -797,6 +859,7 @@ local function BindLittleElfChestDeathHandler(player: Player)
 			if pendingLittleElfChestRewardMap[player.UserId] ~= nil then
 				ClearLittleElfChestPending(player)
 			end
+			ClearJumpRunwayEscapeActive(player)
 		end)
 	end)
 end
@@ -889,12 +952,16 @@ function JumpRunwayServerManager.Init()
 	NetMsg.ConnectRequestJumpRunwayLittleElfChestGrant(function(player: Player)
 		HandleLittleElfChestGrant(player)
 	end)
+	NetMsg.ConnectRequestJumpRunwayEnterEscapePhase(function(player: Player)
+		HandleEnterEscapePhase(player)
+	end)
 	for _, player in ipairs(players:GetPlayers()) do
 		BindLittleElfChestDeathHandler(player)
 	end
 	players.PlayerAdded:Connect(BindLittleElfChestDeathHandler)
 	players.PlayerRemoving:Connect(function(player)
 		ClearLittleElfChestPending(player)
+		ClearJumpRunwayEscapeActive(player)
 		local st = runMap[player.UserId]
 		if st then
 			local fwd = st.runwayForward

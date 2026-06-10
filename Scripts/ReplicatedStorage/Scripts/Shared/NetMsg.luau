@@ -143,6 +143,8 @@ local requestJumpRunwayLittleElfChestGrantEvent: RemoteEvent? = remoteEventsFold
 local requestJumpRunwayLittleElfChestStartCarryEvent: RemoteEvent? =
 	remoteEventsFolder:FindFirstChild("RequestJumpRunwayLittleElfChestStartCarry") :: RemoteEvent?
 local notifyJumpRunwayLittleElfChestRewardEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("NotifyJumpRunwayLittleElfChestReward") :: RemoteEvent?
+local requestJumpRunwayEnterEscapePhaseEvent: RemoteEvent? = GetOrCreateRemoteEvent("RequestJumpRunwayEnterEscapePhase")
+local requestJumpRunwayTeleportPortalEscapeEvent: RemoteEvent? = GetOrCreateRemoteEvent("RequestJumpRunwayTeleportPortalEscape")
 
 -- ExEquip 锻炼器材
 local requestBuyExEquipEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestBuyExEquip") :: RemoteEvent?
@@ -959,6 +961,47 @@ function NetMsg.ConnectNotifyJumpRunwayLittleElfChestReward(callback: (brainrotI
 		return
 	end
 	notifyJumpRunwayLittleElfChestRewardEvent.OnClientEvent:Connect(callback)
+end
+
+-- JumpRunway 逃生阶段：客户端进入追击/逃生后通知服务端
+function NetMsg.FireRequestJumpRunwayEnterEscapePhase()
+	if requestJumpRunwayEnterEscapePhaseEvent == nil then
+		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
+		return
+	end
+	requestJumpRunwayEnterEscapePhaseEvent:FireServer()
+end
+
+function NetMsg.ConnectRequestJumpRunwayEnterEscapePhase(callback: (player: Player) -> ())
+	if requestJumpRunwayEnterEscapePhaseEvent == nil then
+		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
+		return
+	end
+	requestJumpRunwayEnterEscapePhaseEvent.OnServerEvent:Connect(function(player: Player)
+		callback(player)
+	end)
+end
+
+-- JumpRunway 逃生：从传送门正面穿越后请求回 Home 并入背包
+function NetMsg.FireRequestJumpRunwayTeleportPortalEscape(portalItselfPath: string)
+	if requestJumpRunwayTeleportPortalEscapeEvent == nil then
+		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
+		return
+	end
+	requestJumpRunwayTeleportPortalEscapeEvent:FireServer(portalItselfPath)
+end
+
+function NetMsg.ConnectRequestJumpRunwayTeleportPortalEscape(callback: (player: Player, portalItselfPath: string) -> ())
+	if requestJumpRunwayTeleportPortalEscapeEvent == nil then
+		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
+		return
+	end
+	requestJumpRunwayTeleportPortalEscapeEvent.OnServerEvent:Connect(function(player: Player, portalItselfPath: any)
+		if typeof(portalItselfPath) ~= "string" then
+			return
+		end
+		callback(player, portalItselfPath :: string)
+	end)
 end
 
 -- ExEquip: 客户端请求购买器材

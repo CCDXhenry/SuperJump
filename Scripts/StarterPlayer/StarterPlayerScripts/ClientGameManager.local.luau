@@ -22,6 +22,7 @@ local BrainrotClientManager = require(clientScripts:WaitForChild("BrainrotClient
 --local ChestWorkbenchClientManager = require(clientScripts:WaitForChild("ChestWorkbenchClientManager"))
 local GuideManager = require(clientScripts:WaitForChild("GuideManager"))
 local JumpRunwayClientManager = require(clientScripts:WaitForChild("JumpRunwayClientManager"))
+local TeleportPortalClientManager = require(clientScripts:WaitForChild("TeleportPortalClientManager"))
 local ExEquipManager = require(clientScripts:WaitForChild("ExEquipManager"))
 local JetpackClientManager = require(clientScripts:WaitForChild("JetpackClientManager"))
 local GroupRewardClientManager = require(clientScripts:WaitForChild("GroupRewardClientManager"))
@@ -85,6 +86,7 @@ local function InitUI()
 
 	-- 初始化系统经理
 	JumpRunwayClientManager.Init()
+	TeleportPortalClientManager.Init()
 	HomeClientManager.Init()
 	ShopClientManager.Init()
 	PlayerInteractClientManager.Init()

@@ -6288,7 +6288,28 @@ function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chest
 	end
 	ClientGameInfo.SetInJumpRunwayEscapePhase(true)
 	Refs.chestCarryReturnActive = true
+	NetMsg.FireRequestJumpRunwayEnterEscapePhase()
 	ClientMsg.FireJumpRunWayEnterEscapeHudMode()
+end
+
+function RunwaySession.TryCompleteEscapeViaTeleportPortal()
+	if Refs.chestBackpackDeliverRequested == true then
+		return
+	end
+	if not ClientGameInfo.IsInJumpRunwayEscapePhase() then
+		return
+	end
+	local character, _humanoid, hrp = RunwaySession.GetCharacterParts()
+	if character == nil or hrp == nil then
+		return
+	end
+
+	Refs.chestBackpackDeliverRequested = true
+	Refs.startTriggerStartArmed = false
+	Refs.chestCarryReturnActive = false
+	ChaserClientManager.StopAndFadeChaser()
+	ClientMsg.FireJumpRunWayStopEscapeRedScreen()
+	RunwaySession.ResetLocalRunToIdle()
 end
 
 function RunwaySession.TryDeliverLittleElfChestAtEndTrigger(endTrigger: Part)
