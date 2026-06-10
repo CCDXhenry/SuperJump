@@ -1192,6 +1192,26 @@ local jumpRunwayDesigner = GameConfig.JumpRunwayDesigner
 GameConfig.JumpPowerDefaultValue = jumpRunwayDesigner.DEFAULT_JUMP_POWER -- 默认跳跃力
 GameConfig.JumpPowerExerciseInterval = jumpRunwayDesigner.JUMP_POWER_EXERCISE_INTERVAL -- 跳跃力锻炼间隔
 GameConfig.ExerciseRunWalkSpeed = jumpRunwayDesigner.EXERCISE_RUN_WALK_SPEED -- 跑步机锻炼固定跑步动画速度
+
+local EXERCISE_RUN_ANIM_WALK_SPEED_REFERENCE = 16
+
+function GameConfig.GetExerciseJumpPowerInterval(buffInfo: BuffInfo?): number
+	local multiplier = GameConfig.GetBuffMultiplier(buffInfo, GameConfig.BuffType.ExerciseEfficiency)
+	return GameConfig.JumpPowerExerciseInterval / multiplier
+end
+
+function GameConfig.GetExerciseAnimationSpeedScale(buffInfo: BuffInfo?): number
+	return GameConfig.GetBuffMultiplier(buffInfo, GameConfig.BuffType.ExerciseEfficiency)
+end
+
+function GameConfig.GetExerciseTreadmillAnimationSpeed(buffInfo: BuffInfo?): number
+	local scale = GameConfig.GetExerciseAnimationSpeedScale(buffInfo)
+	return (GameConfig.ExerciseRunWalkSpeed / EXERCISE_RUN_ANIM_WALK_SPEED_REFERENCE) * scale
+end
+
+function GameConfig.GetExerciseBikeAnimationSpeed(buffInfo: BuffInfo?): number
+	return GameConfig.GetExerciseAnimationSpeedScale(buffInfo)
+end
 GameConfig.ExerciseClickReward = {
 	-- 点击奖励按钮每次出现的最短等待时间（秒）
 	DelayMin = 5,

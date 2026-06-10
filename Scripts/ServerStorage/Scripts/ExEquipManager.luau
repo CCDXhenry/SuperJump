@@ -22,8 +22,6 @@ local exEquipModelsFolder: Folder? = if modelsFolder ~= nil then modelsFolder:Fi
 
 local LOG_PREFIX = "[ExEquipManager]"
 
--- 锻炼 JumpPower 递增
-local EXERCISE_JUMP_POWER_INTERVAL = GameConfig.JumpPowerExerciseInterval
 local ClickRewardConfig = GameConfig.ExerciseClickReward
 -- 人物躯干高度（HumanoidRootPart 到脚底的参考偏移）
 local CHARACTER_TORSO_HEIGHT: number = 3
@@ -373,11 +371,6 @@ local function GetMoneyCount(playerInfo: GameConfig.PlayerInfo): number
 	return playerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
 end
 
-local function GetExerciseJumpPowerInterval(playerInfo: GameConfig.PlayerInfo): number
-	local multiplier = GameConfig.GetBuffMultiplier(playerInfo.buffInfo, GameConfig.BuffType.ExerciseEfficiency)
-	return EXERCISE_JUMP_POWER_INTERVAL / multiplier
-end
-
 -- 处理客户端购买器材请求
 function ExEquipManager.OnRequestBuyExEquip(player: Player, equipId: number)
 	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
@@ -581,7 +574,11 @@ function ExEquipManager.OnRequestStartExercise(player: Player, equipId: number)
 	task.spawn(function()
 		local capturedSessionId = sessionId
 		while exerciseSessionMap[userId] == capturedSessionId do
-			task.wait(GetExerciseJumpPowerInterval(playerInfo))
+			local currentPlayerInfo = ServerGameInfo.GetPlayerInfo(player)
+			local interval = if currentPlayerInfo ~= nil
+				then GameConfig.GetExerciseJumpPowerInterval(currentPlayerInfo.buffInfo)
+				else GameConfig.JumpPowerExerciseInterval
+			task.wait(interval)
 			if exerciseSessionMap[userId] ~= capturedSessionId then
 				break
 			end

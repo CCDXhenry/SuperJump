@@ -105,6 +105,7 @@ local exerciseScaleBarTween: Tween? = nil
 local exerciseScaleBarRatioValue: NumberValue? = nil
 local exerciseScaleBarRatioConnection: RBXScriptConnection? = nil
 local exerciseScaleBarSequenceId: number = 0
+local exerciseScaleBarTweenStartRatio: number = 0
 local exerciseDisplayLv: number? = nil
 local clickRewardRandom = Random.new()
 local clickRewardSequenceId: number = 0
@@ -253,6 +254,7 @@ local function TweenExerciseScaleBarToTarget(
 	onComplete: (() -> ())?
 )
 	StopExerciseScaleBarTween()
+	exerciseScaleBarTweenStartRatio = exerciseScaleBarRatio
 	ratioValue.Value = exerciseScaleBarRatio
 	local sequenceId = exerciseScaleBarSequenceId
 	local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
@@ -306,6 +308,63 @@ local function RefreshExerciseInfoLabels(jumpPowerInfo: GameConfig.JumpPowerInfo
 	end
 end
 
+local function GetLocalExerciseBuffInfo(): GameConfig.BuffInfo?
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if localPlayerInfo == nil then
+		return nil
+	end
+	return localPlayerInfo.buffInfo
+end
+
+local function GetLocalExerciseJumpPowerInterval(): number
+	return GameConfig.GetExerciseJumpPowerInterval(GetLocalExerciseBuffInfo())
+end
+
+local function ApplyExerciseAnimationSpeed()
+	local buffInfo = GetLocalExerciseBuffInfo()
+	if exerciseTreadmillAnimTrack ~= nil then
+		exerciseTreadmillAnimTrack:AdjustSpeed(GameConfig.GetExerciseTreadmillAnimationSpeed(buffInfo))
+	end
+	if exerciseBikeAnimTrack ~= nil then
+		exerciseBikeAnimTrack:AdjustSpeed(GameConfig.GetExerciseBikeAnimationSpeed(buffInfo))
+	end
+end
+
+local function RefreshExerciseScaleBarForIntervalChange()
+	if not isExercising then
+		return
+	end
+
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if localPlayerInfo == nil then
+		return
+	end
+
+	local jumpPowerInfo = localPlayerInfo.jumpPower
+	local requiredExp = GameConfig.GetJumpPowerRequiredExp(jumpPowerInfo)
+	local targetRatio = if requiredExp > 0 then jumpPowerInfo.exp / requiredExp else 0
+	local interval = GetLocalExerciseJumpPowerInterval()
+	local ratioValue = EnsureExerciseScaleBarRatioValue()
+	local currentRatio = ratioValue.Value
+
+	if math.abs(targetRatio - currentRatio) <= 1e-5 then
+		StopExerciseScaleBarTween()
+		ApplyExerciseScaleBarRatio(targetRatio)
+		return
+	end
+
+	local startRatio = exerciseScaleBarTweenStartRatio
+	local totalDelta = targetRatio - startRatio
+	local remainingDuration = interval
+	if math.abs(totalDelta) > 1e-5 then
+		remainingDuration = interval * (targetRatio - currentRatio) / totalDelta
+	end
+	remainingDuration = math.max(remainingDuration, 0)
+
+	exerciseScaleBarSequenceId += 1
+	TweenExerciseScaleBarToTarget(ratioValue, targetRatio, remainingDuration, nil)
+end
+
 local function UpdateExerciseInfoView()
 	local equipFrame = GetExerciseEquipFrame()
 	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
@@ -328,7 +387,7 @@ local function UpdateExerciseInfoView()
 	local jumpPowerInfo = localPlayerInfo.jumpPower
 	local requiredExp = GameConfig.GetJumpPowerRequiredExp(jumpPowerInfo)
 	local targetRatio = if requiredExp > 0 then jumpPowerInfo.exp / requiredExp else 0
-	local interval = GameConfig.JumpPowerExerciseInterval
+	local interval = GetLocalExerciseJumpPowerInterval()
 
 	if exerciseDisplayLv == nil then
 		exerciseDisplayLv = jumpPowerInfo.lv
@@ -1392,6 +1451,7 @@ local function StartExercise(equipId: number)
 				exerciseTreadmillAnimTrack = animator:LoadAnimation(treadmillAnim)
 				exerciseTreadmillAnimTrack.Looped = true
 				exerciseTreadmillAnimTrack:Play()
+				ApplyExerciseAnimationSpeed()
 			end
 		elseif IsBikeExEquipType(equipData.type) then
 			-- Bike 类型：播放专属骑行动画
@@ -1402,6 +1462,7 @@ local function StartExercise(equipId: number)
 				exerciseBikeAnimTrack = animator:LoadAnimation(bikeAnim)
 				exerciseBikeAnimTrack.Looped = true
 				exerciseBikeAnimTrack:Play()
+				ApplyExerciseAnimationSpeed()
 			end
 			UpdateBikePedalController()
 		end
@@ -1468,6 +1529,14 @@ function ExEquipManager.Init()
 		if ClientGameInfo.IsInJumpRunway() then
 			StopExerciseWithServerRequest()
 		end
+	end)
+
+	ClientMsg.ConnectLocalPlayerBuffInfoUpdate(function()
+		if not isExercising then
+			return
+		end
+		ApplyExerciseAnimationSpeed()
+		RefreshExerciseScaleBarForIntervalChange()
 	end)
 
 	-- 角色死亡/移除时退出锻炼模式
