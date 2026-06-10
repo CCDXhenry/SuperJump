@@ -215,6 +215,22 @@ local function IsExEquipGuideUnlocked(info: GameConfig.ClientLocalPlayerInfo): b
 		and IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackRunwayRetryFinished)
 end
 
+local function IsExEquipGuideFinished(info: GameConfig.ClientLocalPlayerInfo): boolean
+	return IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished)
+		and IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipUseFinished)
+		and IsGuideStepDone(info, GameConfig.GuideStepKey.JumpPowerRunwayRetryFinished)
+end
+
+local function HasMetWalkSpeedUpgradeDistanceRequirement(info: GameConfig.ClientLocalPlayerInfo): boolean
+	return (info.jumpRunwayBestDistance or 0) > GameConfig.GuideWalkSpeedUpgradeMinBestDistance
+end
+
+local function IsWalkSpeedUpgradeGuideUnlocked(info: GameConfig.ClientLocalPlayerInfo): boolean
+	return HasMetWalkSpeedUpgradeDistanceRequirement(info)
+		and IsExEquipGuideUnlocked(info)
+		and IsExEquipGuideFinished(info)
+end
+
 local function TryCompleteOwnedPurchaseGuideSteps()
 	local info = ClientGameInfo.GetLocalPlayerInfo()
 	if info == nil then
@@ -953,7 +969,7 @@ local function ResolveGuideType(): number
 	if not IsGuideStepDone(info, GameConfig.GuideStepKey.WalkSpeedUpgradeFinished) then
 		if HasWalkSpeedUpgraded(info) then
 			CompleteGuideStep(GameConfig.GuideStepKey.WalkSpeedUpgradeFinished)
-		elseif IsGuideStepDone(info, GameConfig.GuideStepKey.ChaserKillExperienced) then
+		elseif IsWalkSpeedUpgradeGuideUnlocked(info) then
 			if IsWalkSpeedUpgradeAffordable(info) then
 				return FilterOutsideRunwaySessionGuide(
 					MaybeIslandTeleportOr(GameConfig.GuideType.TutorialWalkSpeedUpgrade)
@@ -1126,6 +1142,10 @@ function GuideManager.Init()
 
 	ClientMsg.ConnectLocalPlayerExEquipInventoryUpdate(function()
 		TryCompleteOwnedPurchaseGuideSteps()
+		ForceRefreshGuideType()
+	end)
+
+	ClientMsg.ConnectLocalPlayerJumpRunwayBestDistanceUpdate(function()
 		ForceRefreshGuideType()
 	end)
 

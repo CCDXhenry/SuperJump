@@ -82,6 +82,8 @@ GameConfig.GuideStepKey = {
 
 GameConfig.GuideTargetJetpackId = 1
 GameConfig.GuideTargetExEquipId = 1
+-- 升级速度引导：最远跳跃距离需超过该值（与跑道 HUD 同 stud 语义，显示后缀 m）
+GameConfig.GuideWalkSpeedUpgradeMinBestDistance = 300
 
 -- 工厂玩法停用
 -- GameConfig.GuideWorldAnchorName = {
