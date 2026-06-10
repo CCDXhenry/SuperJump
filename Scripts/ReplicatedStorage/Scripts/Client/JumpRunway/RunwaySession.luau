@@ -4169,17 +4169,20 @@ function RunwaySession.GetDistanceRecorderDisplayStuds(hrp: BasePart): number
 	return Refs.runwayDistanceRecorderPeakStuds or 0
 end
 
-function RunwaySession.CommitRunwayBestDistanceFromDistanceRecorder(hrpOpt: BasePart?)
+function RunwaySession.CommitRunwayBestDistanceFromDistanceRecorder(hrpOpt: BasePart?): boolean
 	if Refs.runwayBestDistanceCommitted == true then
-		return
+		return false
 	end
 	if hrpOpt ~= nil then
 		RunwaySession.RefreshDistanceRecorderPeak(hrpOpt)
 	end
 	local peak = Refs.runwayDistanceRecorderPeakStuds
 	if peak == nil or peak <= 0 then
-		return
+		return false
 	end
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	local previousBest = if localPlayerInfo ~= nil then localPlayerInfo.jumpRunwayBestDistance else 0
+	local isNewRecord = peak > previousBest
 	Refs.runwayBestDistanceCommitted = true
 	Refs.runwayDistanceRecorderFrozenStuds = peak
 	ClientGameInfo.UpdateJumpRunwayBestDistance(peak)
@@ -4199,6 +4202,10 @@ function RunwaySession.CommitRunwayBestDistanceFromDistanceRecorder(hrpOpt: Base
 			end
 		end
 	end
+	if isNewRecord then
+		ClientMsg.FireJumpRunWayShowNewRecordTip()
+	end
+	return isNewRecord
 end
 
 function RunwaySession.DestroyDistanceRecorder()
@@ -4749,7 +4756,6 @@ function RunwaySession.UpdateBestDistanceWall(hrp: BasePart)
 		return
 	end
 	Refs.bestDistanceWallPassed = true
-	ClientMsg.FireJumpRunWayShowNewRecordTip()
 	Refs.bestDistanceWallDestroyToken += 1
 	local destroyToken = Refs.bestDistanceWallDestroyToken
 	task.delay(BestDistanceWallDestroyDelaySec, function()

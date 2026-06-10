@@ -58,6 +58,10 @@ local speedValue: TextLabel? = nil
 local tipText: TextLabel? = nil
 local tipTextBasePosition: UDim2? = nil
 local tipTextBaseRotation: number? = nil
+local latestDistanceStuds = 0
+local latestDistanceHudVisible = false
+local latestDistanceCanShow = false
+local tipDistanceHoldActive = false
 
 local presentationToken = 0
 local tipPresentationToken = 0
@@ -628,6 +632,7 @@ local function CancelTipPresentationOnly()
 		tween:Cancel()
 	end
 	table.clear(activeTipTweenList)
+	tipDistanceHoldActive = false
 	ResetTipTextPresentation()
 end
 
@@ -650,6 +655,20 @@ local function ResolveImpactUIScale(label: TextLabel): UIScale?
 		return onRoot
 	end
 	return nil
+end
+
+local function ApplyDistanceHudVisibility()
+	local shouldShowDistance = latestDistanceHudVisible
+		or (tipDistanceHoldActive and latestDistanceCanShow and latestDistanceStuds > 0)
+	if distanceLabel ~= nil then
+		distanceLabel.Visible = shouldShowDistance
+	end
+	if distanceValue ~= nil then
+		distanceValue.Visible = shouldShowDistance
+		if shouldShowDistance then
+			LocalizeDistanceMeters(distanceValue, latestDistanceStuds)
+		end
+	end
 end
 
 local function RefreshRunwayStats(
@@ -678,16 +697,13 @@ local function RefreshRunwayStats(
 	local isEscapePhase = ClientGameInfo.IsInJumpRunwayEscapePhase()
 	local inRunwayHud = ClientGameInfo.IsInJumpRunway() and not isEscapePhase and distanceStuds > 0
 	local distanceHudVisible = inRunwayHud and distanceVisible
+	if distanceStuds > 0 then
+		latestDistanceStuds = distanceStuds
+	end
+	latestDistanceHudVisible = distanceHudVisible
+	latestDistanceCanShow = inRunwayHud
 	local speedHudVisible = inRunwayHud and cfg.DEBUG
-	if distanceLabel ~= nil then
-		distanceLabel.Visible = distanceHudVisible
-	end
-	if distanceValue ~= nil then
-		distanceValue.Visible = distanceHudVisible
-		if distanceHudVisible then
-			LocalizeDistanceMeters(distanceValue, distanceStuds)
-		end
-	end
+	ApplyDistanceHudVisibility()
 	if speedLabel ~= nil then
 		speedLabel.Visible = speedHudVisible
 	end
@@ -723,6 +739,8 @@ local function ShowNewRecordTip()
 	local label = tipText :: TextLabel
 	local basePosition = tipTextBasePosition or label.Position
 	local baseRotation = tipTextBaseRotation or label.Rotation
+	tipDistanceHoldActive = true
+	ApplyDistanceHudVisibility()
 	label.Visible = true
 	label.Position = basePosition + TipTextPopOffset
 	label.Rotation = baseRotation - 7
@@ -783,6 +801,8 @@ local function ShowNewRecordTip()
 					return
 				end
 				label.Visible = false
+				tipDistanceHoldActive = false
+				ApplyDistanceHudVisibility()
 			end)
 			fadeTextTween:Play()
 		end)
