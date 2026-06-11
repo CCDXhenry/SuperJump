@@ -413,13 +413,13 @@ function ServerGameInfo.PrepareOfflineReward(player: Player): GameConfig.Offline
 	end
 
 	local offlineSeconds = math.floor(math.max(0, playerInfo.timeOfThisLogin - (playerInfo.lastOnlineDateUTC or 0)))
+	--print("[ServerGameInfo] PrepareOfflineReward", player.Name, "offlineSeconds", offlineSeconds, playerInfo.timeOfThisLogin, playerInfo.lastOnlineDateUTC)
 	if offlineSeconds <= GameConfig.OfflineRewards.MinOfflineSeconds then
 		pendingOfflineRewardByUserId[player.UserId] = nil
 		return nil
 	end
 
 	offlineSeconds = math.min(offlineSeconds, GameConfig.OfflineRewards.MaxOfflineSeconds)
-
 	local rewardPerSecond = ServerGameInfo.GetHomeCoinYieldPerSecond(playerInfo)
 	local baseReward = math.floor(offlineSeconds * rewardPerSecond * GameConfig.OfflineRewards.BaseRewardMultiplier)
 	if baseReward <= 0 then
