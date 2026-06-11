@@ -163,10 +163,6 @@ function ServerGameInfo.InitPlayerInfo(
 		return
 	end
 	local currentActivePlayer = activePlayerByUserId[player.UserId]
-	if currentActivePlayer ~= nil and currentActivePlayer ~= player and IsPlayerConnected(currentActivePlayer) then
-		warn("[ServerGameInfo] InitPlayerInfo ignored stale session for", player.Name, "userId", player.UserId)
-		return
-	end
 
 	local playerInfo: GameConfig.PlayerInfo = {
 		dataVersion = playerSaveInfo.dataVersion,
