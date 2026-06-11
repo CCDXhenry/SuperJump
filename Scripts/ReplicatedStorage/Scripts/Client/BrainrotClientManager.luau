@@ -3,14 +3,12 @@ local BrainrotClientManager = {}
 
 local players = game:GetService("Players")
 local replicatedStorage = game:GetService("ReplicatedStorage")
-local workspace = game:GetService("Workspace")
 local tweenService = game:GetService("TweenService")
 
 local localPlayer = players.LocalPlayer
 local holdAnimInstance = Instance.new("Animation")
 holdAnimInstance.AnimationId = "rbxassetid://93311785688859" -- 手动替换为双手托举的动作ID
 local holdAnimTrack: AnimationTrack? = nil
-local isPlayerOnIsland = false -- 将在阶段四中由区域检测系统更新
 
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
@@ -29,7 +27,6 @@ local NumberExtension = require(coreSharedScripts:WaitForChild("NumberExtension"
 local ChestOpenAnimationManager = require(scripts:WaitForChild("Client"):WaitForChild("ChestOpenAnimationManager"))
 local BrainrotVariantVisualTool = require(scripts:WaitForChild("Client"):WaitForChild("BrainrotVariantVisualTool"))
 
-local islandsFolder = workspace:FindFirstChild("Islands")
 local actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
 local modelsFolderForChests = replicatedStorage:WaitForChild("Models")
 local actualChests = modelsFolderForChests:FindFirstChild("LittleElfChests")
@@ -39,6 +36,8 @@ local brainrotInfoUIParams = uIFolder:WaitForChild("BrainrotInfoUI") :: Billboar
 local chestInfoUIParams = (uIFolder:FindFirstChild("ChestInfoUI") or uIFolder:WaitForChild("LittleElfChestInfoUI")) :: BillboardGui
 local BILLBOARD_TRACKED_ATTR = "BillboardTracked"
 local COUNTDOWN_SECONDS_PER_MINUTE = 60
+local characterDescendantConnectionMap: { [Player]: RBXScriptConnection } = {}
+local characterAddedConnectionMap: { [Player]: RBXScriptConnection } = {}
 
 local function EnsureBillboardTracked(gui: BillboardGui)
 	if gui:GetAttribute(BILLBOARD_TRACKED_ATTR) ~= true then
@@ -378,6 +377,43 @@ local function ProcessDescendantAdded(descendant: Instance)
 	end
 end
 
+local function DisconnectPlayerCharacterTracking(player: Player)
+	local descendantConnection = characterDescendantConnectionMap[player]
+	if descendantConnection ~= nil then
+		descendantConnection:Disconnect()
+		characterDescendantConnectionMap[player] = nil
+	end
+end
+
+local function TrackPlayerCharacter(player: Player, character: Model)
+	DisconnectPlayerCharacterTracking(player)
+	for _, desc in ipairs(character:GetDescendants()) do
+		ProcessDescendantAdded(desc)
+	end
+	characterDescendantConnectionMap[player] = character.DescendantAdded:Connect(ProcessDescendantAdded)
+end
+
+local function TrackPlayer(player: Player)
+	if characterAddedConnectionMap[player] ~= nil then
+		return
+	end
+	if player.Character then
+		TrackPlayerCharacter(player, player.Character)
+	end
+	characterAddedConnectionMap[player] = player.CharacterAdded:Connect(function(character: Model)
+		TrackPlayerCharacter(player, character)
+	end)
+end
+
+local function UntrackPlayer(player: Player)
+	DisconnectPlayerCharacterTracking(player)
+	local characterAddedConnection = characterAddedConnectionMap[player]
+	if characterAddedConnection ~= nil then
+		characterAddedConnection:Disconnect()
+		characterAddedConnectionMap[player] = nil
+	end
+end
+
 local function OnLocalToolEquipped(tool: Tool, character: Model)
 	local visualModel = tool:FindFirstChild("VisualModel") :: Model?
 	if visualModel and tool:GetAttribute("ItemType") == GameConfig.ItemType.Brainrot then
@@ -391,10 +427,6 @@ local function OnLocalToolEquipped(tool: Tool, character: Model)
 		local visualMotor = handle:FindFirstChild("VisualMotor") :: Motor6D
 		if visualMotor then
 			local targetC0 = CFrame.new()
-			if isPlayerOnIsland and visualModel ~= nil then
-				local extents = visualModel:GetExtentsSize()
-				targetC0 = CFrame.new(0, (extents.Y / 2) + 1.5, 0) -- 1.5 为预估头部偏移量
-			end
 			local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 			tweenService:Create(visualMotor, tweenInfo, { C0 = targetC0 }):Play()
 		end
@@ -569,28 +601,11 @@ local function OnNotifyChestOpenResult(uid: string, _chestConfigId: number, _che
 end
 
 function BrainrotClientManager.Init()
-	if islandsFolder then
-		islandsFolder.DescendantAdded:Connect(ProcessDescendantAdded)
-		for _, desc in ipairs(islandsFolder:GetDescendants()) do
-			ProcessDescendantAdded(desc)
-		end
-	end
-
-	workspace.DescendantAdded:Connect(function(desc)
-		if islandsFolder ~= nil and desc:IsDescendantOf(islandsFolder) then
-			return
-		end
-		ProcessDescendantAdded(desc)
-	end)
-
-	-- Scan existing characters
 	for _, player in ipairs(players:GetPlayers()) do
-		if player.Character then
-			for _, desc in ipairs(player.Character:GetDescendants()) do
-				ProcessDescendantAdded(desc)
-			end
-		end
+		TrackPlayer(player)
 	end
+	players.PlayerAdded:Connect(TrackPlayer)
+	players.PlayerRemoving:Connect(UntrackPlayer)
 
 	-- Local Player Tool Tracking
 	if localPlayer.Character then

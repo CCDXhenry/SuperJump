@@ -14,7 +14,11 @@ local infoGuis: { BillboardGui } = {}
 local infoGuiStateMap: { [BillboardGui]: InfoGuiState } = {}
 local MAX_INFO_UI_SCALE = 1.2
 local MIN_VALID_INFO_UI_SCALE = 0.01
+local UPDATE_INTERVAL_SECONDS = 0.01
+local MAX_UPDATES_PER_STEP = 24
 local DEBUG_LOG_ENABLED = false
+local updateElapsedSeconds = 0
+local updateCursorIndex = 1
 
 local function FormatVector2(value: Vector2): string
 	return string.format("%.1f, %.1f", value.X, value.Y)
@@ -167,9 +171,19 @@ local function RestoreControllerVisibleIfReady(infoUI: BillboardGui, state: Info
 	end
 end
 
-local function UpdateAllInfoScales()
-	local index = 1
-	while index <= #infoGuis do
+local function UpdateInfoScalesStep()
+	local count = #infoGuis
+	if count <= 0 then
+		updateCursorIndex = 1
+		return
+	end
+	if updateCursorIndex > count then
+		updateCursorIndex = 1
+	end
+
+	local updated = 0
+	while updated < MAX_UPDATES_PER_STEP and updateCursorIndex <= #infoGuis do
+		local index = updateCursorIndex
 		local infoUI = infoGuis[index]
 		if infoUI.Parent == nil then
 			RemoveInfoGuiByIndex(index)
@@ -187,11 +201,21 @@ local function UpdateAllInfoScales()
 		local state = infoGuiStateMap[infoUI]
 		if state ~= nil and state.shouldRestoreControllerVisible then
 			RestoreControllerVisibleIfReady(infoUI, state)
-		else
+		elseif infoUI.Enabled then
 			UpdateSingleInfoScale(infoUI, true)
 		end
-		index += 1
+		updateCursorIndex += 1
+		updated += 1
 	end
+end
+
+local function OnRenderStepped(deltaTime: number)
+	updateElapsedSeconds += deltaTime
+	if updateElapsedSeconds < UPDATE_INTERVAL_SECONDS then
+		return
+	end
+	updateElapsedSeconds = 0
+	UpdateInfoScalesStep()
 end
 
 function BillboardManager.Track(gui: BillboardGui)
@@ -228,6 +252,6 @@ function BillboardManager.Untrack(gui: BillboardGui)
 	RemoveInfoGui(gui)
 end
 
-runService.RenderStepped:Connect(UpdateAllInfoScales)
+runService.RenderStepped:Connect(OnRenderStepped)
 
 return BillboardManager

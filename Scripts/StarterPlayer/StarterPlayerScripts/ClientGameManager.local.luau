@@ -11,6 +11,7 @@ local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
 local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
 local clientScripts = scripts:WaitForChild("Client")
+--local GraphicsPerformanceGuard = require(clientScripts:WaitForChild("GraphicsPerformanceGuard"))
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
 local ClientGameInfo = require(clientScripts:FindFirstChild("ClientGameInfo"))
 local UIManager = require(clientScripts:FindFirstChild("UIManager"))
@@ -44,6 +45,10 @@ local GameTipZIndex: number = 2000
 local soundsFolder: Folder = workspace:FindFirstChild("Sounds")
 local bgmSound: Sound = soundsFolder:FindFirstChild("BGM") :: Sound
 local PreloadAssets: () -> ()
+local PreloadBatchSize: number = 50
+local PreloadBatchYieldSeconds: number = 0.05
+local PreloadSlowBatchWarnSeconds: number = 0.5
+local PreloadMeshAssetsEnabled: boolean = false
 
 local function TryOpenOfflineRewardsWindow()
 	local offlineRewardInfo = ClientGameInfo.GetOfflineRewardInfo()
@@ -150,6 +155,9 @@ PreloadAssets = function()
 	end
 
 	local function AddMesh(meshId: string)
+		if not PreloadMeshAssetsEnabled then
+			return
+		end
 		if meshId == "" or meshMap[meshId] ~= nil then
 			return
 		end
@@ -243,18 +251,39 @@ PreloadAssets = function()
 		AddImage(otherImage)
 	end
 
-	--print(string.format("[ClientGameManager] PreloadAssets start. candidates=%d", #assetList))
-	local preloadSuccess, preloadErr = pcall(function()
-		contentProvider:PreloadAsync(assetList, function(assetId: string, assetFetchStatus: Enum.AssetFetchStatus)
-			if assetFetchStatus ~= Enum.AssetFetchStatus.Success then
-				table.insert(failedAssetList, assetId)
-				warn("[ClientGameManager] LoadAssetResult", assetId, assetFetchStatus)
-			end
-		end)
-	end)
+	local totalAssetCount = #assetList
+	local batchStartIndex = 1
+	local batchIndex = 0
+	while batchStartIndex <= totalAssetCount do
+		batchIndex += 1
+		local batchList: { Instance } = {}
+		local batchEndIndex = math.min(batchStartIndex + PreloadBatchSize - 1, totalAssetCount)
+		for assetIndex = batchStartIndex, batchEndIndex do
+			table.insert(batchList, assetList[assetIndex])
+		end
 
-	if not preloadSuccess then
-		warn("[ClientGameManager] PreloadAssets failed:", preloadErr)
+		local batchStartTime = os.clock()
+		local preloadSuccess, preloadErr = pcall(function()
+			contentProvider:PreloadAsync(batchList, function(assetId: string, assetFetchStatus: Enum.AssetFetchStatus)
+				if assetFetchStatus ~= Enum.AssetFetchStatus.Success then
+					table.insert(failedAssetList, assetId)
+					warn("[ClientGameManager] LoadAssetResult", assetId, assetFetchStatus)
+				end
+			end)
+		end)
+		local batchElapsedTime = os.clock() - batchStartTime
+
+		if not preloadSuccess then
+			warn("[ClientGameManager] PreloadAssets batch failed:", batchIndex, preloadErr)
+		elseif batchElapsedTime >= PreloadSlowBatchWarnSeconds then
+			warn(string.format("[ClientGameManager] PreloadAssets slow batch=%d size=%d elapsed=%.2fs", batchIndex, #batchList, batchElapsedTime))
+		end
+
+		table.clear(batchList)
+		batchStartIndex = batchEndIndex + 1
+		if batchStartIndex <= totalAssetCount then
+			task.wait(PreloadBatchYieldSeconds)
+		end
 	end
 
 	for _, instance: Instance in assetList do
@@ -263,11 +292,9 @@ PreloadAssets = function()
 	table.clear(assetList)
 
 	local elapsedTime = os.clock() - preloadStartTime
-	--print(string.format(
-	--	"[ClientGameManager] PreloadAssets complete. failed=%d elapsed=%.2fs",
-	--	#failedAssetList,
-	--	elapsedTime
-	--))
+	if elapsedTime >= PreloadSlowBatchWarnSeconds then
+		warn(string.format("[ClientGameManager] PreloadAssets complete. candidates=%d failed=%d elapsed=%.2fs", totalAssetCount, #failedAssetList, elapsedTime))
+	end
 	if #failedAssetList > 0 then
 		--print(string.format("[ClientGameManager] PreloadAssets failed sample=%s", tostring(failedAssetList[1])))
 	end
@@ -287,6 +314,8 @@ end
 NetMsg.ConnectNotifyPlayerInfoInit(OnNotifyPlayerInfoInit)
 NetMsg.ConnectNotifyPlayersOtherPlayerInfoInit(OnNotifyPlayersOtherPlayerInfoInit)
 NetMsg.ConnectNotifyPlayerAcquiredGamePass(OnNotifyPlayerAcquiredGamePass)
+
+--GraphicsPerformanceGuard.Init()
 
 -- 监听库存同步消息 (持有物/持久化)
 NetMsg.ConnectNotifyPlayerInventoryUpdate(function(inventoryInfo: GameConfig.PlayerInventorySaveInfo)
