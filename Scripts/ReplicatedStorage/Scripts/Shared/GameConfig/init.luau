@@ -280,16 +280,21 @@ GameConfig.ItemCountChangeReason = {
 	SpendOnUpgradeJetpackThrust = 2005,
 }
 
+-- 离线奖励
 export type OfflineRewardsConfig = {
 	MinOfflineSeconds: number,
+	MaxOfflineSeconds: number,
+	BaseRewardMultiplier: number,
 	PaidReceiveMultiplier: number,
 	PaidReceiveProductId: number,
 }
 
 GameConfig.OfflineRewards = {
-	MinOfflineSeconds = 60,
-	PaidReceiveMultiplier = 10,
-	PaidReceiveProductId = 3602750413,
+	MinOfflineSeconds = 300, -- 最短离线时长(秒)，低于此不弹窗
+	MaxOfflineSeconds = 3 * 60 * 60, -- 离线累计上限(秒)，最多按3小时计
+	BaseRewardMultiplier = 1 / 3, -- 基础金币奖励倍率（相对家园每秒产出×离线时长）
+	PaidReceiveMultiplier = 10, -- 付费领取倍率（相对基础奖励）
+	PaidReceiveProductId = 3602750413, -- 付费领取 Developer Product ID
 } :: OfflineRewardsConfig
 
 export type OfflineRewardInfo = {

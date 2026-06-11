@@ -418,8 +418,10 @@ function ServerGameInfo.PrepareOfflineReward(player: Player): GameConfig.Offline
 		return nil
 	end
 
+	offlineSeconds = math.min(offlineSeconds, GameConfig.OfflineRewards.MaxOfflineSeconds)
+
 	local rewardPerSecond = ServerGameInfo.GetHomeCoinYieldPerSecond(playerInfo)
-	local baseReward = math.floor(offlineSeconds * rewardPerSecond)
+	local baseReward = math.floor(offlineSeconds * rewardPerSecond * GameConfig.OfflineRewards.BaseRewardMultiplier)
 	if baseReward <= 0 then
 		pendingOfflineRewardByUserId[player.UserId] = nil
 		return nil
