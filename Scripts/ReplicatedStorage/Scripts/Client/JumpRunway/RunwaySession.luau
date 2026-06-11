@@ -2460,13 +2460,6 @@ function RunwaySession.StartFinalLandPronePhase(nowClock: number, hrp: BasePart?
 			then NormalizeRunwayForward(localState.runwayForward)
 			else fwdHInit
 		Refs.chestSlideFwdH = chestFwdH
-		-- 记录本次跑道的沿轴距离，用于宝箱与怪物动态配置
-		local alongAtPhaseB = RunwaySession.CurrentAlongProgress(hrp)
-		Refs.lastRunAlongDistance = alongAtPhaseB
-		-- 根据距离动态选择宝箱配置
-		local chestByDist = GameConfig.GetLittleElfChestByDistance(alongAtPhaseB)
-		local chestIdOverride = if chestByDist then chestByDist.id else nil
-		Refs.chestDynamicConfigId = chestIdOverride
 		if localState.runwaySlideKind == SlideKindObstacleBounce then
 			Refs.chestPredictedPlaceDistance = 0
 			Refs.chestScheduledSpawnPos = nil
@@ -2475,6 +2468,9 @@ function RunwaySession.StartFinalLandPronePhase(nowClock: number, hrp: BasePart?
 		local placeDistance = RunwaySession.ResolveProneSlidePlaceDistance()
 		Refs.chestPredictedPlaceDistance = placeDistance
 		local spawnPos = RunwaySession.ComputeLittleElfChestSpawnPosition(hrp, fwdHInit, placeDistance)
+		local chestIdOverride, dropDistance = RunwaySession.ResolveLittleElfChestConfigIdByDropPosition(spawnPos)
+		Refs.lastRunAlongDistance = dropDistance
+		Refs.chestDynamicConfigId = chestIdOverride
 		Refs.chestScheduledSpawnPos = spawnPos
 		RunwaySession.ScheduleLittleElfChestAtPhaseBEnter(fwdHInit, spawnPos)
 	else
@@ -2862,15 +2858,13 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 			end
 			Refs.slideMotion = RunwaySession.CreateMissSlideMotion(nowClock, hrpMissChest.Position, fwdHChest)
 			Refs.chestSlideFwdH = fwdHChest
-			local alongAtMiss = RunwaySession.CurrentAlongProgress(hrpMissChest)
-			Refs.lastRunAlongDistance = alongAtMiss
-			local chestByDist = GameConfig.GetLittleElfChestByDistance(alongAtMiss)
-			local chestIdOverride = if chestByDist then chestByDist.id else nil
-			Refs.chestDynamicConfigId = chestIdOverride
 			RunwaySession.EnsureDistanceRecorderFromTemplate(humanoidOpt, hrpMissChest)
 			local placeDistance = RunwaySession.ResolveProneSlidePlaceDistance()
 			Refs.chestPredictedPlaceDistance = placeDistance
 			local spawnPos = RunwaySession.ComputeLittleElfChestSpawnPosition(hrpMissChest, fwdHChest, placeDistance)
+			local chestIdOverride, dropDistance = RunwaySession.ResolveLittleElfChestConfigIdByDropPosition(spawnPos)
+			Refs.lastRunAlongDistance = dropDistance
+			Refs.chestDynamicConfigId = chestIdOverride
 			Refs.chestScheduledSpawnPos = spawnPos
 			RunwaySession.ScheduleLittleElfChestAtPhaseBEnter(fwdHChest, spawnPos)
 		end
@@ -5996,6 +5990,30 @@ function RunwaySession.ComputeLittleElfChestSpawnPosition(hrp: BasePart, fwdH: V
 	return RunwaySession.ComputeLittleElfChestSpawnPositionAtOrigin(hrp.Position, hrp, fwdH, placeDistance)
 end
 
+function RunwaySession.GetLittleElfChestDropDistance(spawnPos: Vector3): number
+	local origin = localState.runwayOrigin
+	if origin == nil then
+		return 0
+	end
+	local forward = NormalizeRunwayForward(localState.runwayForward)
+	if forward.Magnitude < 1e-4 then
+		return 0
+	end
+	local baseline = localState.alongBaseline or 0
+	local dropDistance = (spawnPos - origin):Dot(forward) - baseline
+	if dropDistance ~= dropDistance then
+		return 0
+	end
+	return math.max(0, dropDistance)
+end
+
+function RunwaySession.ResolveLittleElfChestConfigIdByDropPosition(spawnPos: Vector3): (number?, number)
+	local dropDistance = RunwaySession.GetLittleElfChestDropDistance(spawnPos)
+	local chestByDist = GameConfig.GetLittleElfChestByDistance(dropDistance)
+	local chestConfigId = if chestByDist then chestByDist.id else nil
+	return chestConfigId, dropDistance
+end
+
 function RunwaySession.HideLittleElfChestModel(chestModel: Model)
 	for _, part in chestModel:GetDescendants() do
 		if part:IsA("BasePart") then
@@ -6627,7 +6645,12 @@ function RunwaySession.OpenLittleElfChestAfterObstacleBounceStop(humanoid: Human
 	end
 	local faceFwdH = NormalizeRunwayForward(localState.runwayForward)
 	Refs.chestSlideFwdH = faceFwdH
-	local chestConfigId = if Refs.chestDynamicConfigId ~= nil then Refs.chestDynamicConfigId else cfg.RUNWAY_CHEST_CONFIG_ID
+	local ahead = RunwaySession.ResolveTreeHitNumber(cfg.RUNWAY_TREE_HIT_DIRECT_OPEN_CHEST_AHEAD_STUDS, 3, 0, 16)
+	local spawnPos = RunwaySession.ComputeLittleElfChestSpawnPositionAtOrigin(hrp.Position, hrp, faceFwdH, ahead)
+	local chestIdOverride, dropDistance = RunwaySession.ResolveLittleElfChestConfigIdByDropPosition(spawnPos)
+	Refs.lastRunAlongDistance = dropDistance
+	Refs.chestDynamicConfigId = chestIdOverride
+	local chestConfigId = if chestIdOverride ~= nil then chestIdOverride else cfg.RUNWAY_CHEST_CONFIG_ID
 	local chestConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
 	if
 		chestConfig == nil
@@ -6640,8 +6663,6 @@ function RunwaySession.OpenLittleElfChestAfterObstacleBounceStop(humanoid: Human
 	if not template then
 		return
 	end
-	local ahead = RunwaySession.ResolveTreeHitNumber(cfg.RUNWAY_TREE_HIT_DIRECT_OPEN_CHEST_AHEAD_STUDS, 3, 0, 16)
-	local spawnPos = RunwaySession.ComputeLittleElfChestSpawnPositionAtOrigin(hrp.Position, hrp, faceFwdH, ahead)
 	local chestModel = GameConfig.CloneTemplateAsModel(template)
 	chestModel.Name = "RunwayLittleElfChest"
 	RunwaySession.SetModelCollisionGroup(chestModel, ChestCollisionGroupName)

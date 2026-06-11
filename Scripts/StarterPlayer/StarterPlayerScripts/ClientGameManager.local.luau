@@ -47,7 +47,7 @@ local bgmSound: Sound = soundsFolder:FindFirstChild("BGM") :: Sound
 local PreloadAssets: () -> ()
 local PreloadBatchSize: number = 50
 local PreloadBatchYieldSeconds: number = 0.05
-local PreloadSlowBatchWarnSeconds: number = 0.5
+local PreloadSlowBatchWarnSeconds: number = 10
 local PreloadMeshAssetsEnabled: boolean = false
 
 local function TryOpenOfflineRewardsWindow()
