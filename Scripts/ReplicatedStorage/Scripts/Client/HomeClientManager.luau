@@ -1088,24 +1088,12 @@ local function SetVisuals(inst: Instance, visible: boolean, isPlaceholder: boole
 		return
 	end
 	if inst:IsA("BasePart") then
-		local targetTransparency = if visible then 0 else 1
-		local targetCanCollide = visible and not isPlaceholder
-		if inst.Transparency ~= targetTransparency then
-			inst.Transparency = targetTransparency
-		end
-		if inst.CanCollide ~= targetCanCollide then
-			inst.CanCollide = targetCanCollide
-		end
+		inst.Transparency = if visible then 0 else 1
+		inst.CanCollide = visible and not isPlaceholder
 	elseif inst:IsA("Decal") then
-		local targetTransparency = if visible then 0 else 1
-		if inst.Transparency ~= targetTransparency then
-			inst.Transparency = targetTransparency
-		end
+		inst.Transparency = if visible then 0 else 1
 	elseif inst:IsA("ParticleEmitter") or inst:IsA("BillboardGui") or inst:IsA("Texture") or inst:IsA("SurfaceGui") then
-		local enabledInstance = inst :: any
-		if enabledInstance.Enabled ~= visible then
-			enabledInstance.Enabled = visible
-		end
+		(inst :: any).Enabled = visible
 	end
 end
 
