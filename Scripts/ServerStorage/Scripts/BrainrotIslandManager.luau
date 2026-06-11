@@ -37,37 +37,6 @@ local BrainrotIslandManager = {}
 local rng = Random.new()
 local islandDiscoverAccumulator = 0
 local SpawnFacingRandomOffsetMaxDeg = 360
-local DebugRunId = "runway_pullback_probe_1"
-
-local function DebugEmit(hypothesisId: string, location: string, message: string, data: { [string]: any }?)
-	local payload = {
-		sessionId = "6f8203",
-		runId = DebugRunId,
-		hypothesisId = hypothesisId,
-		location = location,
-		message = message,
-		data = data or {},
-		timestamp = DateTime.now().UnixTimestampMillis,
-	}
-	pcall(function()
-		HttpService:RequestAsync({
-			Url = "http://127.0.0.1:7477/ingest/d880235d-ec65-4b2d-88e2-c8b819ceca93",
-			Method = "POST",
-			Compress = Enum.HttpCompression.None,
-			Headers = {
-				["Content-Type"] = "application/json",
-				["X-Debug-Session-Id"] = "6f8203",
-			},
-			Body = HttpService:JSONEncode(payload),
-		})
-	end)
-	local okEncode, encoded = pcall(function()
-		return HttpService:JSONEncode(payload)
-	end)
-	if okEncode then
-		warn("[DBG6f8203] " .. encoded)
-	end
-end
 
 -- =========================================================
 -- Brainrot 独立倒计时（按 BrainrotUID 管理）
@@ -181,18 +150,8 @@ local function SetupIslandTeleport(island: Instance)
 
 	proximityPrompt.Triggered:Connect(function(player)
 		if player:GetAttribute("JumpRunwayActive") == true then
-			-- #region agent log
-			DebugEmit("H3", "BrainrotIslandManager:SetupIslandTeleport", "island_teleport_blocked_by_runway_active", {
-				playerUserId = player.UserId,
-			})
-			-- #endregion
 			return
 		end
-		-- #region agent log
-		DebugEmit("H3", "BrainrotIslandManager:SetupIslandTeleport", "island_teleport_triggered", {
-			playerUserId = player.UserId,
-		})
-		-- #endregion
 		local playerInfo = ServerGameInfo.GetPlayerInfo(player)
 		local homes = workspace:FindFirstChild("PlayersHome")
 		if playerInfo and playerInfo.homeSlot ~= "" and homes then

@@ -30,37 +30,6 @@ local yieldBroadcastAccumulator = 0
 local basePlotsCount = 0
 
 local initDone = false
-local DebugRunId = "runway_pullback_probe_1"
-
-local function DebugEmit(hypothesisId: string, location: string, message: string, data: { [string]: any }?)
-	local payload = {
-		sessionId = "6f8203",
-		runId = DebugRunId,
-		hypothesisId = hypothesisId,
-		location = location,
-		message = message,
-		data = data or {},
-		timestamp = DateTime.now().UnixTimestampMillis,
-	}
-	pcall(function()
-		httpService:RequestAsync({
-			Url = "http://127.0.0.1:7477/ingest/d880235d-ec65-4b2d-88e2-c8b819ceca93",
-			Method = "POST",
-			Compress = Enum.HttpCompression.None,
-			Headers = {
-				["Content-Type"] = "application/json",
-				["X-Debug-Session-Id"] = "6f8203",
-			},
-			Body = httpService:JSONEncode(payload),
-		})
-	end)
-	local okEncode, encoded = pcall(function()
-		return httpService:JSONEncode(payload)
-	end)
-	if okEncode then
-		warn("[DBG6f8203] " .. encoded)
-	end
-end
 
 local function ensurePlayersHomeFolder(): Folder
 	local existing = workspace:FindFirstChild("PlayersHome")
@@ -110,11 +79,6 @@ local function setupPlayerRespawn(player: Player, slotName: string)
 					if hrp then
 						task.defer(function()
 							if player:GetAttribute("JumpRunwayActive") == true then
-								-- #region agent log
-								DebugEmit("H3", "PlayerHomeServerManager:setupPlayerRespawn:initTeleport", "home_init_teleport_blocked_by_runway_active", {
-									playerUserId = player.UserId,
-								})
-								-- #endregion
 								return
 							end
 							hrp.CFrame = spawnLocation.CFrame * CFrame.new(0, 3, 0)
@@ -134,11 +98,6 @@ local function setupPlayerRespawn(player: Player, slotName: string)
 				if spawnLocation then
 					task.defer(function()
 						if player:GetAttribute("JumpRunwayActive") == true then
-							-- #region agent log
-							DebugEmit("H3", "PlayerHomeServerManager:setupPlayerRespawn:characterAdded", "home_characterAdded_teleport_blocked_by_runway_active", {
-								playerUserId = player.UserId,
-							})
-							-- #endregion
 							return
 						end
 						hrp.CFrame = spawnLocation.CFrame * CFrame.new(0, 3, 0)
