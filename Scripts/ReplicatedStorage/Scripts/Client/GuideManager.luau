@@ -942,18 +942,6 @@ local function ResolveGuideType(): number
 		)
 	end
 
-	if IsGuideStepDone(info, GameConfig.GuideStepKey.BrainrotCollectFinished)
-		and not IsGuideStepDone(info, GameConfig.GuideStepKey.BrainrotUpgradeFinished)
-	then
-		if HasUpgradedBrainrot(info) then
-			CompleteGuideStep(GameConfig.GuideStepKey.BrainrotUpgradeFinished)
-		elseif HasAffordableUpgradeableBrainrot(info) then
-			return FilterOutsideRunwaySessionGuide(
-				MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotUpgrade)
-			)
-		end
-	end
-
 	local hasAnyOwnedJetpack = HasAnyOwnedJetpack(info)
 	if hasAnyOwnedJetpack and not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished) then
 		CompleteGuideStep(GameConfig.GuideStepKey.JetpackBuyFinished)
@@ -992,6 +980,19 @@ local function ResolveGuideType(): number
 			and IsTargetExEquipAffordable(info)
 		then
 			return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipBuy)
+		end
+	end
+
+	if IsGuideStepDone(info, GameConfig.GuideStepKey.BrainrotCollectFinished)
+		and IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished)
+		and not IsGuideStepDone(info, GameConfig.GuideStepKey.BrainrotUpgradeFinished)
+	then
+		if HasUpgradedBrainrot(info) then
+			CompleteGuideStep(GameConfig.GuideStepKey.BrainrotUpgradeFinished)
+		elseif HasAffordableUpgradeableBrainrot(info) then
+			return FilterOutsideRunwaySessionGuide(
+				MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotUpgrade)
+			)
 		end
 	end
 
