@@ -5998,6 +5998,12 @@ function RunwaySession.ShouldBlockFinalLandingSlideEndForChest(): boolean
 end
 
 function RunwaySession.ShouldDeferFinalReportForSlideChest(): boolean
+	if Refs.chestRewardPresentationStarted == true or Refs.chestRunwayAwaitingExit == true then
+		return true
+	end
+	if Refs.chestBounceActive == true or Refs.chestRewardWaitPose == true then
+		return true
+	end
 	if localState.phase ~= Ph.Slide then
 		return false
 	end
@@ -6010,9 +6016,6 @@ function RunwaySession.ShouldDeferFinalReportForSlideChest(): boolean
 		and localState.runwaySlideKind ~= SlideKindObstacleBounce
 	then
 		return false
-	end
-	if Refs.chestRewardPresentationStarted == true or Refs.chestRunwayAwaitingExit == true then
-		return true
 	end
 	return Refs.chestSpawnedForThisRun == true or Refs.chestScheduledSpawnPos ~= nil
 end
@@ -6142,6 +6145,10 @@ function RunwaySession.IsLittleElfChestCarryReturnActive(): boolean
 	return Refs.chestCarryReturnActive == true
 end
 
+function RunwaySession.CanCompleteLittleElfChestCarryReturn(): boolean
+	return Refs.chestCarryReturnActive == true and ClientGameInfo.IsInJumpRunwayEscapePhase()
+end
+
 function RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character: Model): boolean
 	local carrying = character:FindFirstChild("CarryingBrainrot")
 	if carrying == nil then
@@ -6244,14 +6251,23 @@ function RunwaySession.UpdateEndTriggerReentryState()
 	local enteredNow = insideNow and not wasInside
 
 	if enteredNow then
-		if character and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
+		if
+			character
+			and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character)
+			and RunwaySession.CanCompleteLittleElfChestCarryReturn()
+		then
 			RunwaySession.TryDeliverLittleElfChestAtEndTrigger(endTrigger)
-		elseif Refs.chestCarryReturnActive == true then
+		elseif RunwaySession.CanCompleteLittleElfChestCarryReturn() then
 			RunwaySession.TryExitEscapePhaseAtEndTrigger(endTrigger)
 		end
-	elseif insideNow and character and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character) then
+	elseif
+		insideNow
+		and character
+		and RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(character)
+		and RunwaySession.CanCompleteLittleElfChestCarryReturn()
+	then
 		RunwaySession.TryDeliverLittleElfChestAtEndTrigger(endTrigger)
-	elseif insideNow and Refs.chestCarryReturnActive == true then
+	elseif insideNow and RunwaySession.CanCompleteLittleElfChestCarryReturn() then
 		RunwaySession.TryExitEscapePhaseAtEndTrigger(endTrigger)
 	end
 
@@ -6401,7 +6417,7 @@ function RunwaySession.TryCompleteEscapeViaTeleportPortal()
 	if Refs.chestBackpackDeliverRequested == true then
 		return
 	end
-	if not ClientGameInfo.IsInJumpRunwayEscapePhase() then
+	if not RunwaySession.CanCompleteLittleElfChestCarryReturn() then
 		return
 	end
 	local character, _humanoid, hrp = RunwaySession.GetCharacterParts()
@@ -6419,6 +6435,9 @@ end
 
 function RunwaySession.TryDeliverLittleElfChestAtEndTrigger(endTrigger: Part)
 	if Refs.chestBackpackDeliverRequested == true then
+		return
+	end
+	if not RunwaySession.CanCompleteLittleElfChestCarryReturn() then
 		return
 	end
 	local character, humanoid, hrp = RunwaySession.GetCharacterParts()
@@ -6454,7 +6473,7 @@ function RunwaySession.TryDeliverLittleElfChestAtEndTrigger(endTrigger: Part)
 end
 
 function RunwaySession.TryExitEscapePhaseAtEndTrigger(endTrigger: Part)
-	if Refs.chestCarryReturnActive ~= true then
+	if not RunwaySession.CanCompleteLittleElfChestCarryReturn() then
 		return
 	end
 
@@ -6475,6 +6494,9 @@ end
 
 function RunwaySession.DeliverLittleElfChestRewardToBackpackAfterOpenAnim()
 	if Refs.chestBackpackDeliverRequested == true then
+		return
+	end
+	if not RunwaySession.CanCompleteLittleElfChestCarryReturn() then
 		return
 	end
 	if Refs.chestPendingReward == nil and Refs.chestPickedBrainrotId == nil then
@@ -8028,11 +8050,14 @@ function RunwaySession.BindSceneTriggers()
 		Refs.endTriggerConn = endTrigger.Touched:Connect(function(hit)
 			local ch = hit:FindFirstAncestorOfClass("Model")
 			if ch ~= nil and ch == localPlayer.Character then
-				if RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(ch) then
+				if
+					RunwaySession.IsLocalPlayerCarryingRunwayLittleElfChest(ch)
+					and RunwaySession.CanCompleteLittleElfChestCarryReturn()
+				then
 					RunwaySession.TryDeliverLittleElfChestAtEndTrigger(endTrigger)
 					return
 				end
-				if Refs.chestCarryReturnActive == true then
+				if RunwaySession.CanCompleteLittleElfChestCarryReturn() then
 					RunwaySession.TryExitEscapePhaseAtEndTrigger(endTrigger)
 				end
 			end

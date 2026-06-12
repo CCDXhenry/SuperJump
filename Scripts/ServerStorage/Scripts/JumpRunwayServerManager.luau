@@ -792,6 +792,9 @@ local function HandleLittleElfChestGrant(player: Player)
 	if pendingLittleElfChestRewardMap[player.UserId] == nil then
 		return
 	end
+	if player:GetAttribute(JumpRunwayEscapeActiveAttr) ~= true then
+		return
+	end
 	if GetRunwayLittleElfChestCarrying(player) == nil then
 		return
 	end
