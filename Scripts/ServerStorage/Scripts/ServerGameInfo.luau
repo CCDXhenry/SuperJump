@@ -211,6 +211,8 @@ function ServerGameInfo.InitPlayerInfo(
 		-- 初始化瞬态数据
 		carriedInfo = {} :: GameConfig.PlayerCarriedInfo,
 		lastArrivedIslandId = 1,
+		friendInThisServerPlayerIdMap = {},
+		friendsPlayingSameGameCount = 0,
 	}
 	for ownedGamePassIndex: number, ownedGamePassId: number in playerInfo.ownedGamePassList do
 		playerInfo.ownedGamePassMap[ownedGamePassId] = true
@@ -767,7 +769,8 @@ function ServerGameInfo.UpdatePlayerCurrency(player: Player, currencyType: numbe
 
 	if currencyType == GameConfig.CurrencyType.Coin and addAmount > 0 and ShouldApplyCoinEfficiencyBuff(reason) then
 		local multiplier = GameConfig.GetBuffMultiplier(playerInfo.buffInfo, GameConfig.BuffType.CoinEfficiency)
-		addAmount = math.ceil(addAmount * multiplier)
+		local friendRate = GameConfig.GetFriendCoinGainIncreaseRate(playerInfo.friendsPlayingSameGameCount)
+		addAmount = math.ceil(addAmount * multiplier * (1 + friendRate))
 	end
 
 	local currencyKey: string = tostring(currencyType)

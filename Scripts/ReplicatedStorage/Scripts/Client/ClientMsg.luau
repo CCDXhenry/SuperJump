@@ -53,6 +53,8 @@ local jumpRunWayStartEscapeRedScreenEvent: BindableEvent =
 local jumpRunWayStopEscapeRedScreenEvent: BindableEvent =
 	EnsureBindableEvent("JumpRunWayStopEscapeRedScreen")
 local localPlayerClaimedGroupRewardEvent: BindableEvent = EnsureBindableEvent("LocalPlayerClaimedGroupReward")
+local localPlayerFriendsPlayingSameGameCountChangedEvent: BindableEvent =
+	EnsureBindableEvent("LocalPlayerFriendsPlayingSameGameCountChanged")
 local localPlayerJumpRunwayBestDistanceUpdateEvent: BindableEvent =
 	EnsureBindableEvent("LocalPlayerJumpRunwayBestDistanceUpdate")
 
@@ -252,6 +254,14 @@ end
 
 function ClientMsg.ConnectLocalPlayerBuffInfoUpdate(callback: (buffInfo: GameConfig.BuffInfo, grantBuffId: number?, shopBundleId: number?) -> ())
 	localPlayerBuffInfoUpdateEvent.Event:Connect(callback)
+end
+
+function ClientMsg.FireLocalPlayerFriendsPlayingSameGameCountChanged(friendsPlayingSameGameCount: number)
+	localPlayerFriendsPlayingSameGameCountChangedEvent:Fire(friendsPlayingSameGameCount)
+end
+
+function ClientMsg.ConnectLocalPlayerFriendsPlayingSameGameCountChanged(callback: (friendsPlayingSameGameCount: number) -> ())
+	localPlayerFriendsPlayingSameGameCountChangedEvent.Event:Connect(callback)
 end
 
 -- JumpPower 更新

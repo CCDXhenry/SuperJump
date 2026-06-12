@@ -81,6 +81,9 @@ function ClientGameInfo.InitPlayerInfo(
 
 		-- 初始化瞬态信息
 		carriedInfo = {} :: GameConfig.PlayerCarriedInfo,
+		friendInThisServerPlayerIdMap = {},
+		friendsPlayingSameGameCount = 0,
+		onlineFriendIdMap = {},
 	}
 	if localPlayerInfo == nil then
 		return
@@ -551,6 +554,28 @@ function ClientGameInfo.SetLocalPlayerClaimedGroupReward()
 	end
 	localPlayerInfo.hasClaimedGroupReward = true
 	ClientMsg.FireLocalPlayerClaimedGroupReward()
+end
+
+function ClientGameInfo.AddLocalPlayerFriendInThisServer(playerId: number)
+	if localPlayerInfo == nil then
+		return
+	end
+	localPlayerInfo.friendInThisServerPlayerIdMap[playerId] = true
+end
+
+function ClientGameInfo.RemoveLocalPlayerFriendInThisServer(playerId: number)
+	if localPlayerInfo == nil then
+		return
+	end
+	localPlayerInfo.friendInThisServerPlayerIdMap[playerId] = nil
+end
+
+function ClientGameInfo.UpdateFriendsPlayingSameGameCount(friendsPlayingSameGameCount: number)
+	if localPlayerInfo == nil or localPlayerInfo.friendsPlayingSameGameCount == friendsPlayingSameGameCount then
+		return
+	end
+	localPlayerInfo.friendsPlayingSameGameCount = friendsPlayingSameGameCount
+	ClientMsg.FireLocalPlayerFriendsPlayingSameGameCountChanged(friendsPlayingSameGameCount)
 end
 
 NetMsg.ConnectNotifyPlayerClaimedGroupReward(ClientGameInfo.SetLocalPlayerClaimedGroupReward)

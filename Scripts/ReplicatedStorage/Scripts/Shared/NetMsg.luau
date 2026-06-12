@@ -155,6 +155,11 @@ local notifyPlayerExEquipInventoryUpdateEvent: RemoteEvent? = remoteEventsFolder
 local requestClaimGroupRewardEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestClaimGroupReward") :: RemoteEvent?
 local notifyPlayerClaimedGroupRewardEvent: RemoteEvent? = GetOrCreateRemoteEvent("NotifyPlayerClaimedGroupReward")
 
+-- 好友在线奖励
+local requestAddFriendInThisServerEvent: RemoteEvent? = GetOrCreateRemoteEvent("RequestAddFriendInThisServer")
+local requestRemoveFriendInThisServerEvent: RemoteEvent? = GetOrCreateRemoteEvent("RequestRemoveFriendInThisServer")
+local requestUpdateFriendsPlayingSameGameCountEvent: RemoteEvent? = GetOrCreateRemoteEvent("RequestUpdateFriendsPlayingSameGameCount")
+
 -- 锻炼模式
 local requestStartExerciseEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestStartExercise") :: RemoteEvent?
 local requestStopExerciseEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestStopExercise") :: RemoteEvent?
@@ -1322,6 +1327,48 @@ function NetMsg.ConnectNotifyLeaderboardResetTime(callback: (resetTimestamp: num
 		return
 	end
 	notifyLeaderboardResetTimeEvent.OnClientEvent:Connect(callback)
+end
+
+function NetMsg.FireRequestAddFriendInThisServer(playerId: number)
+	if requestAddFriendInThisServerEvent == nil then
+		return
+	end
+	requestAddFriendInThisServerEvent:FireServer(playerId)
+end
+
+function NetMsg.ConnectRequestAddFriendInThisServer(callback: (player: Player, playerId: number) -> ())
+	if requestAddFriendInThisServerEvent == nil then
+		return
+	end
+	requestAddFriendInThisServerEvent.OnServerEvent:Connect(callback)
+end
+
+function NetMsg.FireRequestRemoveFriendInThisServer(playerId: number)
+	if requestRemoveFriendInThisServerEvent == nil then
+		return
+	end
+	requestRemoveFriendInThisServerEvent:FireServer(playerId)
+end
+
+function NetMsg.ConnectRequestRemoveFriendInThisServer(callback: (player: Player, playerId: number) -> ())
+	if requestRemoveFriendInThisServerEvent == nil then
+		return
+	end
+	requestRemoveFriendInThisServerEvent.OnServerEvent:Connect(callback)
+end
+
+function NetMsg.FireRequestUpdateFriendsPlayingSameGameCount(friendsPlayingSameGameCount: number)
+	if requestUpdateFriendsPlayingSameGameCountEvent == nil then
+		return
+	end
+	requestUpdateFriendsPlayingSameGameCountEvent:FireServer(friendsPlayingSameGameCount)
+end
+
+function NetMsg.ConnectRequestUpdateFriendsPlayingSameGameCount(callback: (player: Player, friendsPlayingSameGameCount: number) -> ())
+	if requestUpdateFriendsPlayingSameGameCountEvent == nil then
+		return
+	end
+	requestUpdateFriendsPlayingSameGameCountEvent.OnServerEvent:Connect(callback)
 end
 
 return NetMsg

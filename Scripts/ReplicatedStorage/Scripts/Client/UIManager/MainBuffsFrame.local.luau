@@ -41,6 +41,11 @@ buffHintFrameOrigin.Parent = nil
 
 local buffIconFrameWrapperMap: { [number]: BuffIconFrameWrapper } = {}
 local buffHintFrameWrapperMap: { [number]: HintFrameWrapper } = {}
+local friendRewardIconFrame: Frame = buffIconsFrame:FindFirstChild("FriendRewardIconFrame") :: Frame
+local friendRewardIconImage: ImageLabel = friendRewardIconFrame:FindFirstChild("FriendRewardIconImage") :: ImageLabel
+local friendRewardCoinFrame: Frame = friendRewardIconFrame:FindFirstChild("CoinFrame") :: Frame
+local friendRewardCoinGainIncreaseRateText: TextLabel = friendRewardCoinFrame:FindFirstChild("CoinGainIncreaseRateText") :: TextLabel
+local friendRewardHintFrameWrapper: HintFrameWrapper
 local touchingBuffIconsFrameInputObject: InputObject?
 
 local function localizeText(textLabel: TextLabel, textValue: string)
@@ -92,6 +97,29 @@ local function PlayBuffIconFlyInAnimation(buffId: number)
 	end)
 	tween1:Play()
 	tween2:Play()
+end
+
+local function RefreshFriendRewardView()
+	local localPlayerInfo = GetLocalPlayerInfo()
+	local buffData = GameConfig.GetFriendRewardBuffData()
+	if localPlayerInfo == nil or buffData == nil then
+		friendRewardIconFrame.Visible = false
+		friendRewardHintFrameWrapper.hintFrame.Parent = nil
+		return
+	end
+	local friendCoinGainIncreaseRate: number =
+		GameConfig.GetFriendCoinGainIncreaseRate(localPlayerInfo.friendsPlayingSameGameCount)
+	friendRewardIconFrame.Visible = true
+	friendRewardIconImage.Image = buffData.iconImageId
+	friendRewardCoinGainIncreaseRateText.Text = string.format("+%d%%", friendCoinGainIncreaseRate * 100)
+	friendRewardHintFrameWrapper.hintFrame.Parent = buffHints2Frame
+	local percentText = string.format("%d%%", friendCoinGainIncreaseRate * 100)
+	TranslationTool.CustomAutoLocalizeTextLabel(
+		friendRewardHintFrameWrapper.hintText,
+		buffData.describe_t,
+		string.format("BuffDescribe_%d", buffData.id),
+		{ percentText }
+	)
 end
 
 local function RefreshBuffIcons(playFlyInBuffId: number?)
@@ -151,6 +179,8 @@ local function InitBuffHintsFrame()
 		hintFrameWrapper.hintFrame.LayoutOrder = layoutOrder
 		buffHintFrameWrapperMap[buffId] = hintFrameWrapper
 	end
+	friendRewardHintFrameWrapper = CreateHintFrame()
+	friendRewardHintFrameWrapper.hintFrame.LayoutOrder = layoutOrder + 1
 end
 
 local function OnBuffIconsFrameMouseEnter(_x: number, _y: number)
@@ -185,15 +215,21 @@ end
 
 local function OnLocalPlayerInfoInit()
 	RefreshBuffIcons()
+	RefreshFriendRewardView()
 end
 
 local function OnLocalPlayerBuffInfoUpdate(_buffInfo: GameConfig.BuffInfo, grantBuffId: number?, _shopBundleId: number?)
 	RefreshBuffIcons(grantBuffId)
 end
 
+local function OnLocalPlayerFriendsPlayingSameGameCountChanged(_friendsPlayingSameGameCount: number)
+	RefreshFriendRewardView()
+end
+
 InitBuffIconFrames()
 InitBuffHintsFrame()
 RefreshBuffIcons()
+RefreshFriendRewardView()
 
 buffIconsFrame.MouseEnter:Connect(OnBuffIconsFrameMouseEnter)
 buffIconsFrame.MouseLeave:Connect(OnBuffIconsFrameMouseLeave)
@@ -202,3 +238,4 @@ userInputService.InputEnded:Connect(OnUserInputEnded)
 
 ClientMsg.ConnectLocalPlayerInfoInit(OnLocalPlayerInfoInit)
 ClientMsg.ConnectLocalPlayerBuffInfoUpdate(OnLocalPlayerBuffInfoUpdate)
+ClientMsg.ConnectLocalPlayerFriendsPlayingSameGameCountChanged(OnLocalPlayerFriendsPlayingSameGameCountChanged)

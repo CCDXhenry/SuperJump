@@ -222,6 +222,25 @@ GameConfig.BuffType = {
 GameConfig.BuffMethod = {
 	Multiplier = 1,
 	ExtraValue = 2,
+	ParamConfig = 3, -- 参数配置：数值由 BuffParamConfig 驱动，不使用 buffValue
+}
+
+export type FriendRewardBuffParamConfig = {
+	coinGainIncreaseRatePerFriend: number,
+	maxCoinGainIncreaseRateFromFriends: number,
+	updateInterval: number,
+	onlineInGameLocationType: number,
+}
+
+GameConfig.FriendRewardBuffId = 3
+
+GameConfig.BuffParamConfig = {
+	[GameConfig.FriendRewardBuffId] = {
+		coinGainIncreaseRatePerFriend = 0.1,
+		maxCoinGainIncreaseRateFromFriends = 0.5,
+		updateInterval = 30,
+		onlineInGameLocationType = 4,
+	} :: FriendRewardBuffParamConfig,
 }
 
 GameConfig.ModelGetSource = {
@@ -697,6 +716,41 @@ function GameConfig.GetBuffMultiplier(buffInfo: BuffInfo?, buffType: number): nu
 		end
 	end
 	return multiplier
+end
+
+function GameConfig.GetBuffParamConfig(buffId: number): FriendRewardBuffParamConfig?
+	local buffData = GameConfig.BuffIdMap[buffId]
+	if buffData == nil or buffData.buffMethod ~= GameConfig.BuffMethod.ParamConfig then
+		return nil
+	end
+	local paramConfig = GameConfig.BuffParamConfig[buffId]
+	if paramConfig == nil then
+		return nil
+	end
+	return paramConfig :: FriendRewardBuffParamConfig
+end
+
+function GameConfig.GetFriendRewardBuffParamConfig(): FriendRewardBuffParamConfig?
+	return GameConfig.GetBuffParamConfig(GameConfig.FriendRewardBuffId)
+end
+
+function GameConfig.GetFriendCoinGainIncreaseRate(friendsPlayingSameGameCount: number): number
+	local paramConfig = GameConfig.GetFriendRewardBuffParamConfig()
+	if paramConfig == nil then
+		return 0
+	end
+	return math.min(
+		paramConfig.coinGainIncreaseRatePerFriend * friendsPlayingSameGameCount,
+		paramConfig.maxCoinGainIncreaseRateFromFriends
+	)
+end
+
+function GameConfig.GetFriendRewardBuffData(): BuffData?
+	local buffData = GameConfig.BuffIdMap[GameConfig.FriendRewardBuffId]
+	if buffData ~= nil and buffData.buffMethod == GameConfig.BuffMethod.ParamConfig then
+		return buffData
+	end
+	return nil
 end
 
 export type ExEquipData = {
@@ -1957,6 +2011,8 @@ export type PlayerInfo = PlayerSaveInfo & {
 	homeSlot: string,
 	carriedInfo: PlayerCarriedInfo,
 	lastArrivedIslandId: number,
+	friendInThisServerPlayerIdMap: { [number]: boolean },
+	friendsPlayingSameGameCount: number,
 	leaderboardChanges: { [string]: boolean }?,
 }
 
@@ -2058,6 +2114,9 @@ export type ClientLocalPlayerInfo = ClientLocalPlayerSaveInfo & {
 	playerConfigInfo: PlayerConfigInfo,
 	carriedInfo: PlayerCarriedInfo,
 	currentGuideType: number,
+	friendInThisServerPlayerIdMap: { [number]: boolean },
+	friendsPlayingSameGameCount: number,
+	onlineFriendIdMap: { [number]: boolean },
 }
 
 export type ClientOtherPlayerSaveInfo = {

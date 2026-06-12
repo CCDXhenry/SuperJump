@@ -17,4 +17,13 @@ return {
 		["name_t"] = "X2 Coin",
 		["buffMethod"] = 1,
 	},
+	[3] = {
+		["buffValue"] = 0,
+		["describe_t"] = "Friends Online Buff: Gold Earnings +{1}",
+		["buffType"] = 2,
+		["id"] = 3,
+		["iconImageId"] = "rbxassetid://137369651578048",
+		["name_t"] = "FriendReward",
+		["buffMethod"] = 3,
+	},
 }
