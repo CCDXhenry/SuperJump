@@ -206,6 +206,14 @@ function ServerGameInfo.InitPlayerInfo(
 		},
 		discoveredIslandIds = playerSaveInfo.discoveredIslandIds or {},
 		hasClaimedGroupReward = playerSaveInfo.hasClaimedGroupReward or false,
+		rewardInfo = playerSaveInfo.rewardInfo or {
+			lastLoginTime = "",
+			todayGameTime = 0,
+			onlineRewardStateInfo = {},
+		},
+		stateGame = playerSaveInfo.stateGame or {
+			startGameTick = -1,
+		},
 		homeSlot = "",
 
 		-- 初始化瞬态数据
@@ -232,6 +240,7 @@ function ServerGameInfo.InitPlayerInfo(
 	player:SetAttribute("CurrentJetpackId", playerInfo.jetpackInventory.currentId)
 	player:SetAttribute("JumpRunwayBestDistance", playerInfo.jumpRunwayBestDistance)
 	ServerMsg.FirePlayerInfoInit(player)
+	ServerGameInfo.InitTimeInfo(playerInfo)
 
 	local clientLocalPlayerSaveInfo: GameConfig.ClientLocalPlayerSaveInfo = {
 		settingInfo = playerInfo.settingInfo,
@@ -252,6 +261,8 @@ function ServerGameInfo.InitPlayerInfo(
 		homeSlot = playerInfo.homeSlot,
 		guideProgressInfo = playerInfo.guideProgressInfo,
 		hasClaimedGroupReward = playerInfo.hasClaimedGroupReward,
+		rewardInfo = playerInfo.rewardInfo,
+		stateGame = playerInfo.stateGame,
 	}
 	local clientOtherPlayerSaveInfo: GameConfig.ClientOtherPlayerSyncInfo = {
 		homeSlot = playerInfo.homeSlot,
@@ -368,6 +379,8 @@ function ServerGameInfo.CreatePlayerSaveInfoByPlayerInfo(playerInfo: GameConfig.
 		jetpackInventory = playerInfo.jetpackInventory,
 		buffInfo = playerInfo.buffInfo,
 		hasClaimedGroupReward = playerInfo.hasClaimedGroupReward,
+		rewardInfo = playerInfo.rewardInfo,
+		stateGame = playerInfo.stateGame,
 	}
 end
 
@@ -1485,6 +1498,78 @@ function ServerGameInfo.UpdateJumpRunwayBestDistance(player: Player, distance: n
 		playerInfo.jumpRunwayBestDistance = distance
 		playerInfo.playerInfoChanged = true
 		player:SetAttribute("JumpRunwayBestDistance", playerInfo.jumpRunwayBestDistance)
+	end
+end
+
+function ServerGameInfo.GetTodayTimeInfo(): string
+	local currentTime = os.date("!*t")
+	return currentTime.year .. "," .. currentTime.month .. "," .. currentTime.day
+end
+
+function ServerGameInfo.InitTimeInfo(playerInfo: GameConfig.PlayerInfo)
+	playerInfo.stateGame.startGameTick = os.time()
+	playerInfo.playerInfoChanged = true
+	local today = ServerGameInfo.GetTodayTimeInfo()
+	if playerInfo.rewardInfo.lastLoginTime ~= today then
+		playerInfo.rewardInfo.todayGameTime = 0
+		playerInfo.rewardInfo.lastLoginTime = today
+		playerInfo.rewardInfo.onlineRewardStateInfo = {}
+	end
+end
+
+function ServerGameInfo.UpdateTimeInfo(
+	player: Player?,
+	playerInfo: GameConfig.PlayerInfo,
+	tickNow: number,
+	isNewDay: boolean?
+)
+	local thisGameTime = tickNow - playerInfo.stateGame.startGameTick
+	if isNewDay then
+		playerInfo.rewardInfo.todayGameTime = 0
+		playerInfo.rewardInfo.lastLoginTime = ServerGameInfo.GetTodayTimeInfo()
+		playerInfo.rewardInfo.onlineRewardStateInfo = {}
+		if player then
+			NetMsg.FireNotifyPlayersInitPlayerRewardInfo(player, playerInfo.rewardInfo)
+		end
+	else
+		playerInfo.rewardInfo.todayGameTime += thisGameTime
+	end
+	playerInfo.stateGame.startGameTick = tickNow
+	playerInfo.playerInfoChanged = true
+end
+
+function ServerGameInfo.PlayerUpdateRewardInfo(
+	player: Player,
+	indexs: { number },
+	stateNew: number,
+	rewardType: number
+)
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return
+	end
+	for _, i in indexs do
+		if rewardType == GameConfig.RewardEnum.onlineTime then
+			playerInfo.rewardInfo.onlineRewardStateInfo[tostring(i)] = stateNew
+		end
+	end
+	playerInfo.playerInfoChanged = true
+	NetMsg.FireNotifyPlayerRewardUpdate(player, indexs, stateNew, rewardType)
+end
+
+function ServerGameInfo.NewDayUpdatePlayerInfo()
+	local tickNow = os.time()
+	for userId, playerInfo in playerInfoMap do
+		local player: Player? = players:GetPlayerByUserId(userId)
+		ServerGameInfo.UpdateTimeInfo(player, playerInfo, tickNow, true)
+		if player then
+			NetMsg.FireNotifyPlayerNewDay(
+				player,
+				playerInfo.rewardInfo.lastLoginTime,
+				playerInfo.gameTime,
+				playerInfo.stateGame.startGameTick
+			)
+		end
 	end
 end
 

@@ -11,6 +11,7 @@ local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
 
 local localPlayerInfo: GameConfig.ClientLocalPlayerInfo?
 local offlineRewardInfo: GameConfig.OfflineRewardInfo?
+local serverTimeOffset: number = 0
 local otherPlayerInfoMap: { [number]: GameConfig.ClientOtherPlayerInfo } = {}
 local isInJumpRunway = false
 local isInJumpRunwayEscapePhase = false
@@ -77,6 +78,14 @@ function ClientGameInfo.InitPlayerInfo(
 		homeSlot = localPlayerSaveInfo.homeSlot,
 		guideProgressInfo = guideProgressInfo,
 		hasClaimedGroupReward = localPlayerSaveInfo.hasClaimedGroupReward or false,
+		rewardInfo = localPlayerSaveInfo.rewardInfo or {
+			lastLoginTime = "",
+			todayGameTime = 0,
+			onlineRewardStateInfo = {},
+		},
+		stateGame = localPlayerSaveInfo.stateGame or {
+			startGameTick = -1,
+		},
 		currentGuideType = GameConfig.GuideType.None,
 
 		-- 初始化瞬态信息
@@ -111,6 +120,7 @@ function ClientGameInfo.InitPlayerInfo(
 		}
 		otherPlayerInfoMap[otherPlayerId] = otherPlayerInfo
 	end
+	ClientGameInfo.UpdateStartGameTick(localPlayerInfo.stateGame.startGameTick)
 	--发送消息
 	ClientMsg.FireLocalPlayerInfoInit()
 	--print("[ClientGameInfo] InitPlayerInfo complete")
@@ -169,7 +179,7 @@ function ClientGameInfo.UpdateCurrency(currencyType: number, totalAmount: number
 	--print("[ClientGameInfo] UpdateCurrency type", currencyType, "total", totalAmount, "change", lastChange, "reason", reason)
 
 	--如果是增加且金额大于0，弹出获得提示
-	if lastChange > 0 then
+	if lastChange > 0 and reason ~= GameConfig.ItemCountChangeReason.GainFromOnline then
 		local rewardInfo: GameConfig.RewardInfo = {
 			rewardType = GameConfig.RewardType.Currency,
 			rewardId = currencyType,
@@ -579,6 +589,73 @@ function ClientGameInfo.UpdateFriendsPlayingSameGameCount(friendsPlayingSameGame
 end
 
 NetMsg.ConnectNotifyPlayerClaimedGroupReward(ClientGameInfo.SetLocalPlayerClaimedGroupReward)
+
+function ClientGameInfo.GetOsTime(): number
+	return os.time() - serverTimeOffset
+end
+
+function ClientGameInfo.UpdateStartGameTick(startGameTick: number)
+	if localPlayerInfo == nil then
+		return
+	end
+	localPlayerInfo.stateGame.startGameTick = startGameTick
+	if startGameTick > 0 then
+		serverTimeOffset = os.time() - startGameTick
+	else
+		serverTimeOffset = 0
+	end
+end
+
+function ClientGameInfo.GetTodayGameTimeNow(): number
+	if localPlayerInfo == nil then
+		return 0
+	end
+	local startGameTick = localPlayerInfo.stateGame.startGameTick
+	if startGameTick <= 0 then
+		return localPlayerInfo.rewardInfo.todayGameTime
+	end
+	return ClientGameInfo.GetOsTime() - startGameTick + localPlayerInfo.rewardInfo.todayGameTime
+end
+
+function ClientGameInfo.UpdateRewardState(indexs: { number }, stateNew: number, rewardType: number)
+	if localPlayerInfo == nil then
+		return
+	end
+	local rewardList: { GameConfig.RewardInfo } = {}
+	for _, i in indexs do
+		if rewardType == GameConfig.RewardEnum.onlineTime then
+			if
+				stateNew == GameConfig.RewardState.HasGot
+				and localPlayerInfo.rewardInfo.onlineRewardStateInfo[tostring(i)] ~= GameConfig.RewardState.HasGot
+			then
+				local onlineRewardData = GameConfig.OnlineRewardDataList[i]
+				if onlineRewardData ~= nil then
+					local rewardInfo: GameConfig.RewardInfo = {
+						rewardType = onlineRewardData.rewardType,
+						rewardId = onlineRewardData.rewardId,
+						rewardCount = onlineRewardData.rewardCount,
+						rewardSource = GameConfig.ItemCountChangeReason.GainFromOnline,
+					}
+					table.insert(rewardList, rewardInfo)
+				end
+			end
+			localPlayerInfo.rewardInfo.onlineRewardStateInfo[tostring(i)] = stateNew
+		end
+	end
+	if #rewardList > 0 then
+		ClientMsg.FireShowAddRewardsTip(rewardList)
+	end
+	ClientMsg.FireRewardUpdate(stateNew, rewardType)
+end
+
+function ClientGameInfo.InitPlayerRewardInfo(rewardInfo: GameConfig.PlayerRewardInfo)
+	if localPlayerInfo == nil then
+		return
+	end
+	ClientMsg.FireLocalPlayerUpdateOnlineRewardThead(false)
+	localPlayerInfo.rewardInfo = rewardInfo
+	ClientMsg.FireLocalPlayerUpdateOnlineRewardThead(true)
+end
 
 -- 移除其他玩家信息 (当玩家离开时)
 function ClientGameInfo.RemoveOtherPlayer(playerId: number)

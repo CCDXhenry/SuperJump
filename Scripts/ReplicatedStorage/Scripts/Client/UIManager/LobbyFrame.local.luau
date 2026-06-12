@@ -17,6 +17,7 @@ local uiManagerScript = clientScripts:WaitForChild("UIManager")
 local UIManager = require(uiManagerScript)
 local RunwaySession = require(clientScripts:FindFirstChild("JumpRunway"):FindFirstChild("RunwaySession"))
 local ClientMsg = require(clientScripts:FindFirstChild("ClientMsg"))
+local ClientGameTool = require(clientScripts:FindFirstChild("ClientGameTool"))
 local TranslationTool = require(core:WaitForChild("Scripts"):WaitForChild("Client"):FindFirstChild("TranslationTool"))
 local GameTexts = require(sharedScripts_game:FindFirstChild("GameTexts"))
 local userInputService = game:GetService("UserInputService")
@@ -58,6 +59,21 @@ local storeBundleEntryFrame: Frame? = (lobbyFrame:FindFirstChild("StoreBundleFra
 local storeBundleButton: GuiButton? = if storeBundleEntryFrame then (storeBundleEntryFrame:FindFirstChild("Button") :: any) else nil
 local teleHomeButton: ImageButton? = lobbyFrame:FindFirstChild("TeleHomeButton") :: ImageButton?
 local teleShopButton: ImageButton? = lobbyFrame:FindFirstChild("TeleShopButton") :: ImageButton?
+local onlineRewardButton: ImageButton? = lobbyFrame:FindFirstChild("OnlineRewardButton") :: ImageButton?
+if onlineRewardButton == nil and bottomButtonsFrame then
+	onlineRewardButton = bottomButtonsFrame:FindFirstChild("OnlineRewardButton") :: ImageButton?
+end
+local onlineRewardRedPoint: GuiObject? = if onlineRewardButton
+	then (onlineRewardButton:FindFirstChild("RedPoint") :: GuiObject?)
+	else nil
+local onlineRewardClaim: TextLabel? = if onlineRewardButton
+	then (onlineRewardButton:FindFirstChild("Claim") :: TextLabel?)
+	else nil
+local onlineRewardCountDown: TextLabel? = if onlineRewardButton
+	then (onlineRewardButton:FindFirstChild("CountDown") :: TextLabel?)
+	else nil
+local onlineRewardUpdateToken = 0
+local onlineRewardThreadRunning = false
 
 local walkSpeedAddButton: GuiButton? = walkSpeedFrame:FindFirstChild("AddButton") :: any
 local maxFuelAddButton: GuiButton? = maxFuelFrame:FindFirstChild("AddButton") :: any
@@ -461,11 +477,119 @@ local function OnLocalPlayerCoinCountChanged()
 	RefreshCoinCountText()
 end
 
+local function OnOnlineRewardButtonActivated()
+	UIManager.OpenWindow(UIManager.WindowId.OnlineReward)
+	if onlineRewardRedPoint then
+		onlineRewardRedPoint.Visible = false
+	end
+end
+
+local function UpdateOnlineRewardButton()
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if
+		localPlayerInfo == nil
+		or onlineRewardButton == nil
+		or not onlineRewardButton.Visible
+		or onlineRewardClaim == nil
+		or onlineRewardCountDown == nil
+	then
+		return
+	end
+	local todayGameTimeNow = ClientGameInfo.GetTodayGameTimeNow()
+	for i = #GameConfig.OnlineRewardDataList, 1, -1 do
+		if todayGameTimeNow >= GameConfig.OnlineRewardDataList[i].unlockTime then
+			if localPlayerInfo.rewardInfo.onlineRewardStateInfo[tostring(i)] == nil then
+				onlineRewardClaim.Visible = true
+				onlineRewardCountDown.Visible = false
+				local list: { number } = {}
+				for j = 1, i do
+					if localPlayerInfo.rewardInfo.onlineRewardStateInfo[tostring(j)] == nil then
+						localPlayerInfo.rewardInfo.onlineRewardStateInfo[tostring(j)] = GameConfig.RewardState.CanGet
+						table.insert(list, j)
+					end
+				end
+				NetMsg.FireRequestUpdateReward(list, GameConfig.RewardState.CanGet, GameConfig.RewardEnum.onlineTime)
+			elseif localPlayerInfo.rewardInfo.onlineRewardStateInfo[tostring(i)] == GameConfig.RewardState.CanGet then
+				onlineRewardClaim.Visible = true
+				onlineRewardCountDown.Visible = false
+			elseif
+				i + 1 <= #GameConfig.OnlineRewardDataList
+				and localPlayerInfo.rewardInfo.onlineRewardStateInfo[tostring(i)] == GameConfig.RewardState.HasGot
+			then
+				local unlockTime = GameConfig.OnlineRewardDataList[i + 1].unlockTime
+				onlineRewardClaim.Visible = false
+				onlineRewardCountDown.Visible = true
+				onlineRewardCountDown.Text = ClientGameTool.GetCountDownText(math.floor(unlockTime - todayGameTimeNow))
+			end
+			break
+		end
+		if i == 1 then
+			local unlockTime = GameConfig.OnlineRewardDataList[i].unlockTime
+			onlineRewardClaim.Visible = false
+			onlineRewardCountDown.Visible = true
+			onlineRewardCountDown.Text = ClientGameTool.GetCountDownText(math.floor(unlockTime - todayGameTimeNow))
+		end
+	end
+end
+
+local function OnRewardUpdate(stateNew: number, rewardType: number)
+	if
+		stateNew == GameConfig.RewardState.CanGet
+		and not UIManager.IsWindowShowing(UIManager.WindowId.OnlineReward)
+		and onlineRewardRedPoint
+	then
+		onlineRewardRedPoint.Visible = true
+	end
+end
+
+local function StartOnlineRewardUpdateThread()
+	onlineRewardUpdateToken += 1
+	local myToken = onlineRewardUpdateToken
+	onlineRewardThreadRunning = true
+	task.spawn(function()
+		while onlineRewardThreadRunning and myToken == onlineRewardUpdateToken do
+			UpdateOnlineRewardButton()
+			task.wait(1)
+		end
+	end)
+end
+
+local function StopOnlineRewardUpdateThread()
+	onlineRewardThreadRunning = false
+	onlineRewardUpdateToken += 1
+end
+
+local function OnLocalPlayerUpdateOnlineRewardThead(isStart: boolean)
+	if isStart then
+		StartOnlineRewardUpdateThread()
+	else
+		StopOnlineRewardUpdateThread()
+	end
+end
+
+local function InitOnlineRewardButton()
+	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if localPlayerInfo == nil or onlineRewardButton == nil then
+		return
+	end
+	UpdateOnlineRewardButton()
+	StartOnlineRewardUpdateThread()
+	if onlineRewardRedPoint then
+		for _, state in localPlayerInfo.rewardInfo.onlineRewardStateInfo do
+			if state == GameConfig.RewardState.CanGet then
+				onlineRewardRedPoint.Visible = true
+				break
+			end
+		end
+	end
+end
+
 local function OnLocalPlayerInfoInit()
 	RefreshView()
 	RefreshRebirthDisplay()
 	RefreshDecelerationButtonView()
 	RefreshRebirthRedPointView()
+	InitOnlineRewardButton()
 end
 
 local function ConnectHumanoid(char: Model)
@@ -504,9 +628,17 @@ RefreshView()
 RefreshRebirthDisplay()
 RefreshDecelerationButtonView()
 RefreshRebirthRedPointView()
+if ClientGameInfo.GetLocalPlayerInfo() ~= nil then
+	InitOnlineRewardButton()
+end
 
 ClientMsg.ConnectLocalPlayerCurrencyUpdate(OnLocalPlayerCoinCountChanged)
 ClientMsg.ConnectLocalPlayerInfoInit(OnLocalPlayerInfoInit)
+ClientMsg.ConnectRewardUpdate(OnRewardUpdate)
+ClientMsg.ConnectLocalPlayerUpdateOnlineRewardThead(OnLocalPlayerUpdateOnlineRewardThead)
+if onlineRewardButton then
+	onlineRewardButton.Activated:Connect(OnOnlineRewardButtonActivated)
+end
 ClientMsg.ConnectLocalPlayerSkillLevelUpdate(OnLocalPlayerSkillLevelChanged)
 ClientMsg.ConnectLocalPlayerJumpPowerUpdate(function(jumpPowerInfo: GameConfig.JumpPowerInfo, addAmount: number)
 	RefreshJumpPowerText(jumpPowerInfo.lv)

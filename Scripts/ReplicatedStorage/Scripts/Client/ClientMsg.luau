@@ -57,6 +57,9 @@ local localPlayerFriendsPlayingSameGameCountChangedEvent: BindableEvent =
 	EnsureBindableEvent("LocalPlayerFriendsPlayingSameGameCountChanged")
 local localPlayerJumpRunwayBestDistanceUpdateEvent: BindableEvent =
 	EnsureBindableEvent("LocalPlayerJumpRunwayBestDistanceUpdate")
+local rewardUpdateEvent: BindableEvent = EnsureBindableEvent("RewardUpdate")
+local localPlayerUpdateOnlineRewardTheadEvent: BindableEvent =
+	EnsureBindableEvent("LocalPlayerUpdateOnlineRewardThead")
 
 --关闭窗口事件
 function ClientMsg.FireCloseWindow(windowName: string)
@@ -384,6 +387,22 @@ end
 
 function ClientMsg.ConnectLocalPlayerJumpRunwayBestDistanceUpdate(callback: (distance: number) -> ())
 	localPlayerJumpRunwayBestDistanceUpdateEvent.Event:Connect(callback)
+end
+
+function ClientMsg.FireRewardUpdate(stateNew: number, rewardType: number)
+	rewardUpdateEvent:Fire(stateNew, rewardType)
+end
+
+function ClientMsg.ConnectRewardUpdate(callback: (stateNew: number, rewardType: number) -> ())
+	rewardUpdateEvent.Event:Connect(callback)
+end
+
+function ClientMsg.FireLocalPlayerUpdateOnlineRewardThead(isStart: boolean)
+	localPlayerUpdateOnlineRewardTheadEvent:Fire(isStart)
+end
+
+function ClientMsg.ConnectLocalPlayerUpdateOnlineRewardThead(callback: (isStart: boolean) -> ())
+	localPlayerUpdateOnlineRewardTheadEvent.Event:Connect(callback)
 end
 
 return ClientMsg

@@ -20,10 +20,11 @@ local RebirthDataModule = require(script:WaitForChild("RebirthData"))
 local BuffDataModule = require(script:WaitForChild("BuffData"))
 local ShopBundleConfigurationDataModule = require(script:WaitForChild("ShopBundleConfigurationData"))
 local ShopBundleDataModule = require(script:WaitForChild("ShopBundleData"))
+local OnlineRewardDataModule = require(script:WaitForChild("OnlineRewardData"))
 
 GameConfig.GameVersion = "1.0.0"
 GameConfig.ABTestVersion = "1.0.0"
-GameConfig.PlayerSaveInfoDataVersion = 1
+GameConfig.PlayerSaveInfoDataVersion = 2
 GameConfig.GameId = 10269142148
 
 if game.GameId == GameConfig.GameId then
@@ -159,6 +160,44 @@ GameConfig.RewardType = {
 	Jetpack = 6,
 }
 
+GameConfig.RewardState = {
+	CanGet = 0,
+	HasGot = 2,
+}
+
+GameConfig.RewardEnum = {
+	onlineTime = 2,
+}
+
+GameConfig.newDayHour = 0
+GameConfig.newDayMinute = 0
+
+export type OnlineRewardData = {
+	id: number,
+	rewardType: number,
+	rewardId: number,
+	rewardCount: number,
+	unlockTime: number,
+}
+
+export type PlayerRewardInfo = {
+	lastLoginTime: string,
+	todayGameTime: number,
+	onlineRewardStateInfo: { [string]: number },
+}
+
+export type StateGameInfo = {
+	startGameTick: number,
+}
+
+GameConfig.OnlineRewardDataList = {} :: { OnlineRewardData }
+for _, onlineRewardData in pairs(OnlineRewardDataModule) do
+	table.insert(GameConfig.OnlineRewardDataList, onlineRewardData :: OnlineRewardData)
+end
+table.sort(GameConfig.OnlineRewardDataList, function(a: OnlineRewardData, b: OnlineRewardData)
+	return a.id < b.id
+end)
+
 GameConfig.CurrencyType = {
 	Coin = 1,
 }
@@ -248,6 +287,7 @@ GameConfig.ModelGetSource = {
 	LittleElfChest = 2,
 	Shop = 3,
 	PlayerGift = 4,
+	OnlineReward = 5,
 }
 
 GameConfig.EnablePlayerGift = true
@@ -292,6 +332,7 @@ GameConfig.ItemCountChangeReason = {
 	GainFromCollect = 1004,
 	GainFromClaimModelYield = 1005,
 	GainFromOfflineReward = 1006,
+	GainFromOnline = 1007,
 	SpendOnUpgradeBrainrot = 2001,
 	SpendOnUpgradeHome = 2002,
 	SpendOnUpgradeWalkSpeed = 2003,
@@ -1999,6 +2040,8 @@ export type PlayerSaveInfo = {
 	guideProgressInfo: GuideProgressSaveInfo,
 	discoveredIslandIds: { [string]: boolean }?,
 	hasClaimedGroupReward: boolean,
+	rewardInfo: PlayerRewardInfo,
+	stateGame: StateGameInfo,
 }
 
 export type PlayerInfo = PlayerSaveInfo & {
@@ -2082,6 +2125,14 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 		},
 		discoveredIslandIds = {},
 		hasClaimedGroupReward = false,
+		rewardInfo = {
+			lastLoginTime = "",
+			todayGameTime = 0,
+			onlineRewardStateInfo = {},
+		},
+		stateGame = {
+			startGameTick = -1,
+		},
 	}
 end
 
@@ -2107,6 +2158,8 @@ export type ClientLocalPlayerSaveInfo = {
 	homeSlot: string,
 	guideProgressInfo: GuideProgressSaveInfo,
 	hasClaimedGroupReward: boolean,
+	rewardInfo: PlayerRewardInfo,
+	stateGame: StateGameInfo,
 }
 
 export type ClientLocalPlayerInfo = ClientLocalPlayerSaveInfo & {

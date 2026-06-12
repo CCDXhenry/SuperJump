@@ -372,6 +372,18 @@ NetMsg.ConnectNotifyShowGameTip(function(tipContentSource, tweenType, tipContent
 	ClientMsg.FireShowGameTip(tipContentSource, tweenType, tipContentKey, tipContentArgs, textColor)
 end)
 
+NetMsg.ConnectNotifyPlayerRewardUpdate(function(indexs, stateNew, rewardType)
+	ClientGameInfo.UpdateRewardState(indexs, stateNew, rewardType)
+end)
+
+NetMsg.ConnectNotifyPlayersInitPlayerRewardInfo(function(rewardInfo)
+	ClientGameInfo.InitPlayerRewardInfo(rewardInfo)
+end)
+
+NetMsg.ConnectNotifyPlayerNewDay(function(_lastLoginTime, _gameTime, startGameTick)
+	ClientGameInfo.UpdateStartGameTick(startGameTick)
+end)
+
 -- 客户端启动时立即异步预加载资源，不阻塞初始化流程
 task.spawn(function()
 	PreloadAssets()

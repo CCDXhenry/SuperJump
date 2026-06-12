@@ -46,6 +46,8 @@ local policyService: PolicyService = game:GetService("PolicyService")
 local AutoSavePlayerInfoInterval: number = 30 --自动保存玩家信息间隔时间
 local GAME_TIME_UPDATE_INTERVAL = 0.25
 local LOGIN_DAY_CHECK_INTERVAL = 5
+local newDayHour = GameConfig.newDayHour
+local newDayMinute = GameConfig.newDayMinute
 
 local gameTimeAccumulator = 0
 local loginDayCheckAccumulator = 0
@@ -220,6 +222,10 @@ end
 --玩家离开事件
 local function OnPlayerRemoving(player: Player)
 	LeaderboardManager.SavePlayerStats(player)
+	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo ~= nil then
+		ServerGameInfo.UpdateTimeInfo(player, playerInfo, os.time())
+	end
 	--埋点移除玩家
 	AnalyticsTool.RemovePlayer(player)
 	ServerGameInfo.MarkPlayerLastOnlineNow(player)
@@ -289,6 +295,18 @@ NetMsg.ConnectRequestClaimOfflineReward(function(player: Player)
 	ServerGameInfo.TryClaimOfflineReward(player, false)
 end)
 
+local function CheckForNewDay()
+	while true do
+		local currentTime = os.date("!*t")
+		if currentTime.hour == newDayHour and currentTime.min == newDayMinute then
+			ServerGameInfo.NewDayUpdatePlayerInfo()
+			task.wait(100)
+		end
+		task.wait(1)
+	end
+end
+
 players.PlayerAdded:Connect(OnPlayerAdded)
 players.PlayerRemoving:Connect(OnPlayerRemoving)
 runService.Heartbeat:Connect(OnHeartbeat)
+task.spawn(CheckForNewDay)

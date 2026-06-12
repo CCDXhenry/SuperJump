@@ -160,6 +160,12 @@ local requestAddFriendInThisServerEvent: RemoteEvent? = GetOrCreateRemoteEvent("
 local requestRemoveFriendInThisServerEvent: RemoteEvent? = GetOrCreateRemoteEvent("RequestRemoveFriendInThisServer")
 local requestUpdateFriendsPlayingSameGameCountEvent: RemoteEvent? = GetOrCreateRemoteEvent("RequestUpdateFriendsPlayingSameGameCount")
 
+-- 在线时长奖励
+local requestUpdateRewardEvent: RemoteEvent? = GetOrCreateRemoteEvent("RequestUpdateReward")
+local notifyPlayerRewardUpdateEvent: RemoteEvent? = GetOrCreateRemoteEvent("NotifyPlayerRewardUpdate")
+local notifyPlayersInitPlayerRewardInfoEvent: RemoteEvent? = GetOrCreateRemoteEvent("NotifyPlayersInitPlayerRewardInfo")
+local notifyPlayerNewDayEvent: RemoteEvent? = GetOrCreateRemoteEvent("NotifyPlayerNewDay")
+
 -- 锻炼模式
 local requestStartExerciseEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestStartExercise") :: RemoteEvent?
 local requestStopExerciseEvent: RemoteEvent? = remoteEventsFolder:FindFirstChild("RequestStopExercise") :: RemoteEvent?
@@ -283,7 +289,7 @@ end
 
 --通知客户端玩家获得了通行证
 function NetMsg.FireNotifyPlayerAcquiredGamePass(player: Player, gamePassId: number)
-	print("[NetMsg] FireNotifyPlayerAcquiredGamePass for player", player.Name, "gamePassId", gamePassId)
+	--print("[NetMsg] FireNotifyPlayerAcquiredGamePass for player", player.Name, "gamePassId", gamePassId)
 	notifyPlayerAcquiredGamePassEvent:FireClient(player, gamePassId)
 end
 
@@ -348,7 +354,7 @@ end
 
 -- 客户端请求拾取模型
 function NetMsg.FireRequestPickupModel(instanceId: string)
-	print("[NetMsg] FireRequestPickupModel", instanceId)
+	--print("[NetMsg] FireRequestPickupModel", instanceId)
 	requestPickupModelEvent:FireServer(instanceId)
 end
 function NetMsg.ConnectRequestPickupModel(callback: (player: Player, instanceId: string) -> ())
@@ -357,7 +363,7 @@ end
 
 -- 客户端请求放置模型到家园展台
 function NetMsg.FireRequestPlaceHomeModel(instanceId: string, pointIndex: number)
-	print("[NetMsg] FireRequestPlaceHomeModel", instanceId, "at pointIndex", pointIndex)
+	--print("[NetMsg] FireRequestPlaceHomeModel", instanceId, "at pointIndex", pointIndex)
 	requestPlaceHomeModelEvent:FireServer(instanceId, pointIndex)
 end
 function NetMsg.ConnectRequestPlaceHomeModel(callback: (player: Player, instanceId: string, pointIndex: number) -> ())
@@ -366,7 +372,7 @@ end
 
 -- 客户端请求升级家园展台模型
 function NetMsg.FireRequestUpgradeModel(pointIndex: number, levelAdd: number?, isPaidIntent: boolean?)
-	print("[NetMsg] FireRequestUpgradeModel at pointIndex", pointIndex, "levelAdd", levelAdd, "isPaidIntent", isPaidIntent)
+	--print("[NetMsg] FireRequestUpgradeModel at pointIndex", pointIndex, "levelAdd", levelAdd, "isPaidIntent", isPaidIntent)
 	requestUpgradeModelEvent:FireServer(pointIndex, levelAdd, isPaidIntent)
 end
 function NetMsg.ConnectRequestUpgradeModel(callback: (player: Player, pointIndex: number, levelAdd: number?, isPaidIntent: boolean?) -> ())
@@ -375,7 +381,7 @@ end
 
 -- 客户端请求出售家园展台模型
 function NetMsg.FireRequestSellModel(pointIndex: number)
-	print("[NetMsg] FireRequestSellModel at pointIndex", pointIndex)
+	--print("[NetMsg] FireRequestSellModel at pointIndex", pointIndex)
 	requestSellModelEvent:FireServer(pointIndex)
 end
 function NetMsg.ConnectRequestSellModel(callback: (player: Player, pointIndex: number) -> ())
@@ -384,7 +390,7 @@ end
 
 -- 客户端请求购买商店升级
 function NetMsg.FireRequestBuyShopUpgrade(upgradeType: string)
-	print("[NetMsg] FireRequestBuyShopUpgrade", upgradeType)
+	--print("[NetMsg] FireRequestBuyShopUpgrade", upgradeType)
 	requestBuyShopUpgradeEvent:FireServer(upgradeType)
 end
 function NetMsg.ConnectRequestBuyShopUpgrade(callback: (player: Player, upgradeType: string) -> ())
@@ -471,7 +477,7 @@ end
 
 -- 客户端请求出售正在搬运的宠物
 function NetMsg.FireRequestSellCarryingBrainrot()
-	print("[NetMsg] FireRequestSellCarryingBrainrot")
+	--print("[NetMsg] FireRequestSellCarryingBrainrot")
 	requestSellCarryingBrainrotEvent:FireServer()
 end
 function NetMsg.ConnectRequestSellCarryingBrainrot(callback: (player: Player) -> ())
@@ -480,7 +486,7 @@ end
 
 -- 客户端请求出售手上（若有）及背包队列中所有 Brainrot
 function NetMsg.FireRequestSellAllBrainrotInQueue()
-	print("[NetMsg] FireRequestSellAllBrainrotInQueue")
+	--print("[NetMsg] FireRequestSellAllBrainrotInQueue")
 	requestSellAllBrainrotInQueueEvent:FireServer()
 end
 
@@ -490,7 +496,7 @@ end
 
 -- 通知客户端玩家库存更新 (持久化部分)
 function NetMsg.FireNotifyPlayerInventoryUpdate(player: Player, inventoryInfo: GameConfig.PlayerInventorySaveInfo)
-	print("[NetMsg] FireNotifyPlayerInventoryUpdate for player", player.Name)
+	--print("[NetMsg] FireNotifyPlayerInventoryUpdate for player", player.Name)
 	notifyPlayerInventoryUpdateEvent:FireClient(player, inventoryInfo)
 end
 function NetMsg.ConnectNotifyPlayerInventoryUpdate(callback: (inventoryInfo: GameConfig.PlayerInventorySaveInfo) -> ())
@@ -625,7 +631,7 @@ end
 
 -- 客户端请求开启宝箱
 function NetMsg.FireRequestOpenChest(uid: string)
-	print("[NetMsg] FireRequestOpenChest", uid)
+	--print("[NetMsg] FireRequestOpenChest", uid)
 	requestOpenChestEvent:FireServer(uid)
 end
 
@@ -668,7 +674,7 @@ end
 
 -- 客户端请求重生
 function NetMsg.FireRequestRebirth()
-	print("[NetMsg] FireRequestRebirth")
+	--print("[NetMsg] FireRequestRebirth")
 	requestRebirthEvent:FireServer()
 end
 
@@ -678,7 +684,7 @@ end
 
 -- 客户端请求付费重生
 function NetMsg.FireRequestPaidRebirth()
-	print("[NetMsg] FireRequestPaidRebirth")
+	--print("[NetMsg] FireRequestPaidRebirth")
 	requestPaidRebirthEvent:FireServer()
 end
 
@@ -1369,6 +1375,76 @@ function NetMsg.ConnectRequestUpdateFriendsPlayingSameGameCount(callback: (playe
 		return
 	end
 	requestUpdateFriendsPlayingSameGameCountEvent.OnServerEvent:Connect(callback)
+end
+
+function NetMsg.FireRequestUpdateReward(indexs: { number }, stateNew: number, rewardType: number)
+	if requestUpdateRewardEvent == nil then
+		return
+	end
+	requestUpdateRewardEvent:FireServer(indexs, stateNew, rewardType)
+end
+
+function NetMsg.ConnectRequestUpdateReward(callback: (
+	player: Player,
+	indexs: { number },
+	stateNew: number,
+	rewardType: number
+) -> ())
+	if requestUpdateRewardEvent == nil then
+		return
+	end
+	requestUpdateRewardEvent.OnServerEvent:Connect(callback)
+end
+
+function NetMsg.FireNotifyPlayerRewardUpdate(
+	player: Player,
+	indexs: { number },
+	stateNew: number,
+	rewardType: number
+)
+	if notifyPlayerRewardUpdateEvent == nil then
+		return
+	end
+	notifyPlayerRewardUpdateEvent:FireClient(player, indexs, stateNew, rewardType)
+end
+
+function NetMsg.ConnectNotifyPlayerRewardUpdate(callback: (
+	indexs: { number },
+	stateNew: number,
+	rewardType: number
+) -> ())
+	if notifyPlayerRewardUpdateEvent == nil then
+		return
+	end
+	notifyPlayerRewardUpdateEvent.OnClientEvent:Connect(callback)
+end
+
+function NetMsg.FireNotifyPlayersInitPlayerRewardInfo(player: Player, rewardInfo: GameConfig.PlayerRewardInfo)
+	if notifyPlayersInitPlayerRewardInfoEvent == nil then
+		return
+	end
+	notifyPlayersInitPlayerRewardInfoEvent:FireClient(player, rewardInfo)
+end
+
+function NetMsg.ConnectNotifyPlayersInitPlayerRewardInfo(callback: (rewardInfo: GameConfig.PlayerRewardInfo) -> ())
+	if notifyPlayersInitPlayerRewardInfoEvent == nil then
+		return
+	end
+	notifyPlayersInitPlayerRewardInfoEvent.OnClientEvent:Connect(callback)
+end
+
+function NetMsg.FireNotifyPlayerNewDay(player: Player, lastLoginTime: string, gameTime: number, startGameTick: number)
+	if notifyPlayerNewDayEvent == nil then
+		return
+	end
+	notifyPlayerNewDayEvent:FireClient(player, lastLoginTime, gameTime, startGameTick)
+end
+
+function NetMsg.ConnectNotifyPlayerNewDay(callback: (lastLoginTime: string, gameTime: number, startGameTick: number) -> ())
+	if notifyPlayerNewDayEvent == nil then
+		return
+	end
+	notifyPlayerNewDayEvent.OnClientEvent:Connect(callback)
 end
 
 return NetMsg

@@ -31,6 +31,7 @@ UIManager.WindowId = {
 	ExEquipFrame = "ExEquipFrame",
 	JetpackShop = "JetpackShopFrame",
 	OfflineRewards = "OfflineRewardsFrame",
+	OnlineReward = "OnlineRewardFrame",
 }
 
 type WindowConfig = {
@@ -82,6 +83,11 @@ local WindowConfigs: { [string]: WindowConfig } = {
 	[UIManager.WindowId.OfflineRewards] = {
 		FrameName = "OfflineRewardsFrame",
 		scriptName = "OfflineRewardsFrame",
+		isModal = true,
+	},
+	[UIManager.WindowId.OnlineReward] = {
+		FrameName = "OnlineRewardFrame",
+		scriptName = "OnlineRewardFrame",
 		isModal = true,
 	},
 }
