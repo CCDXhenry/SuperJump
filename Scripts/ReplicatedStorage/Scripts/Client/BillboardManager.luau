@@ -1,39 +1,43 @@
 --!strict
+local players = game:GetService("Players")
 local runService = game:GetService("RunService")
 
 local BillboardManager = {}
 
 type InfoGuiState = {
 	index: number,
+	visibleIndex: number?,
 	controllerFrame: Frame?,
-	isWaitingForStableScale: boolean,
-	didHideControllerForWait: boolean,
+	uiScale: UIScale?,
+	visibleDistance: number?,
+	isDistanceVisible: boolean,
+	isControllerVisible: boolean,
 	wasEnabled: boolean,
 	lastBillboardSize: Vector2?,
 	stableBillboardSizeFrameCount: number,
-	lastWaitReason: string?,
-	waitStartedAt: number?,
-	postRestoreStableFrames: number,
+	scaleWaitStartedAt: number?,
+	lastScaleWaitReason: string?,
 }
 
 local infoGuis: { BillboardGui } = {}
+local visibleInfoGuis: { BillboardGui } = {}
 local infoGuiStateMap: { [BillboardGui]: InfoGuiState } = {}
+local localPlayer = players.LocalPlayer
+local VISIBLE_DISTANCE_ATTR = "VisibleDistance"
 local MAX_INFO_UI_SCALE = 1.2
 local MIN_VALID_INFO_UI_SCALE = 0.01
--- 等待显示前，BillboardGui.AbsoluteSize 需连续稳定的渲染帧数（配合 ProcessWaitingGuis 每帧采样）。
--- 用于过滤 MaxDistance 进入视野时首帧尺寸异常，避免在未稳定时应用 UIScale 并显示。
-local STABLE_INFO_SIZE_FRAME_COUNT = 3
+local STABLE_INFO_SIZE_FRAME_COUNT = 1
 local INFO_SIZE_EPSILON = 0.5
 local INFO_SIZE_MAX_CHANGE_RATIO = 0.05
-local MAX_STABLE_WAIT_SECONDS = 0.4
--- ControllerFrame 恢复可见后，仍需尺寸稳定才允许更新 UIScale 的帧数。
--- 防止显示瞬间 AbsoluteSize 再次跳变导致 UIScale 立刻修正而产生闪屏。
-local POST_RESTORE_STABLE_FRAME_COUNT = 3
+local MAX_SCALE_READY_WAIT_SECONDS = 0.5
 local UPDATE_INTERVAL_SECONDS = 0.01
+local DISTANCE_VISIBILITY_INTERVAL_SECONDS = 0.05
+local DISTANCE_VISIBILITY_HYSTERESIS_STUDS = 5
 local MAX_UPDATES_PER_STEP = 90
 local DEBUG_LOG_ENABLED = false
 local updateElapsedSeconds = 0
-local updateCursorIndex = 1
+local distanceVisibilityElapsedSeconds = 0
+local distanceVisibilityCursorIndex = 1
 
 local function FormatVector2(value: Vector2): string
 	return string.format("%.1f, %.1f", value.X, value.Y)
@@ -86,9 +90,42 @@ local function GetControllerFrame(infoUI: BillboardGui): Frame?
 	return controllerFrame
 end
 
-local function CanScaleControllerFrame(controllerFrame: Frame): boolean
-	local uiScale = controllerFrame:FindFirstChild("UIScale")
-	return uiScale ~= nil and uiScale:IsA("UIScale") and controllerFrame.Size.X.Offset > 0 and controllerFrame.Size.Y.Offset > 0
+local function GetStateControllerFrame(infoUI: BillboardGui, state: InfoGuiState): Frame?
+	local controllerFrame = state.controllerFrame
+	if controllerFrame ~= nil and controllerFrame.Parent ~= nil then
+		return controllerFrame
+	end
+	controllerFrame = GetControllerFrame(infoUI)
+	state.controllerFrame = controllerFrame
+	state.uiScale = nil
+	return controllerFrame
+end
+
+local function GetStateUIScale(infoUI: BillboardGui, state: InfoGuiState): UIScale?
+	local controllerFrame = GetStateControllerFrame(infoUI, state)
+	if controllerFrame == nil then
+		return nil
+	end
+
+	local uiScale = state.uiScale
+	if uiScale ~= nil and uiScale.Parent == controllerFrame then
+		return uiScale
+	end
+
+	local foundUIScale = controllerFrame:FindFirstChild("UIScale")
+	if foundUIScale == nil or not foundUIScale:IsA("UIScale") then
+		state.uiScale = nil
+		return nil
+	end
+
+	state.uiScale = foundUIScale
+	return foundUIScale
+end
+
+local function SetControllerFrameVisibleIfChanged(controllerFrame: Frame, visible: boolean)
+	if controllerFrame.Visible ~= visible then
+		controllerFrame.Visible = visible
+	end
 end
 
 local function IsSameBillboardSize(left: Vector2, right: Vector2): boolean
@@ -102,10 +139,11 @@ local function GetBillboardSizeChangeRatio(left: Vector2, right: Vector2): numbe
 	return math.max(dx, dy) / maxDim
 end
 
-local function ResetStableBillboardSize(state: InfoGuiState)
+local function ResetScaleReadiness(state: InfoGuiState)
 	state.lastBillboardSize = nil
 	state.stableBillboardSizeFrameCount = 0
-	state.lastWaitReason = nil
+	state.scaleWaitStartedAt = nil
+	state.lastScaleWaitReason = nil
 end
 
 local function IsBillboardSizeStable(state: InfoGuiState, billboardSize: Vector2): boolean
@@ -129,68 +167,140 @@ local function IsBillboardSizeStable(state: InfoGuiState, billboardSize: Vector2
 	return state.stableBillboardSizeFrameCount >= STABLE_INFO_SIZE_FRAME_COUNT
 end
 
-local RestoreControllerVisible: (BillboardGui, InfoGuiState, string) -> ()
-local CancelStableScaleWait: (BillboardGui, InfoGuiState, string) -> ()
-local FinishStableScaleWait: (BillboardGui, InfoGuiState, string) -> ()
-local UpdateSingleInfoScale: (BillboardGui, boolean, InfoGuiState?, boolean) -> (boolean, string)
-local RestoreControllerVisibleIfReady: (BillboardGui, InfoGuiState) -> ()
-local RefreshEnabledStableScaleWait: (BillboardGui, InfoGuiState) -> ()
-
-local function BeginStableScaleWait(infoUI: BillboardGui, state: InfoGuiState, controllerFrame: Frame, reason: string)
-	state.controllerFrame = controllerFrame
-	state.isWaitingForStableScale = true
-	if state.waitStartedAt == nil then
-		state.waitStartedAt = os.clock()
+local function GetInstanceWorldPosition(inst: Instance?): Vector3?
+	if inst == nil then
+		return nil
 	end
-	ResetStableBillboardSize(state)
-	if controllerFrame.Visible then
-		controllerFrame.Visible = false
-		state.didHideControllerForWait = true
-		DebugLog(`hide ControllerFrame before stable scale: gui={GetDebugName(infoUI)} reason={reason}`)
+	if inst:IsA("BasePart") then
+		return inst.Position
 	end
+	if inst:IsA("Attachment") then
+		return inst.WorldPosition
+	end
+	return nil
 end
 
-RestoreControllerVisible = function(infoUI: BillboardGui, state: InfoGuiState, reason: string)
-	if not state.didHideControllerForWait then
+local function GetBillboardWorldPosition(infoUI: BillboardGui): Vector3?
+	local adornee = infoUI.Adornee :: Instance?
+	local adorneePosition = GetInstanceWorldPosition(adornee)
+	if adorneePosition ~= nil then
+		return adorneePosition
+	end
+	return GetInstanceWorldPosition(infoUI.Parent)
+end
+
+local function GetLocalPlayerRootPosition(): Vector3?
+	local character = localPlayer.Character
+	if character == nil then
+		return nil
+	end
+	local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+	if humanoidRootPart == nil or not humanoidRootPart:IsA("BasePart") then
+		return nil
+	end
+	return humanoidRootPart.Position
+end
+
+local function GetVisibleDistance(infoUI: BillboardGui): number?
+	local attrValue = infoUI:GetAttribute(VISIBLE_DISTANCE_ATTR)
+	if type(attrValue) == "number" and attrValue > 0 then
+		return attrValue
+	end
+	local maxDistance = infoUI.MaxDistance
+	if maxDistance > 0 then
+		return maxDistance
+	end
+	return nil
+end
+
+local function RefreshMaxDistanceOverride(infoUI: BillboardGui, state: InfoGuiState)
+	local maxDistance = infoUI.MaxDistance
+	if maxDistance <= 0 then
+		return
+	end
+	state.visibleDistance = maxDistance
+	infoUI.MaxDistance = 0
+end
+
+local function IsInfoGuiDistanceVisible(infoUI: BillboardGui, state: InfoGuiState): boolean
+	local visibleDistance = state.visibleDistance
+	if visibleDistance == nil then
+		return true
+	end
+	local rootPosition = GetLocalPlayerRootPosition()
+	local guiPosition = GetBillboardWorldPosition(infoUI)
+	if rootPosition == nil or guiPosition == nil then
+		return false
+	end
+	local distanceLimit = if state.isDistanceVisible then visibleDistance + DISTANCE_VISIBILITY_HYSTERESIS_STUDS else visibleDistance
+	local offset = rootPosition - guiPosition
+	return offset:Dot(offset) <= distanceLimit * distanceLimit
+end
+
+local function AddVisibleInfoGui(infoUI: BillboardGui, state: InfoGuiState)
+	if state.visibleIndex ~= nil then
+		return
+	end
+	table.insert(visibleInfoGuis, infoUI)
+	state.visibleIndex = #visibleInfoGuis
+end
+
+local function RemoveVisibleInfoGuiByIndex(visibleIndex: number)
+	local lastIndex = #visibleInfoGuis
+	local lastGui = visibleInfoGuis[lastIndex]
+	if visibleIndex ~= lastIndex then
+		visibleInfoGuis[visibleIndex] = lastGui
+		local lastGuiState = infoGuiStateMap[lastGui]
+		if lastGuiState ~= nil then
+			lastGuiState.visibleIndex = visibleIndex
+		end
+	end
+	visibleInfoGuis[lastIndex] = nil
+end
+
+local function RemoveVisibleInfoGui(state: InfoGuiState)
+	local visibleIndex = state.visibleIndex
+	if visibleIndex == nil then
 		return
 	end
 
-	local controllerFrame = state.controllerFrame
-	if controllerFrame == nil or controllerFrame.Parent == nil then
+	RemoveVisibleInfoGuiByIndex(visibleIndex)
+	state.visibleIndex = nil
+end
+
+local function RefreshDistanceVisibility(infoUI: BillboardGui, state: InfoGuiState)
+	local isVisible = infoUI.Enabled and IsInfoGuiDistanceVisible(infoUI, state)
+	if isVisible then
+		if not state.isDistanceVisible then
+			state.isDistanceVisible = true
+			state.isControllerVisible = false
+			ResetScaleReadiness(state)
+			AddVisibleInfoGui(infoUI, state)
+		end
 		return
 	end
 
-	state.didHideControllerForWait = false
-	state.lastWaitReason = nil
-	controllerFrame.Visible = true
-	DebugLog(`restore ControllerFrame visible: gui={GetDebugName(infoUI)} reason={reason}`)
-end
-
-CancelStableScaleWait = function(infoUI: BillboardGui, state: InfoGuiState, reason: string)
-	if not state.isWaitingForStableScale then
+	state.isDistanceVisible = false
+	RemoveVisibleInfoGui(state)
+	local controllerFrame = GetStateControllerFrame(infoUI, state)
+	if controllerFrame == nil then
 		return
 	end
-
-	state.isWaitingForStableScale = false
-	state.waitStartedAt = nil
-	ResetStableBillboardSize(state)
-	RestoreControllerVisible(infoUI, state, reason)
+	state.isControllerVisible = false
+	ResetScaleReadiness(state)
+	SetControllerFrameVisibleIfChanged(controllerFrame, false)
 end
 
-FinishStableScaleWait = function(infoUI: BillboardGui, state: InfoGuiState, reason: string)
-	state.isWaitingForStableScale = false
-	state.waitStartedAt = nil
-	state.postRestoreStableFrames = POST_RESTORE_STABLE_FRAME_COUNT
-	ResetStableBillboardSize(state)
-	RestoreControllerVisible(infoUI, state, reason)
-end
+local UpdateSingleInfoScale: (BillboardGui, InfoGuiState, boolean) -> (boolean, string)
+local RefreshControllerFrameVisibility: (BillboardGui, InfoGuiState) -> ()
+local RefreshEnabledDistanceVisibility: (BillboardGui, InfoGuiState) -> ()
 
 local function RemoveInfoGuiByIndex(index: number)
 	local lastIndex = #infoGuis
 	local removedGui = infoGuis[index]
 	local removedGuiState = infoGuiStateMap[removedGui]
 	if removedGuiState ~= nil then
-		RestoreControllerVisible(removedGui, removedGuiState, "removed")
+		RemoveVisibleInfoGui(removedGuiState)
 	end
 	local lastGui = infoGuis[lastIndex]
 	if index ~= lastIndex then
@@ -212,13 +322,13 @@ local function RemoveInfoGui(gui: BillboardGui)
 	RemoveInfoGuiByIndex(state.index)
 end
 
-UpdateSingleInfoScale = function(infoUI: BillboardGui, useSizeFallback: boolean, state: InfoGuiState?, requireStableSize: boolean): (boolean, string)
-	local controllerFrame = GetControllerFrame(infoUI)
+UpdateSingleInfoScale = function(infoUI: BillboardGui, state: InfoGuiState, useSizeFallback: boolean): (boolean, string)
+	local controllerFrame = GetStateControllerFrame(infoUI, state)
 	if controllerFrame == nil then
 		return false, "missing ControllerFrame"
 	end
-	local uiScale = controllerFrame:FindFirstChild("UIScale")
-	if uiScale == nil or not uiScale:IsA("UIScale") then
+	local uiScale = GetStateUIScale(infoUI, state)
+	if uiScale == nil then
 		return false, "missing UIScale"
 	end
 	local controllerWidth = controllerFrame.Size.X.Offset
@@ -230,13 +340,6 @@ UpdateSingleInfoScale = function(infoUI: BillboardGui, useSizeFallback: boolean,
 	if billboardSize == nil then
 		return false,
 			`invalid Billboard size absolute={FormatVector2(infoUI.AbsoluteSize)} offset={FormatUDim2Offset(infoUI.Size)} fallback={tostring(useSizeFallback)}`
-	end
-	local needsStableSize = requireStableSize
-	if state ~= nil and state.postRestoreStableFrames > 0 then
-		needsStableSize = true
-	end
-	if needsStableSize and state ~= nil and not IsBillboardSizeStable(state, billboardSize) then
-		return false, `waiting stable Billboard size current={FormatVector2(billboardSize)} frames={state.stableBillboardSizeFrameCount}`
 	end
 	local rawScale = math.min(billboardSize.X / controllerWidth, billboardSize.Y / controllerHeight)
 	if rawScale < MIN_VALID_INFO_UI_SCALE then
@@ -255,42 +358,61 @@ UpdateSingleInfoScale = function(infoUI: BillboardGui, useSizeFallback: boolean,
 			)} fallback={tostring(useSizeFallback)} visible={tostring(controllerFrame.Visible)}`
 		)
 	end
-	if state ~= nil and state.postRestoreStableFrames > 0 then
-		state.postRestoreStableFrames -= 1
-	end
 	return true, "ok"
 end
 
-RestoreControllerVisibleIfReady = function(infoUI: BillboardGui, state: InfoGuiState)
-	if not state.isWaitingForStableScale then
+RefreshControllerFrameVisibility = function(infoUI: BillboardGui, state: InfoGuiState)
+	local controllerFrame = GetStateControllerFrame(infoUI, state)
+	if controllerFrame == nil then
 		return
 	end
 
-	local waitStartedAt = state.waitStartedAt
-	if waitStartedAt ~= nil and os.clock() - waitStartedAt >= MAX_STABLE_WAIT_SECONDS then
-		UpdateSingleInfoScale(infoUI, false, state, false)
-		FinishStableScaleWait(infoUI, state, "wait timeout")
+	if not infoUI.Enabled or not state.isDistanceVisible then
+		state.isControllerVisible = false
+		ResetScaleReadiness(state)
+		SetControllerFrameVisibleIfChanged(controllerFrame, false)
 		return
 	end
 
-	local success, reason = UpdateSingleInfoScale(infoUI, false, state, true)
+	if state.isControllerVisible then
+		return
+	end
+
+	SetControllerFrameVisibleIfChanged(controllerFrame, false)
+	if state.scaleWaitStartedAt == nil then
+		state.scaleWaitStartedAt = os.clock()
+	end
+
+	local billboardSize = GetBillboardPixelSize(infoUI, false)
+	local isStable = billboardSize ~= nil and IsBillboardSizeStable(state, billboardSize)
+	local waitStartedAt = state.scaleWaitStartedAt
+	local didTimeout = waitStartedAt ~= nil and os.clock() - waitStartedAt >= MAX_SCALE_READY_WAIT_SECONDS
+
+	local success = false
+	local reason = "waiting stable Billboard size"
+	if isStable then
+		success, reason = UpdateSingleInfoScale(infoUI, state, false)
+	elseif didTimeout then
+		success, reason = UpdateSingleInfoScale(infoUI, state, true)
+	end
+
 	if success then
-		FinishStableScaleWait(infoUI, state, "scale ready")
-	elseif state.lastWaitReason ~= reason then
-		state.lastWaitReason = reason
-		DebugLog(`wait restore: gui={GetDebugName(infoUI)} reason={reason}`)
+		state.isControllerVisible = true
+		ResetScaleReadiness(state)
+		SetControllerFrameVisibleIfChanged(controllerFrame, true)
+	elseif state.lastScaleWaitReason ~= reason then
+		state.lastScaleWaitReason = reason
+		DebugLog(`wait first visible scale: gui={GetDebugName(infoUI)} reason={reason}`)
 	end
 end
 
-RefreshEnabledStableScaleWait = function(infoUI: BillboardGui, state: InfoGuiState)
+RefreshEnabledDistanceVisibility = function(infoUI: BillboardGui, state: InfoGuiState)
 	local wasEnabled = state.wasEnabled
 	local isEnabled = infoUI.Enabled
 	state.wasEnabled = isEnabled
 
 	if wasEnabled and not isEnabled then
-		if state.isWaitingForStableScale then
-			CancelStableScaleWait(infoUI, state, "disabled")
-		end
+		RefreshDistanceVisibility(infoUI, state)
 		return
 	end
 
@@ -298,19 +420,25 @@ RefreshEnabledStableScaleWait = function(infoUI: BillboardGui, state: InfoGuiSta
 		return
 	end
 
-	local controllerFrame = GetControllerFrame(infoUI)
-	if controllerFrame ~= nil and CanScaleControllerFrame(controllerFrame) then
-		BeginStableScaleWait(infoUI, state, controllerFrame, "enabled")
-	end
+	RefreshDistanceVisibility(infoUI, state)
 end
 
-local function ProcessWaitingGuis()
-	local index = #infoGuis
-	while index >= 1 do
+local function UpdateDistanceVisibilityStep()
+	local count = #infoGuis
+	if count <= 0 then
+		distanceVisibilityCursorIndex = 1
+		return
+	end
+	if distanceVisibilityCursorIndex > count then
+		distanceVisibilityCursorIndex = 1
+	end
+
+	local updated = 0
+	while updated < MAX_UPDATES_PER_STEP and distanceVisibilityCursorIndex <= #infoGuis do
+		local index = distanceVisibilityCursorIndex
 		local infoUI = infoGuis[index]
 		if infoUI.Parent == nil then
 			RemoveInfoGuiByIndex(index)
-			index -= 1
 			continue
 		end
 
@@ -318,68 +446,62 @@ local function ProcessWaitingGuis()
 		if adornee ~= nil and adornee.Parent == nil then
 			RemoveInfoGuiByIndex(index)
 			infoUI:Destroy()
-			index -= 1
 			continue
 		end
 
 		local state = infoGuiStateMap[infoUI]
 		if state ~= nil then
-			RefreshEnabledStableScaleWait(infoUI, state)
+			RefreshMaxDistanceOverride(infoUI, state)
+			RefreshEnabledDistanceVisibility(infoUI, state)
+			RefreshDistanceVisibility(infoUI, state)
+			RefreshControllerFrameVisibility(infoUI, state)
 		end
-		if state ~= nil and state.isWaitingForStableScale then
-			RestoreControllerVisibleIfReady(infoUI, state)
+
+		distanceVisibilityCursorIndex += 1
+		updated += 1
+	end
+end
+
+local function UpdateInfoScalesStep()
+	local index = #visibleInfoGuis
+	while index >= 1 do
+		local infoUI = visibleInfoGuis[index]
+		local state = infoGuiStateMap[infoUI]
+		if state == nil or infoUI.Parent == nil then
+			if state ~= nil then
+				RemoveInfoGuiByIndex(state.index)
+			else
+				RemoveVisibleInfoGuiByIndex(index)
+			end
+			index -= 1
+			continue
+		end
+
+		local adornee = infoUI.Adornee :: Instance?
+		if adornee ~= nil and adornee.Parent == nil then
+			RemoveInfoGuiByIndex(state.index)
+			infoUI:Destroy()
+			index -= 1
+			continue
+		end
+
+		RefreshEnabledDistanceVisibility(infoUI, state)
+		if infoUI.Enabled and state.isDistanceVisible then
+			RefreshControllerFrameVisibility(infoUI, state)
+			if state.isControllerVisible then
+				UpdateSingleInfoScale(infoUI, state, false)
+			end
 		end
 		index -= 1
 	end
 end
 
-local function UpdateInfoScalesStep()
-	local count = #infoGuis
-	if count <= 0 then
-		updateCursorIndex = 1
-		return
-	end
-	if updateCursorIndex > count then
-		updateCursorIndex = 1
-	end
-
-	local updated = 0
-	while updated < MAX_UPDATES_PER_STEP and updateCursorIndex <= #infoGuis do
-		local index = updateCursorIndex
-		local infoUI = infoGuis[index]
-		if infoUI.Parent == nil then
-			RemoveInfoGuiByIndex(index)
-			continue
-		end
-
-		local adornee = infoUI.Adornee :: Instance?
-		-- BillboardGui 可以直接挂在 Part/Attachment 下；只有显式 Adornee 失效时才清理。
-		if adornee ~= nil and adornee.Parent == nil then
-			RemoveInfoGuiByIndex(index)
-			infoUI:Destroy()
-			continue
-		end
-
-		local state = infoGuiStateMap[infoUI]
-		if state ~= nil then
-			RefreshEnabledStableScaleWait(infoUI, state)
-		end
-		if state ~= nil and state.isWaitingForStableScale then
-			updateCursorIndex += 1
-			updated += 1
-			continue
-		end
-		if infoUI.Enabled then
-			local requireStableSize = state ~= nil and state.postRestoreStableFrames > 0
-			UpdateSingleInfoScale(infoUI, false, state, requireStableSize)
-		end
-		updateCursorIndex += 1
-		updated += 1
-	end
-end
-
 local function OnRenderStepped(deltaTime: number)
-	ProcessWaitingGuis()
+	distanceVisibilityElapsedSeconds += deltaTime
+	if distanceVisibilityElapsedSeconds >= DISTANCE_VISIBILITY_INTERVAL_SECONDS then
+		distanceVisibilityElapsedSeconds = 0
+		UpdateDistanceVisibilityStep()
+	end
 
 	updateElapsedSeconds += deltaTime
 	if updateElapsedSeconds < UPDATE_INTERVAL_SECONDS then
@@ -395,33 +517,35 @@ function BillboardManager.Track(gui: BillboardGui)
 	end
 	table.insert(infoGuis, gui)
 	local controllerFrame = GetControllerFrame(gui)
-	local shouldWaitForStableScale = gui.Enabled and controllerFrame ~= nil and CanScaleControllerFrame(controllerFrame)
+	local visibleDistance = GetVisibleDistance(gui)
+	gui.MaxDistance = 0
 	local state: InfoGuiState = {
 		index = #infoGuis,
+		visibleIndex = nil,
 		controllerFrame = controllerFrame,
-		isWaitingForStableScale = false,
-		didHideControllerForWait = false,
+		uiScale = nil,
+		visibleDistance = visibleDistance,
+		isDistanceVisible = false,
+		isControllerVisible = false,
 		wasEnabled = gui.Enabled,
 		lastBillboardSize = nil,
 		stableBillboardSizeFrameCount = 0,
-		lastWaitReason = nil,
-		waitStartedAt = nil,
-		postRestoreStableFrames = 0,
+		scaleWaitStartedAt = nil,
+		lastScaleWaitReason = nil,
 	}
 	infoGuiStateMap[gui] = state
+	RefreshDistanceVisibility(gui, state)
+	RefreshControllerFrameVisibility(gui, state)
 	DebugLog(
-		`track: gui={GetDebugName(gui)} waitStableScale={tostring(shouldWaitForStableScale)} guiEnabled={tostring(gui.Enabled)} billboardAbs={FormatVector2(
-			gui.AbsoluteSize
-		)} billboardOffset={FormatUDim2Offset(gui.Size)} controllerOffset={if controllerFrame ~= nil
+		`track: gui={GetDebugName(gui)} guiEnabled={tostring(gui.Enabled)} distanceVisible={tostring(state.isDistanceVisible)} visibleDistance={tostring(
+			visibleDistance
+		)} billboardAbs={FormatVector2(gui.AbsoluteSize)} billboardOffset={FormatUDim2Offset(gui.Size)} controllerOffset={if controllerFrame ~= nil
 			then FormatUDim2Offset(controllerFrame.Size)
 			else "missing"}`
 	)
 
-	if shouldWaitForStableScale and controllerFrame ~= nil then
-		BeginStableScaleWait(gui, state, controllerFrame, "track")
-		RestoreControllerVisibleIfReady(gui, state)
-	else
-		UpdateSingleInfoScale(gui, false, state, false)
+	if gui.Enabled and state.isControllerVisible then
+		UpdateSingleInfoScale(gui, state, false)
 	end
 end
 
