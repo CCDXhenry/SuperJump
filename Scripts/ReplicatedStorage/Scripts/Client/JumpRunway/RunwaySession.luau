@@ -29,6 +29,7 @@ local RunwayFxController = require(jumpRunwayScripts:WaitForChild("RunwayFxContr
 local RunwayUiController = require(jumpRunwayScripts:WaitForChild("RunwayUiController"))
 local RunwayNetBridge = require(jumpRunwayScripts:WaitForChild("RunwayNetBridge"))
 local ChaserClientManager = require(jumpRunwayScripts:WaitForChild("ChaserClientManager"))
+local ScpTrampolineManager = require(jumpRunwayScripts:WaitForChild("ScpTrampolineManager"))
 local ChestOpenAnimationManager = require(clientScripts:WaitForChild("ChestOpenAnimationManager"))
 local GameSoundManager = require(clientScripts:WaitForChild("GameSoundManager"))
 local BrainrotClientManager = require(clientScripts:WaitForChild("BrainrotClientManager"))
@@ -58,6 +59,12 @@ type ChestBounceMotion = {
 	duration: number,
 	totalDistance: number,
 	lastDistance: number,
+}
+type LastJumpWindowTakeoffCache = {
+	forwardSpd: number,
+	vy: number,
+	forward: Vector3,
+	impulseSeg: number,
 }
 type RunwayDistanceLogSegment = {
 	stageName: string,
@@ -273,6 +280,7 @@ local Refs: {
 	treeHitBlockedStartAlong: number?,
 	obstacleBounceForward: Vector3?,
 	lastRunwayTakeoffClock: number?,
+	lastJumpWindowTakeoff: LastJumpWindowTakeoffCache?,
 	finalLandPhaseADebugNextClock: number,
 	slideEndFallbackWarnNextClock: number,
 	slideMotion: ScriptedSlideMotion?,
@@ -358,6 +366,7 @@ local Refs: {
 	treeHitBlockedStartAlong = nil,
 	obstacleBounceForward = nil,
 	lastRunwayTakeoffClock = nil,
+	lastJumpWindowTakeoff = nil,
 	finalLandPhaseADebugNextClock = 0,
 	slideEndFallbackWarnNextClock = 0,
 	slideMotion = nil,
@@ -4782,6 +4791,8 @@ function RunwaySession.ResetLocalRunToIdle()
 	Refs.forwardBlockedStartAlong = nil
 	Refs.lastRunwayTakeoffClock = nil
 	Refs.slideEndFallbackWarnNextClock = 0
+	RunwaySession.ClearLastJumpWindowTakeoffCache()
+	ScpTrampolineManager.Reset()
 	RunwaySession.ClearScriptedSlideMotion()
 	RunwaySession.ClearChestBounceMotion()
 	RunwaySession.DestroyDistanceRecorder()
@@ -5308,6 +5319,7 @@ function RunwaySession.OnPreSimulation(dt: number)
 			RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoidPre, nowClockPre)
 			RunwaySession.SyncRunwayFinalSegmentLocomotionPrePhysics(humanoidPre, hrpPre)
 		end
+		ScpTrampolineManager.UpdateOverlap()
 	end
 	RunwaySession.ApplyLocalPhysics(dt)
 end
@@ -5664,6 +5676,81 @@ function RunwaySession.OnBeginLineTouched(hit: BasePart)
 	RunwaySession.OnBeginLineCharacterContactConfirmed()
 end
 
+function RunwaySession.ClearLastJumpWindowTakeoffCache()
+	Refs.lastJumpWindowTakeoff = nil
+end
+
+function RunwaySession.CacheLastJumpWindowTakeoff(forwardSpd: number, vy: number, forward: Vector3, impulseSeg: number)
+	Refs.lastJumpWindowTakeoff = {
+		forwardSpd = forwardSpd,
+		vy = vy,
+		forward = forward,
+		impulseSeg = impulseSeg,
+	}
+end
+
+function RunwaySession.TryApplyScpTrampolineBounce(humanoid: Humanoid, hrp: BasePart, nowClock: number): boolean
+	if not RunwaySession.IsRunwayActivePhase(localState.phase) or localState.phase == Ph.Slide or localState.phase == Ph.RunEnded or localState.phase == Ph.ScoreLocked then
+		return false
+	end
+	local cached = Refs.lastJumpWindowTakeoff
+	if cached == nil then
+		return false
+	end
+	local forward = cached.forward
+	local forwardSpd = cached.forwardSpd
+	local vy = cached.vy
+	local impulseSeg = cached.impulseSeg
+	local gBase = workspace.Gravity
+	if gBase < 1e-3 then
+		gBase = 196.2
+	end
+	local gGrav = gBase * cfg.RUNWAY_SESSION_EFFECTIVE_GRAVITY_SCALE
+	RunwaySession.CancelJumpWindowTimeoutUntilGroundedAgain()
+	RunwaySession.ClearScriptedSlideMotion()
+	RunwaySession.ClearChestBounceMotion()
+	local stageName = if impulseSeg >= cfg.N_TOTAL_JUMPS
+		then "Jump" .. tostring(impulseSeg) .. "_FinalAir"
+		else "Jump" .. tostring(impulseSeg) .. "_Air"
+	RunwaySession.TransitionDistanceLogStage(
+		stageName,
+		"scp_trampoline",
+		hrp,
+		string.format(
+			"jumpIndex=%d forwardSpd=%.2f vy=%.2f takeoffCount=%d",
+			impulseSeg,
+			forwardSpd,
+			vy,
+			localState.takeoffCount
+		)
+	)
+	localState.jumpBoostVy = vy
+	localState.jumpBoostUntilClock = nowClock + cfg.RUNWAY_JUMP_BOOST_HOLD_SEC
+	hrp.AssemblyLinearVelocity = forward * forwardSpd + Vector3.new(0, vy, 0)
+	localState.jumpHorizLerpStartClock = nowClock
+	localState.jumpHorizLerpDuration = RunwaySession.ComputeJumpHorizontalDecelerationDuration(vy, gGrav)
+	localState.jumpHorizLerpInitialVy = vy
+	if impulseSeg >= cfg.N_TOTAL_JUMPS then
+		GameSoundManager.PlayJumpRunwayFinalTakeoffSound()
+	else
+		GameSoundManager.PlayJumpRunwayTakeoffSound()
+	end
+	RunwaySession.PlayJumpTakeoffSmokeFx(humanoid, hrp)
+	localState.phase = Ph.Airborne
+	localState.chainJumpWindowAwaitingGround = false
+	localState.predictJumpWindowUntil = nil
+	localState.tHudStart = nil
+	localState.jumpWindowGroundedStartClock = nil
+	localState.firstGroundedInWindowClock = nil
+	localState.prevLocalGroundedForLand = true
+	localState.prevPreLand = true
+	localState.prevJumpWindowRayBand = true
+	Refs.prevGroundedHeartbeat = true
+	pcall(function()
+		humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+	end)
+	return true
+end
 -- 子阶段 B 入口：宝箱直接落在地面，滑行全程由宝箱当前位置驱动。
 function RunwaySession.ScheduleLittleElfChestAtPhaseBEnter(
 	fwdH: Vector3,
@@ -6971,6 +7058,7 @@ function RunwaySession.UpdateTick(dt: number)
 	RunwaySession.SyncRunwayHumanoidWalkSpeed(humanoid, nowClock)
 	RunwaySession.ApplyRunwayHumanoidJumpState(humanoid, true)
 	RunwaySession.PollBeginLineOverlapForJumpWindow()
+	ScpTrampolineManager.UpdateOverlap()
 	RunwaySession.UpdateFinalJumpGuideSlowMotionApexGate(hrp)
 	RunwaySession.RefreshRunwayGuideSlowMotionState()
 	if Refs.guideSlowMotionActive then
@@ -6989,6 +7077,7 @@ function RunwaySession.UpdateTick(dt: number)
 		end
 	end
 	RunwaySession.ProcessAirborneLandingHeartbeat(humanoid)
+	ScpTrampolineManager.UpdateOverlap()
 	RunwaySession.ProcessFinalLandingSubPhaseTransition(humanoid, hrp, nowClock)
 	RunwayNetBridge.SendSampleIfDue(
 		NetMsg,
@@ -7560,6 +7649,9 @@ function RunwaySession.JumpApplyTakeoff(
 		GameSoundManager.PlayJumpRunwayTakeoffSound()
 	end
 	RunwaySession.PlayJumpTakeoffSmokeFx(humanoid, hrp)
+	if inLineWindow or inChainWindow then
+		RunwaySession.CacheLastJumpWindowTakeoff(forwardSpd, vy, forward, impulseSeg)
+	end
 	RunwaySession.JumpAdvancePhaseAfterImpulse(inAuto, inLineWindow, inChainWindow)
 	-- 冲量起跳后首帧 Raycast/Humanoid 仍常判贴地或 preland；若 prev* 为 false 会被当成「着地/快触地上升沿」
 	-- 立刻武装链式 T_WINDOW，约 1s 超时进 Slide。置 true 表示上升沿已消费，仅真实再落地时才武装。
@@ -7826,6 +7918,8 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	localState.tHudStart = nil
 	Refs.lastRunwayTakeoffClock = nil
 	Refs.slideEndFallbackWarnNextClock = 0
+	RunwaySession.ClearLastJumpWindowTakeoffCache()
+	ScpTrampolineManager.Reset()
 	localState.lineJumpWindowExpireAt = nil
 	localState.lineWindowConsumed = false
 	localState.chainJumpWindowAwaitingGround = false
@@ -7947,6 +8041,7 @@ function RunwaySession.BindSceneTriggers()
 	if beginLine then
 		Refs.beginLineConn = beginLine.Touched:Connect(RunwaySession.OnBeginLineTouched)
 	end
+	ScpTrampolineManager.BindSceneTriggers()
 end
 
 function RunwaySession.OnHeartbeat(dt: number)
@@ -8028,6 +8123,10 @@ function RunwaySession.Init()
 		return
 	end
 	Refs.initDone = true
+	ScpTrampolineManager.Init({
+		GetCharacterParts = RunwaySession.GetCharacterParts,
+		TryApplyBounce = RunwaySession.TryApplyScpTrampolineBounce,
+	})
 	RunwaySession.BindRunwayExitOnCharacterDeathOrRemove()
 	NetMsg.ConnectNotifyJumpRunwayLittleElfChestReward(function(brainrotId: number, chestConfigId: number, chestLevel: number, variantId: number)
 		RunwaySession.OnLittleElfChestRewardReceived(brainrotId, chestConfigId, chestLevel, variantId)

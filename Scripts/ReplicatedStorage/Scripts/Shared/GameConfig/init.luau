@@ -240,7 +240,7 @@ GameConfig.LeaderboardCategory = {
 }
 GameConfig.LeaderboardUpdateInterval = 10 * 60
 GameConfig.LeaderboardDisplayCount = 20
-GameConfig.LeaderboardWeekStartUnixUtc = 1736226000 -- 2025-01-07 05:00:00 UTC (Tuesday 00:00 EST, fixed UTC-5)
+GameConfig.LeaderboardWeekStartUnixUtc = 1780617600 -- 2025-01-07 05:00:00 UTC (Tuesday 00:00 EST, fixed UTC-5)
 GameConfig.LeaderboardWeekDurationSeconds = 7 * 24 * 60 * 60
 GameConfig.LeaderboardDataVersion = "v1"
 

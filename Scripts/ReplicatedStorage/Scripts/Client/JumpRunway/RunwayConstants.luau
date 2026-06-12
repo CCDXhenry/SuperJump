@@ -31,6 +31,9 @@ RunwayConstants.RunwayFinalTiltRenderStepName = "JumpRunwayFinalBodyTilt"
 RunwayConstants.RunwayRingTemplateName = "JumpRunwayRing"
 RunwayConstants.RunwaySlideTraceTemplateName = "SlideTraceTrail"
 RunwayConstants.RunwayJumpSmokeTemplateName = "JumpSmoke"
+RunwayConstants.ScpTrampolineModelName = "SCP-Trampoline"
+RunwayConstants.ScpTrampolineSpringPartName = "Spring"
+RunwayConstants.ScpTrampolineBounceCooldownSec = 0.2
 
 function RunwayConstants.IsRunwayActivePhase(phase: number): boolean
 	return phase ~= RunwayConstants.Ph.Idle and phase ~= RunwayConstants.Ph.Cleaning
