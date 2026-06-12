@@ -27,8 +27,6 @@ local showTopTipTextEvent: BindableEvent = bindableEventsFolder:FindFirstChild("
 local brainrotQueueUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("BrainrotQueueUpdate") :: BindableEvent
 local localPlayerExEquipInventoryUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("LocalPlayerExEquipInventoryUpdate") :: BindableEvent
 local localPlayerJetpackInventoryUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("LocalPlayerJetpackInventoryUpdate") :: BindableEvent
-local showRescuePopupEvent: BindableEvent = bindableEventsFolder:FindFirstChild("ShowRescuePopup") :: BindableEvent
-local resumeFallingEvent: BindableEvent = bindableEventsFolder:FindFirstChild("ResumeFalling") :: BindableEvent
 local earthquakeUiUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("EarthquakeUiUpdate") :: BindableEvent
 local localPlayerJumpPowerUpdateEvent: BindableEvent = bindableEventsFolder:FindFirstChild("LocalPlayerJumpPowerUpdate") :: BindableEvent
 local jumpRunWayRefreshStatsEvent: BindableEvent = bindableEventsFolder:FindFirstChild("JumpRunWayRefreshStats") :: BindableEvent
@@ -222,19 +220,6 @@ function ClientMsg.ConnectBrainrotQueueUpdate(callback: (queue: { GameConfig.Bra
 	brainrotQueueUpdateEvent.Event:Connect(callback)
 end
 
--- 显示救援弹窗
-function ClientMsg.FireShowRescuePopup()
-	if showRescuePopupEvent then
-		showRescuePopupEvent:Fire()
-	end
-end
-
-function ClientMsg.ConnectShowRescuePopup(callback: () -> ())
-	if showRescuePopupEvent then
-		showRescuePopupEvent.Event:Connect(callback)
-	end
-end
-
 -- 本地玩家锻炼器材库存更新
 function ClientMsg.FireLocalPlayerExEquipInventoryUpdate(inventory: GameConfig.ExEquipInventory)
 	if localPlayerExEquipInventoryUpdateEvent then
@@ -267,25 +252,6 @@ end
 
 function ClientMsg.ConnectLocalPlayerBuffInfoUpdate(callback: (buffInfo: GameConfig.BuffInfo, grantBuffId: number?, shopBundleId: number?) -> ())
 	localPlayerBuffInfoUpdateEvent.Event:Connect(callback)
-end
-
-function ClientMsg.ConnectShowRescuePopup(callback: () -> ())
-	if showRescuePopupEvent then
-		showRescuePopupEvent.Event:Connect(callback)
-	end
-end
-
--- 恢复掉落（拒绝救援或超时）
-function ClientMsg.FireResumeFalling()
-	if resumeFallingEvent then
-		resumeFallingEvent:Fire()
-	end
-end
-
-function ClientMsg.ConnectResumeFalling(callback: () -> ())
-	if resumeFallingEvent then
-		resumeFallingEvent.Event:Connect(callback)
-	end
 end
 
 -- JumpPower 更新

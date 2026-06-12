@@ -231,7 +231,7 @@ GameConfig.ModelGetSource = {
 	PlayerGift = 4,
 }
 
-GameConfig.EnablePlayerGift = false
+GameConfig.EnablePlayerGift = true
 GameConfig.PlayerRespawnTime = 1
 
 -- 排行榜

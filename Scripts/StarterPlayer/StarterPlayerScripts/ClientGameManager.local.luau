@@ -73,6 +73,7 @@ local function InitUI()
 	local lobbyFrame = UIManager.CreateFrame("LobbyFrame", "LobbyFrame", gameScreenGui, 0) :: Frame
 	-- 创建游戏提示界面
 	UIManager.CreateFrame("GameTipFrame", "GameTipFrame", gameScreenGui, GameTipZIndex)
+	UIManager.CreateFrame("GiftsFrame", "GiftsFrame", gameScreenGui, GameTipZIndex)
 	-- 引导手指层（低于 GameTip，高于 Lobby）
 	UIManager.CreateFrame(GameConfig.GuideAssetName.UiFrame, "GuideFrame", gameScreenGui, 1500)
 
