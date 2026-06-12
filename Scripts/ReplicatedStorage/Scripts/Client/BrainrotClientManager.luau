@@ -278,17 +278,8 @@ function AttachInfoUIToModel(targetParent: Instance, adornee: BasePart, configId
 		end
 		if levelText then
 			levelText.Visible = true
-			if itemType == GameConfig.ItemType.LittleElfChest then
-				-- 宝箱档位以 LittleElfChestData 表 id（与 ConfigId 一致）展示；勿用 Tool 的 Level（脑腐等级体系）
-				local tierStr = tostring(configId)
-				TranslationTool.CustomAutoLocalizeTextLabel(levelText, GameTexts.LevelWithNumber.source, GameTexts.LevelWithNumber.key, { tierStr })
-				local chestQuality = (data :: GameConfig.LittleElfChestConfigData).quality
-				local qCfg = GameConfig.BrainrotQualityConfig[chestQuality]
-				levelText.TextColor3 = if qCfg then qCfg.textColor else Color3.new(1, 1, 1)
-			else
-				TranslationTool.CustomAutoLocalizeTextLabel(levelText, GameTexts.LevelWithNumber.source, GameTexts.LevelWithNumber.key, { tostring(level) })
-				levelText.TextColor3 = GameConfig.GetBrainrotLevelTierTextColor(level)
-			end
+			TranslationTool.CustomAutoLocalizeTextLabel(levelText, GameTexts.LevelWithNumber.source, GameTexts.LevelWithNumber.key, { tostring(level) })
+			levelText.TextColor3 = GameConfig.GetBrainrotLevelTierTextColor(level)
 		end
 		if abilityText then
 			abilityText.Visible = itemType == GameConfig.ItemType.Brainrot
@@ -516,6 +507,45 @@ local function SetupLocalPlayerCarryingBrainrotTracking(character: Model)
 	end)
 end
 
+-- 与 JumpRunway BuildLittleElfChestOpenCFrame 一致：保留模板默认朝向，避免手持旋转导致 brainrot 朝向/大小异常
+local function BuildToolChestOpenCFrame(chestConfigId: number, worldPos: Vector3): CFrame?
+	local chestConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
+	if chestConfig == nil then
+		return nil
+	end
+	local template = GameConfig.FindResourceTemplateByResourceName(actualChests, chestConfig.resourceName)
+	if template == nil then
+		return nil
+	end
+	local tempModel = GameConfig.CloneTemplateAsModel(template)
+	local templatePivot = tempModel:GetPivot()
+	tempModel:Destroy()
+	return CFrame.new(worldPos) * (templatePivot - templatePivot.Position)
+end
+
+local function ResolveToolChestOpenCFrame(tool: Tool, character: Model, chestConfigId: number): CFrame?
+	local visualModel = tool:FindFirstChild("VisualModel")
+	local worldPos: Vector3? = nil
+	if visualModel and visualModel:IsA("Model") then
+		worldPos = visualModel:GetPivot().Position
+	else
+		local handle = tool:FindFirstChild("Handle")
+		if handle and handle:IsA("BasePart") then
+			worldPos = handle.Position
+		end
+	end
+	if worldPos == nil then
+		local hrp = character:FindFirstChild("HumanoidRootPart")
+		if hrp and hrp:IsA("BasePart") then
+			worldPos = (hrp.CFrame * CFrame.new(0, 0, -4)).Position
+		end
+	end
+	if worldPos == nil then
+		return nil
+	end
+	return BuildToolChestOpenCFrame(chestConfigId, worldPos) or CFrame.new(worldPos)
+end
+
 local function SetupLocalPlayerToolTracking(character: Model)
 	character.ChildAdded:Connect(function(child)
 		if child:IsA("Tool") and child:GetAttribute("BrainrotUID") then
@@ -529,25 +559,13 @@ local function SetupLocalPlayerToolTracking(character: Model)
 				activatedConn = (child :: Tool).Activated:Connect(function()
 					pendingOpenChestToolMap[uid] = child :: Tool
 					pendingOpenChestResultMap[uid] = nil
-					local visualModel = child:FindFirstChild("VisualModel")
-					if visualModel and visualModel:IsA("Model") then
-						pendingOpenChestCFrameMap[uid] = visualModel:GetPivot()
-					else
-						local handle = child:FindFirstChild("Handle")
-						if handle and handle:IsA("BasePart") then
-							pendingOpenChestCFrameMap[uid] = handle.CFrame
-						end
-					end
 					local chestConfigId = (child:GetAttribute("ConfigId") :: number?) or 0
-					local chestLevel = (child:GetAttribute("Level") :: number?) or 1
-					local fallbackCFrame = pendingOpenChestCFrameMap[uid]
-					if not fallbackCFrame then
-						local hrp = character:FindFirstChild("HumanoidRootPart")
-						if hrp and hrp:IsA("BasePart") then
-							fallbackCFrame = hrp.CFrame * CFrame.new(0, 0, -4)
-						end
+					local openCFrame = ResolveToolChestOpenCFrame(child :: Tool, character, chestConfigId)
+					if openCFrame then
+						pendingOpenChestCFrameMap[uid] = openCFrame
 					end
-					if not fallbackCFrame then
+					local chestOpenAnimLevel = (child:GetAttribute("Level") :: number?) or 1
+					if not openCFrame then
 						warn("[BrainrotClientManager] Open chest failed: no fallback cframe, uid:", uid)
 						return
 					end
@@ -559,10 +577,12 @@ local function SetupLocalPlayerToolTracking(character: Model)
 						ChestOpenAnimationManager.PlayInWorldAndWait(
 							uid,
 							chestConfigId,
-							chestLevel,
+							chestOpenAnimLevel,
 							0,
-							fallbackCFrame,
+							openCFrame,
 							{
+								lockFacing = true,
+								faceBrainrotToCamera = true,
 								maxPlayTimeSec = 15,
 								resolveFinalBrainrotId = function()
 									local result = pendingOpenChestResultMap[uid]
