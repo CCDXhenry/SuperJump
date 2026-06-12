@@ -65,6 +65,25 @@ local ChestThrowForwardDistance = 1.0
 -- 跑道开箱参数：锁定朝向时 Brainrot 面向镜头的修正角度。
 local RunwayChestBrainrotLeftYawRad = math.rad(90)
 
+local function ResolveBrainrotRevealCFrame(throwCFrame: CFrame, lockFacing: boolean, faceBrainrotToCamera: boolean): CFrame
+	local baseCFrame = throwCFrame * CFrame.new(0, 1.2, 0)
+	if faceBrainrotToCamera then
+		local camera = workspace.CurrentCamera
+		if camera then
+			local pos = baseCFrame.Position
+			local camPos = camera.CFrame.Position
+			local flatLook = Vector3.new(camPos.X - pos.X, 0, camPos.Z - pos.Z)
+			if flatLook.Magnitude > 1e-4 then
+				return CFrame.lookAt(pos, pos + flatLook.Unit)
+			end
+		end
+	end
+	if lockFacing then
+		return baseCFrame * CFrame.Angles(0, RunwayChestBrainrotLeftYawRad, 0)
+	end
+	return baseCFrame
+end
+
 local playingUidMap: { [string]: boolean } = {}
 
 local function WaitDurationRespectingFocus(duration: number)
@@ -402,6 +421,7 @@ end
 type PlayInWorldOptions = {
 	existingChestModel: Model?,
 	lockFacing: boolean?,
+	faceBrainrotToCamera: boolean?,
 	resolveFinalBrainrotId: (() -> number?)?,
 	resolveFinalVariantId: (() -> number?)?,
 	finalVariantId: number?,
@@ -451,6 +471,7 @@ local function PlayInWorld(
 
 	local throwCFrame = originCFrame * CFrame.new(0, 0, -ChestThrowForwardDistance)
 	local lockFacing = options ~= nil and options.lockFacing == true
+	local faceBrainrotToCamera = options ~= nil and options.faceBrainrotToCamera == true
 	local existingChestModel = if options ~= nil then options.existingChestModel else nil
 	local container = if existingChestModel ~= nil and existingChestModel.Parent ~= nil then existingChestModel.Parent else workspace
 	local startedClock = os.clock()
@@ -560,9 +581,7 @@ local function PlayInWorld(
 			brainrotData.resourceName,
 			container,
 			"WorldBrainrotModel",
-			throwCFrame
-				* CFrame.new(0, 1.2, 0)
-				* (if lockFacing then CFrame.Angles(0, RunwayChestBrainrotLeftYawRad, 0) else CFrame.identity)
+			ResolveBrainrotRevealCFrame(throwCFrame, lockFacing, faceBrainrotToCamera)
 		)
 		if not displayModel or not displayRoot then
 			return
