@@ -390,3 +390,5 @@ task.spawn(function()
 end)
 
 IdleInputClientManager.Init()
+-- 尽早隐藏自身赠礼按钮，避免玩家信息与资源加载完成前 ProximityPrompt 闪现
+PlayerInteractClientManager.InitEarly()

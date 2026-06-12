@@ -23,6 +23,9 @@ local localPlayer = players.LocalPlayer
 local FAILURE_TIPS_COLOR = Color3.fromRGB(255, 0, 0) -- 红色
 local FAILURE_TIPS_DURATION = 3
 
+local isPromptControlReady = false
+local isEarlyInitDone = false
+
 local function HasBrainrot(character: Model?): boolean
 	if not character then return false end
 	if character:FindFirstChild("CarryingBrainrot") then return true end
@@ -31,9 +34,45 @@ local function HasBrainrot(character: Model?): boolean
 	return false
 end
 
+local function DisableLocalPlayerInteractPrompt(character: Model?)
+	if not character then
+		return
+	end
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then
+		return
+	end
+	local attachment = hrp:FindFirstChild("PlayerInteractAttachment")
+	if not attachment then
+		return
+	end
+	local prompt = attachment:FindFirstChild("PlayerInteractPrompt") :: ProximityPrompt?
+	if prompt then
+		prompt.Enabled = false
+	end
+end
+
+local function BindLocalCharacterPromptHide(character: Model)
+	DisableLocalPlayerInteractPrompt(character)
+	local hrp = character:WaitForChild("HumanoidRootPart", 5)
+	if not hrp then
+		return
+	end
+	local attachment = hrp:WaitForChild("PlayerInteractAttachment", 5)
+	if not attachment then
+		return
+	end
+	DisableLocalPlayerInteractPrompt(character)
+	attachment.ChildAdded:Connect(function(child: Instance)
+		if child.Name == "PlayerInteractPrompt" then
+			(child :: ProximityPrompt).Enabled = false
+		end
+	end)
+end
+
 local function UpdateInteractionPrompts()
 	local localCharacter = localPlayer.Character
-	local hasLocalBrainrot = if GameConfig.EnablePlayerGift then HasBrainrot(localCharacter) else false
+	local hasLocalBrainrot = if GameConfig.EnablePlayerGift and isPromptControlReady then HasBrainrot(localCharacter) else false
 	
 	for _, otherPlayer in ipairs(players:GetPlayers()) do
 		if otherPlayer.Character then
@@ -47,7 +86,7 @@ local function UpdateInteractionPrompts()
 							prompt.Enabled = false
 							continue
 						end
-						if not GameConfig.EnablePlayerGift then
+						if not isPromptControlReady or not GameConfig.EnablePlayerGift then
 							prompt.Enabled = false
 							continue
 						end
@@ -64,11 +103,27 @@ local function UpdateInteractionPrompts()
 	end
 end
 
-function PlayerInteractClientManager.Init()
-	-- 定期检查状态更新 ProximityPrompt 的可见性
+function PlayerInteractClientManager.InitEarly()
+	if isEarlyInitDone then
+		return
+	end
+	isEarlyInitDone = true
+
+	if localPlayer.Character then
+		task.spawn(BindLocalCharacterPromptHide, localPlayer.Character)
+	end
+	localPlayer.CharacterAdded:Connect(function(character: Model)
+		task.spawn(BindLocalCharacterPromptHide, character)
+	end)
+
 	runService.Heartbeat:Connect(function()
 		UpdateInteractionPrompts()
 	end)
+end
+
+function PlayerInteractClientManager.Init()
+	isPromptControlReady = true
+	UpdateInteractionPrompts()
 
 	if GameConfig.EnablePlayerGift then
 		NetMsg.ConnectNotifyShowGiftConfirm(function(targetPlayerId: number, targetPlayerName: string, brainrotInstanceId: string, giftName: string)

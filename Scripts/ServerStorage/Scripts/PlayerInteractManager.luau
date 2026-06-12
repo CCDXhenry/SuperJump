@@ -30,7 +30,8 @@ function PlayerInteractManager.Init()
 				prompt.KeyboardKeyCode = Enum.KeyCode.G
 				prompt.RequiresLineOfSight = false
 				prompt.MaxActivationDistance = 10
-				prompt.Enabled = GameConfig.EnablePlayerGift
+				-- 可见性由客户端控制，避免加入/加载完成前在自己身上闪现赠礼按钮
+				prompt.Enabled = false
 				prompt.Parent = attachment
 
 				prompt.Triggered:Connect(function(triggerPlayer: Player)
