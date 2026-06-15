@@ -16,7 +16,7 @@ local GameTexts = require(SharedScripts:WaitForChild("GameTexts"))
 
 local ShopClientManager = {}
 local SHOP_MODEL_FOLDER_NAME = "ShopModel"
-local SHOP_MODEL_NAMES = {"SellShop", "UpgradeShop" , "JetpackShop" , "ExEquipShop", "NewPack", "ProPack"}
+local SHOP_MODEL_NAMES = {"SellShop", "JetpackShop" , "ExEquipShop", "NewPack", "ProPack"}
 local SHOP_WAIT_TIMEOUT = 10
 local PROMPT_BOUND_ATTR = "ShopPromptWindowBound"
 local BILLBOARD_TRACKED_ATTR = "BillboardTracked"
