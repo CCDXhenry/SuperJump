@@ -2,7 +2,7 @@
 -- JumpRunwayServerManager（客户端权威状态机版）
 -- ----------------------------------------------------------------------
 -- 客户端：开局 / BeginLine 触碰、完整相位机、起跳窗与物理表现。
--- 服务端：会话登记（Start 包）、沿轴样本防作弊累加 maxAlong、终局锁定分数与清理。
+-- 服务端：会话登记（Start 包）、沿轴样本累加 maxAlong（距离硬上限）、终局锁定分数与清理。
 -- 不再：StartTrigger 服端触碰开局、几何穿线、JumpWindow/Coyote/Heartbeat 状态推进、HandleJumpIntent。
 local JumpRunwayServerManager = {}
 
@@ -27,12 +27,9 @@ type RunState = {
 	runwayForward: Vector3,
 	runwayOrigin: Vector3,
 	alongBaseline: number,
-	lastSampleAlong: number?,
-	lastSampleClock: number?,
 	lastNotifyClock: number,
 	notifyDistQ: number,
 	diedConn: RBXScriptConnection?,
-	antiCheatRejectCount: number,
 	analyticsEndLogged: boolean,
 }
 
@@ -425,37 +422,15 @@ local function LockScoreAndTeleport(player: Player, st: RunState, nowClock: numb
 	end)
 end
 
-local function IngestSample(player: Player, st: RunState, report: NetMsg.JumpRunwayInputReport, nowClock: number): boolean
+local function IngestSample(player: Player, st: RunState, report: NetMsg.JumpRunwayInputReport, _nowClock: number): boolean
 	if report.sampleAlong == nil then
 		return false
 	end
 	local sampleAlong = report.sampleAlong :: number
 	local progressAlong = sampleAlong - st.alongBaseline
 	if progressAlong > cfg.ANTI_CHEAT_DISTANCE_HARD_CAP then
-		st.antiCheatRejectCount += 1
 		return false
 	end
-	if report.samplePerpMag ~= nil and (report.samplePerpMag :: number) > cfg.ANTI_CHEAT_MAX_PERP_DEVIATION then
-		st.antiCheatRejectCount += 1
-		return false
-	end
-	if report.sampleAlongSpeed ~= nil and math.abs(report.sampleAlongSpeed :: number) > cfg.ANTI_CHEAT_MAX_ALONG_SPEED then
-		st.antiCheatRejectCount += 1
-		return false
-	end
-	local prevAlong = st.lastSampleAlong
-	local prevClock = st.lastSampleClock
-	if prevAlong ~= nil and prevClock ~= nil then
-		local dtSample = math.max(nowClock - prevClock, 1e-3)
-		local delta = sampleAlong - prevAlong
-		local maxDelta = cfg.ANTI_CHEAT_MAX_ALONG_SPEED * dtSample + cfg.ANTI_CHEAT_MAX_DELTA_PER_SAMPLE
-		if delta > maxDelta then
-			st.antiCheatRejectCount += 1
-			return false
-		end
-	end
-	st.lastSampleAlong = sampleAlong
-	st.lastSampleClock = nowClock
 	local userId = player.UserId
 	if progressAlong > (maxAlongByUserId[userId] or 0) then
 		maxAlongByUserId[userId] = math.min(progressAlong, cfg.ANTI_CHEAT_DISTANCE_HARD_CAP)
@@ -495,12 +470,9 @@ local function TryStartSession(player: Player, report: NetMsg.JumpRunwayInputRep
 		runwayForward = forward,
 		runwayOrigin = origin,
 		alongBaseline = baseline :: number,
-		lastSampleAlong = nil,
-		lastSampleClock = nil,
 		lastNotifyClock = 0,
 		notifyDistQ = -1,
 		diedConn = nil,
-		antiCheatRejectCount = 0,
 		analyticsEndLogged = false,
 	}
 	runMap[player.UserId] = st

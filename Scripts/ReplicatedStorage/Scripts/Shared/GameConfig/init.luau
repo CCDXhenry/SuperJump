@@ -1480,20 +1480,14 @@ GameConfig.JumpRunway = {
 	SLIDE_DURATION_SEC = 2.0,
 	SLIDE_VERTICAL_DAMP = 0.92,
 
-	-- —— 网络采样与防作弊（与 DASH_MAX_SPEED 等数值需一致考虑）——
-	-- 客户端→服务端位置采样间隔（秒）；服务端用样本累加权威 maxAlong 并做防作弊检查
+	-- —— 网络采样与防作弊 ——
+	-- 客户端→服务端位置采样间隔（秒）；服务端用样本累加权威 maxAlong
 	CLIENT_SAMPLE_INTERVAL = 0.08,
 	NOTIFY_INTERVAL = 0.12,
-	-- 防作弊：允许的沿轴最大瞬时速度（水平投影，见客户端 sampleAlongSpeed）。
-	-- 斜坡跑道时若用全量 v·forward 会把垂直速度折进「沿轴速度」，正常 Dash/起跳易被误杀；提高到 ~2×DASH_MAX + 余量。
+	-- 沿轴速度全局上限（客户端起跳/Dash/弹飞等 clamp；与 DASH_MAX_SPEED 等数值需一致考虑）
 	ANTI_CHEAT_MAX_ALONG_SPEED = 600,
-	-- 防作弊：允许的偏离跑道轴的水平距离（远超此值视为越界/瞬移）。
-	-- 起点触发器偏大、玩家从边缘切入时水平偏离常 >18；过严会导致首包起永久拒收、maxAlong 永远不涨。
-	ANTI_CHEAT_MAX_PERP_DEVIATION = 48,
 	-- 防作弊：单局沿轴成绩硬上限，避免序列化异常或外挂虚报
 	ANTI_CHEAT_DISTANCE_HARD_CAP = 45000,
-	-- 防作弊：单次样本相对上次「已接受」样本的最大沿轴正向位移余量（与 MAX_ALONG_SPEED 同步放宽）
-	ANTI_CHEAT_MAX_DELTA_PER_SAMPLE = 36,
 
 	-- —— 脚下跑道环 FX ——
 	-- 脚下跑道环：为 false 时不克隆（无环 FX）
