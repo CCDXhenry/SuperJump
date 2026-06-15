@@ -243,7 +243,7 @@ local function onRequestUpgradeModel(player: Player, pointIndex: number, levelAd
 		local levelShown = if modelAfter then modelAfter.level else model.level
 		print(LogPrefix, "Player", player.Name, "upgraded model at point", pointIndex, "to level", levelShown)
 	else
-		warn(LogPrefix, "OnRequestUpgradeModel failed: insufficient currency for", player.Name)
+		print(LogPrefix, "OnRequestUpgradeModel skipped: insufficient currency for", player.Name)
 	end
 end
 

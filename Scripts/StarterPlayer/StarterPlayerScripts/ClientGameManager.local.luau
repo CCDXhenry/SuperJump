@@ -50,6 +50,7 @@ local PreloadBatchSize: number = 50
 local PreloadBatchYieldSeconds: number = 0.05
 local PreloadSlowBatchWarnSeconds: number = 10
 local PreloadMeshAssetsEnabled: boolean = false
+local PreloadFailureSampleCount: number = 5
 
 local function TryOpenOfflineRewardsWindow()
 	local offlineRewardInfo = ClientGameInfo.GetOfflineRewardInfo()
@@ -145,6 +146,7 @@ PreloadAssets = function()
 	local soundMap: { [string]: boolean } = {}
 	local animationMap: { [string]: boolean } = {}
 	local failedAssetList: { string } = {}
+	local failedAssetCount = 0
 	local folderList: { Instance } = {}
 	if modelOriginsFolder ~= nil then
 		table.insert(folderList, modelOriginsFolder)
@@ -271,8 +273,10 @@ PreloadAssets = function()
 		local preloadSuccess, preloadErr = pcall(function()
 			contentProvider:PreloadAsync(batchList, function(assetId: string, assetFetchStatus: Enum.AssetFetchStatus)
 				if assetFetchStatus ~= Enum.AssetFetchStatus.Success then
-					table.insert(failedAssetList, assetId)
-					warn("[ClientGameManager] LoadAssetResult", assetId, assetFetchStatus)
+					failedAssetCount += 1
+					if failedAssetCount <= PreloadFailureSampleCount then
+						table.insert(failedAssetList, string.format("%s:%s", assetId, assetFetchStatus.Name))
+					end
 				end
 			end)
 		end)
@@ -298,10 +302,15 @@ PreloadAssets = function()
 
 	local elapsedTime = os.clock() - preloadStartTime
 	if elapsedTime >= PreloadSlowBatchWarnSeconds then
-		warn(string.format("[ClientGameManager] PreloadAssets complete. candidates=%d failed=%d elapsed=%.2fs", totalAssetCount, #failedAssetList, elapsedTime))
+		warn(string.format("[ClientGameManager] PreloadAssets complete. candidates=%d failed=%d elapsed=%.2fs", totalAssetCount, failedAssetCount, elapsedTime))
 	end
-	if #failedAssetList > 0 then
-		--print(string.format("[ClientGameManager] PreloadAssets failed sample=%s", tostring(failedAssetList[1])))
+	if failedAssetCount > 0 then
+		warn(string.format(
+			"[ClientGameManager] PreloadAssets failed. candidates=%d failed=%d sample=%s",
+			totalAssetCount,
+			failedAssetCount,
+			table.concat(failedAssetList, ", ")
+		))
 	end
 	table.clear(failedAssetList)
 end

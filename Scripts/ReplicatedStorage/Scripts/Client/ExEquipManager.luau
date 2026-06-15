@@ -158,6 +158,7 @@ type ExercisePopupItem = {
 
 local exercisePopupPool: { ExercisePopupItem } = {}
 local bikePedalControllerInfo: BikePedalControllerInfo? = nil
+local exercisePopupMissingTextWarned = false
 local GetExercisePopupParent: () -> PlayerGui? = function()
 	return nil
 end
@@ -169,9 +170,17 @@ end
 local function GetExercisePopupText(gui: BillboardGui): TextLabel?
 	local controllerFrame = gui:FindFirstChild("ControllerFrame")
 	if controllerFrame == nil or not controllerFrame:IsA("Frame") then
+		local popupText = gui:FindFirstChild("JumpPowerPopupText", true)
+		if popupText ~= nil and popupText:IsA("TextLabel") then
+			return popupText
+		end
 		return nil
 	end
-	return controllerFrame:FindFirstChild("JumpPowerPopupText") :: TextLabel?
+	local popupText = controllerFrame:FindFirstChild("JumpPowerPopupText", true)
+	if popupText ~= nil and popupText:IsA("TextLabel") then
+		return popupText
+	end
+	return nil
 end
 
 local function GetExerciseEquipFrame(): Frame?
@@ -585,7 +594,10 @@ local function ShowExerciseJumpPowerPopup(addAmount: number)
 
 	local textLabel = GetExercisePopupText(item.gui)
 	if textLabel == nil then
-		warn("[ExEquipManager] ExerciseJumpPowerPopupGui missing ControllerFrame.JumpPowerPopupText")
+		if not exercisePopupMissingTextWarned then
+			exercisePopupMissingTextWarned = true
+			warn("[ExEquipManager] ExerciseJumpPowerPopupGui missing JumpPowerPopupText")
+		end
 		return
 	end
 
