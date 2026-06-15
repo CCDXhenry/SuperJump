@@ -9,6 +9,9 @@ local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
 local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
 
 local function OnPlayerRequestAddFriendInThisServer(player: Player, playerId: number)
+	if not GameConfig.EnableFriendOnlineBuff then
+		return
+	end
 	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil or playerInfo.friendInThisServerPlayerIdMap[playerId] then
 		return
@@ -17,6 +20,9 @@ local function OnPlayerRequestAddFriendInThisServer(player: Player, playerId: nu
 end
 
 local function OnPlayerRequestRemoveFriendInThisServer(player: Player, playerId: number)
+	if not GameConfig.EnableFriendOnlineBuff then
+		return
+	end
 	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil or not playerInfo.friendInThisServerPlayerIdMap[playerId] then
 		return
@@ -25,6 +31,9 @@ local function OnPlayerRequestRemoveFriendInThisServer(player: Player, playerId:
 end
 
 local function OnPlayerRequestUpdateFriendsPlayingSameGameCount(player: Player, friendsPlayingSameGameCount: number)
+	if not GameConfig.EnableFriendOnlineBuff then
+		return
+	end
 	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil or playerInfo.friendsPlayingSameGameCount == friendsPlayingSameGameCount then
 		return

@@ -72,6 +72,9 @@ local onlineRewardClaim: TextLabel? = if onlineRewardButton
 local onlineRewardCountDown: TextLabel? = if onlineRewardButton
 	then (onlineRewardButton:FindFirstChild("CountDown") :: TextLabel?)
 	else nil
+if onlineRewardButton and not GameConfig.EnableOnlineReward then
+	onlineRewardButton.Visible = false
+end
 local onlineRewardUpdateToken = 0
 local onlineRewardThreadRunning = false
 
@@ -478,6 +481,9 @@ local function OnLocalPlayerCoinCountChanged()
 end
 
 local function OnOnlineRewardButtonActivated()
+	if not GameConfig.EnableOnlineReward then
+		return
+	end
 	UIManager.OpenWindow(UIManager.WindowId.OnlineReward)
 	if onlineRewardRedPoint then
 		onlineRewardRedPoint.Visible = false
@@ -533,6 +539,9 @@ local function UpdateOnlineRewardButton()
 end
 
 local function OnRewardUpdate(stateNew: number, rewardType: number)
+	if not GameConfig.EnableOnlineReward or rewardType ~= GameConfig.RewardEnum.onlineTime then
+		return
+	end
 	if
 		stateNew == GameConfig.RewardState.CanGet
 		and not UIManager.IsWindowShowing(UIManager.WindowId.OnlineReward)
@@ -560,6 +569,10 @@ local function StopOnlineRewardUpdateThread()
 end
 
 local function OnLocalPlayerUpdateOnlineRewardThead(isStart: boolean)
+	if not GameConfig.EnableOnlineReward then
+		StopOnlineRewardUpdateThread()
+		return
+	end
 	if isStart then
 		StartOnlineRewardUpdateThread()
 	else
@@ -568,6 +581,10 @@ local function OnLocalPlayerUpdateOnlineRewardThead(isStart: boolean)
 end
 
 local function InitOnlineRewardButton()
+	if not GameConfig.EnableOnlineReward then
+		StopOnlineRewardUpdateThread()
+		return
+	end
 	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
 	if localPlayerInfo == nil or onlineRewardButton == nil then
 		return

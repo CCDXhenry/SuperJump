@@ -51,6 +51,9 @@ local function GiveOnlineReward(player: Player, reward: GameConfig.OnlineRewardD
 end
 
 local function OnPlayerRequestUpdateRewardInfo(player: Player, indexs: { number }, stateNew: number, rewardType: number)
+	if not GameConfig.EnableOnlineReward and rewardType == GameConfig.RewardEnum.onlineTime then
+		return
+	end
 	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		return

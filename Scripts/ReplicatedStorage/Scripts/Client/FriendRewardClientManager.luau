@@ -122,7 +122,7 @@ local function OnPlayerUnfriended(unfriendedPlayer: Player)
 end
 
 function FriendRewardClientManager.Init()
-	if players.LocalPlayer == nil then
+	if not GameConfig.EnableFriendOnlineBuff or players.LocalPlayer == nil then
 		return
 	end
 	ClientMsg.ConnectLocalPlayerInfoInit(OnLocalPlayerInfoInit)

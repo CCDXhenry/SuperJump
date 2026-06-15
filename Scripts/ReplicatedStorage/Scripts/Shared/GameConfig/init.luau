@@ -290,7 +290,9 @@ GameConfig.ModelGetSource = {
 	OnlineReward = 5,
 }
 
-GameConfig.EnablePlayerGift = true
+GameConfig.EnablePlayerGift = false
+GameConfig.EnableOnlineReward = false
+GameConfig.EnableFriendOnlineBuff = false
 GameConfig.PlayerRespawnTime = 1
 
 -- 排行榜
@@ -772,6 +774,9 @@ function GameConfig.GetBuffParamConfig(buffId: number): FriendRewardBuffParamCon
 end
 
 function GameConfig.GetFriendRewardBuffParamConfig(): FriendRewardBuffParamConfig?
+	if not GameConfig.EnableFriendOnlineBuff then
+		return nil
+	end
 	return GameConfig.GetBuffParamConfig(GameConfig.FriendRewardBuffId)
 end
 
@@ -787,6 +792,9 @@ function GameConfig.GetFriendCoinGainIncreaseRate(friendsPlayingSameGameCount: n
 end
 
 function GameConfig.GetFriendRewardBuffData(): BuffData?
+	if not GameConfig.EnableFriendOnlineBuff then
+		return nil
+	end
 	local buffData = GameConfig.BuffIdMap[GameConfig.FriendRewardBuffId]
 	if buffData ~= nil and buffData.buffMethod == GameConfig.BuffMethod.ParamConfig then
 		return buffData

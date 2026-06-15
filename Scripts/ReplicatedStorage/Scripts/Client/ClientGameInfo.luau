@@ -623,6 +623,9 @@ function ClientGameInfo.UpdateRewardState(indexs: { number }, stateNew: number, 
 	end
 	local rewardList: { GameConfig.RewardInfo } = {}
 	for _, i in indexs do
+		if rewardType == GameConfig.RewardEnum.onlineTime and not GameConfig.EnableOnlineReward then
+			continue
+		end
 		if rewardType == GameConfig.RewardEnum.onlineTime then
 			if
 				stateNew == GameConfig.RewardState.HasGot
@@ -652,9 +655,13 @@ function ClientGameInfo.InitPlayerRewardInfo(rewardInfo: GameConfig.PlayerReward
 	if localPlayerInfo == nil then
 		return
 	end
-	ClientMsg.FireLocalPlayerUpdateOnlineRewardThead(false)
+	if GameConfig.EnableOnlineReward then
+		ClientMsg.FireLocalPlayerUpdateOnlineRewardThead(false)
+	end
 	localPlayerInfo.rewardInfo = rewardInfo
-	ClientMsg.FireLocalPlayerUpdateOnlineRewardThead(true)
+	if GameConfig.EnableOnlineReward then
+		ClientMsg.FireLocalPlayerUpdateOnlineRewardThead(true)
+	end
 end
 
 -- 移除其他玩家信息 (当玩家离开时)

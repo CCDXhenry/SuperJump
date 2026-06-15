@@ -25,7 +25,7 @@ local rewardFramePre = gridFrame:WaitForChild("RewardFrame") :: Frame
 local rewardButtonTexts: { [number]: TextLabel } = {}
 local rewardButtons: { [number]: ImageButton } = {}
 
-if ClientGameInfo.GetLocalPlayerInfo() == nil then
+if not GameConfig.EnableOnlineReward or ClientGameInfo.GetLocalPlayerInfo() == nil then
 	return
 end
 

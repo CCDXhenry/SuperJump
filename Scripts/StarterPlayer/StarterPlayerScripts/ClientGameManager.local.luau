@@ -104,7 +104,9 @@ local function InitUI()
 	ExEquipManager.Init()
 	JetpackClientManager.Init()
 	GroupRewardClientManager.Init()
-	FriendRewardClientManager.Init()
+	if GameConfig.EnableFriendOnlineBuff then
+		FriendRewardClientManager.Init()
+	end
 	PlayerInfoClientManager.Init()
 	LeaderboardClient.Init()
 	GuideManager.Init()
