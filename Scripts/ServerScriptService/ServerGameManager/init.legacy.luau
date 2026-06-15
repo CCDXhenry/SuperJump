@@ -277,7 +277,9 @@ JetpackManager.Init()
 GuideProgressManager.Init()
 if runService:IsStudio() then
 	local BrainrotDisplayTestManager = require(serverScripts:FindFirstChild("BrainrotDisplayTestManager"))
-	BrainrotDisplayTestManager.Init()
+	if BrainrotDisplayTestManager then
+		BrainrotDisplayTestManager.Init()
+	end
 end
 
 NetMsg.ConnectRequestSetDecelerationOn(function(player: Player, decelerationOn: boolean)
