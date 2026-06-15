@@ -1000,15 +1000,7 @@ local function ResolveGuideType(): number
 		if HasWalkSpeedUpgraded(info) then
 			CompleteGuideStep(GameConfig.GuideStepKey.WalkSpeedUpgradeFinished)
 		elseif IsWalkSpeedUpgradeGuideUnlocked(info) then
-			if IsWalkSpeedUpgradeAffordable(info) then
-				return FilterOutsideRunwaySessionGuide(
-					MaybeIslandTeleportOr(GameConfig.GuideType.TutorialWalkSpeedUpgrade)
-				)
-			elseif HasCollectableBrainrotYield(info) then
-				return FilterOutsideRunwaySessionGuide(
-					MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotCollect)
-				)
-			end
+			CompleteGuideStep(GameConfig.GuideStepKey.WalkSpeedUpgradeFinished)
 		end
 	end
 

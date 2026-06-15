@@ -43,6 +43,7 @@ GameConfig.RbImage = "rbxassetid://116949418469040"
 GameConfig.DecelerationOnImage = "rbxassetid://114216336762183"
 GameConfig.DecelerationOffImage = "rbxassetid://113696020530948"
 GameConfig.DecelerationButtonShowSpeed = 40
+GameConfig.DefaultWalkSpeed = 16
 
 GameConfig.GuideType = {
 	None = 0,
@@ -832,6 +833,7 @@ export type ExStatsData = {
 	ability: number,
 	lv: number,
 	name_t: string,
+	walkSpeed: number?,
 }
 
 export type JumpPowerInfo = {
@@ -874,6 +876,22 @@ end
 function GameConfig.GetJumpPowerRequiredExp(jumpPowerInfo: JumpPowerInfo): number
 	local statsData = GameConfig.GetJumpPowerStatsData(jumpPowerInfo)
 	return if statsData ~= nil then statsData.exp else 0
+end
+
+function GameConfig.GetJumpPowerWalkSpeed(jumpPowerInfo: JumpPowerInfo, useDecelerationLv1: boolean?): number
+	local lookupInfo = jumpPowerInfo
+	if useDecelerationLv1 == true then
+		lookupInfo = {
+			type = jumpPowerInfo.type,
+			lv = 1,
+			exp = jumpPowerInfo.exp,
+		}
+	end
+	local statsData = GameConfig.GetJumpPowerStatsData(lookupInfo)
+	if statsData ~= nil and statsData.walkSpeed ~= nil then
+		return statsData.walkSpeed
+	end
+	return GameConfig.DefaultWalkSpeed
 end
 
 export type JetpackData = {

@@ -488,16 +488,13 @@ local function GetMoneyCount(playerInfo: GameConfig.PlayerInfo): number
 	return playerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
 end
 
--- 埋点用：始终返回 walkSpeedLevel 对应速度，忽略减速按钮（decelerationOn）
--- 埋点用：始终返回 walkSpeedLevel 对应速度，忽略减速按钮（decelerationOn）
+-- 埋点用：返回 JumpPower 等级对应 ExStats walkSpeed，忽略减速按钮（decelerationOn）
 function ServerGameInfo.GetResolvedWalkSpeedValue(player: Player): number
 	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
 		return 0
 	end
-	local walkShop = GameConfig.Shop.WalkSpeed
-	local walkSpeedLevel = playerInfo.shopInfo.walkSpeedLevel
-	return walkShop.abilityList[walkSpeedLevel] or walkShop.abilityList[walkShop.maxLevel] or walkShop.abilityList[1] or 0
+	return GameConfig.GetJumpPowerWalkSpeed(playerInfo.jumpPower, false)
 end
 
 function ServerGameInfo.GetJumpRunwayJumpCount(player: Player): number
@@ -1074,17 +1071,12 @@ function ServerGameInfo.TryConsumeBrainrotPaidUpgrade(player: Player): boolean
 	return true
 end
 
--- 商店与减速设置下的基准行走速度（不含线圈加成）
+-- 非跑道场景基准行走速度（不含线圈加成）
 function ServerGameInfo.GetResolvedShopWalkSpeed(player: Player): number?
-	local playerInfo: GameConfig.PlayerInfo? = ServerGameInfo.GetPlayerInfo(player)
-	if playerInfo == nil then
+	if ServerGameInfo.GetPlayerInfo(player) == nil then
 		return nil
 	end
-	local walkSpeedLevel = playerInfo.shopInfo.walkSpeedLevel
-	local isDecelerationOn = playerInfo.settingInfo.decelerationOn == true
-	local config = GameConfig.Shop.WalkSpeed
-	local targetLevel = if isDecelerationOn then 1 else walkSpeedLevel
-	return config.abilityList[targetLevel] or config.abilityList[config.maxLevel] or config.abilityList[1]
+	return GameConfig.DefaultWalkSpeed
 end
 
 --应用行走速度到角色
@@ -1190,8 +1182,6 @@ function ServerGameInfo.UpgradeAbility(player: Player, abilityName: string, leve
 	-- 更新等级
 	if abilityName == "WalkSpeed" then
 		playerInfo.shopInfo.walkSpeedLevel = nextLevel
-		-- 应用效果
-		ServerGameInfo.ApplyWalkSpeed(player)
 		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.WalkSpeed, nextLevel)
 	elseif abilityName == "HomeLevel" then
 		playerInfo.homeInfo.level = nextLevel
@@ -1252,7 +1242,6 @@ function ServerGameInfo.UpgradeAbilityPaid(player: Player, abilityName: string, 
 
 	if abilityName == "WalkSpeed" then
 		playerInfo.shopInfo.walkSpeedLevel = nextLevel
-		ServerGameInfo.ApplyWalkSpeed(player)
 		NetMsg.FireNotifyPlayerSkillLevelUpdate(player, GameConfig.SkillType.WalkSpeed, nextLevel)
 	elseif abilityName == "HomeLevel" then
 		playerInfo.homeInfo.level = nextLevel

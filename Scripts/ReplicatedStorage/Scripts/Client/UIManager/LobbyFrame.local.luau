@@ -42,12 +42,16 @@ if buffsFrame then
 end
 
 local walkSpeedFrame: Frame = lobbyFrame:FindFirstChild("WalkSpeedFrame") :: Frame
+walkSpeedFrame.Visible = false
 local walkSpeedText: TextLabel = walkSpeedFrame:FindFirstChild("NumberText") :: TextLabel
 local maxFuelFrame: Frame = lobbyFrame:FindFirstChild("MaxFuelFrame") :: Frame
 local maxFuelText: TextLabel = maxFuelFrame:FindFirstChild("NumberText") :: TextLabel
 local maxThrustFrame: Frame = lobbyFrame:FindFirstChild("MaxThrustFrame") :: Frame
 local maxThrustText: TextLabel = maxThrustFrame:FindFirstChild("NumberText") :: TextLabel
 local decelerationButton: ImageButton? = lobbyFrame:FindFirstChild("DecelerationButton") :: ImageButton?
+if decelerationButton then
+	decelerationButton.Visible = false
+end
 local decelerationButtonTextLabel: TextLabel? = if decelerationButton then (decelerationButton:FindFirstChild("TextLabel") :: TextLabel?) else nil
 local bottomButtonsFrame = lobbyFrame:FindFirstChild("BottomButtonsFrame")
 local exEquipButton: ImageButton? = lobbyFrame:FindFirstChild("ExEquipButton") :: ImageButton?
@@ -180,21 +184,7 @@ end
 local RefreshUpgradeValues: () -> ()
 
 local function ResolveLocalBaseWalkSpeed(): number
-	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
-	if localPlayerInfo == nil then
-		return 16
-	end
-	local isDecelerationOn = localPlayerInfo.settingInfo.decelerationOn == true
-	local walkSpeedLevel = localPlayerInfo.shopInfo.walkSpeedLevel or 1
-	local targetLevel = if isDecelerationOn then 1 else walkSpeedLevel
-	local walkSpeedConfig = GameConfig.Shop.WalkSpeed
-	if walkSpeedConfig == nil then
-		return 16
-	end
-	return walkSpeedConfig.abilityList[targetLevel]
-		or walkSpeedConfig.abilityList[walkSpeedConfig.maxLevel]
-		or walkSpeedConfig.abilityList[1]
-		or 16
+	return GameConfig.DefaultWalkSpeed
 end
 
 local function ApplyLocalWalkSpeedFromSettings()

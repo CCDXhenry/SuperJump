@@ -1318,22 +1318,14 @@ function RunwaySession.ClearRunwayFlyingHumanoid(humanoid: Humanoid?)
 end
 
 function RunwaySession.GetExpectedPlayerWalkSpeed(): number
-	local walkSpeedConfig = GameConfig.Shop.WalkSpeed
-	local fallback = walkSpeedConfig.abilityList[1] or 16
+	if not (ClientGameInfo.IsInJumpRunway() or ClientGameInfo.IsInJumpRunwayEscapePhase()) then
+		return GameConfig.DefaultWalkSpeed
+	end
 	local info = ClientGameInfo.GetLocalPlayerInfo()
 	if info == nil then
-		return fallback
+		return GameConfig.DefaultWalkSpeed
 	end
-	local level = info.shopInfo.walkSpeedLevel or 1
-	if info.settingInfo.decelerationOn == true then
-		level = 1
-	end
-	local maxLevel = walkSpeedConfig.maxLevel
-	if typeof(level) ~= "number" or level ~= level then
-		level = 1
-	end
-	level = math.clamp(math.floor(level), 1, maxLevel)
-	return walkSpeedConfig.abilityList[level] or fallback
+	return GameConfig.GetJumpPowerWalkSpeed(info.jumpPower, info.settingInfo.decelerationOn == true)
 end
 
 
