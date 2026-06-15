@@ -22,7 +22,6 @@ end
 local GIFT_CONFIRM_TITLE_COLOR = Color3.fromRGB(0, 255, 0)
 local GIFT_REQUEST_TITLE_COLOR = Color3.fromRGB(0, 0, 255)
 local TOP_TIP_DEFAULT_COLOR = Color3.fromRGB(255, 255, 255)
-local TOP_TIP_SUCCESS_COLOR = Color3.fromRGB(0, 255, 0)
 local GIFT_POPUP_COUNTDOWN_TIME = 10
 local GIFT_TOP_TIP_DURATION = 5
 
@@ -144,13 +143,6 @@ local function OnShowGiftRequestPopup(senderId: number, senderName: string, brai
 	activePopUpConnectionYes = popUpYesButton.MouseButton1Click:Connect(function()
 		NetMsg.FireRequestRespondGift(senderId, true)
 		HidePopUpTipFrame()
-		ClientMsg.FireShowTopTipText(
-			GameTexts.GiftSuccess.source,
-			TOP_TIP_SUCCESS_COLOR,
-			GIFT_TOP_TIP_DURATION,
-			nil,
-			GameTexts.GiftSuccess.key
-		)
 	end)
 	activePopUpConnectionNo = popUpNoButton.MouseButton1Click:Connect(function()
 		NetMsg.FireRequestRespondGift(senderId, false)

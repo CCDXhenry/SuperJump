@@ -20,6 +20,8 @@ local TranslationTool = require(coreClientScripts:FindFirstChild("TranslationToo
 local localPlayer = players.LocalPlayer
 
 -- 常量定义
+local SUCCESS_TIPS_COLOR = Color3.fromRGB(0, 255, 0) -- 绿色
+local SUCCESS_TIPS_DURATION = 5
 local FAILURE_TIPS_COLOR = Color3.fromRGB(255, 0, 0) -- 红色
 local FAILURE_TIPS_DURATION = 3
 
@@ -135,7 +137,15 @@ function PlayerInteractClientManager.Init()
 		end)
 
 		NetMsg.ConnectNotifyGiftResult(function(isSuccess: boolean, message: string?)
-			if not isSuccess then
+			if isSuccess then
+				ClientMsg.FireShowTopTipText(
+					GameTexts.GiftSuccess.source,
+					SUCCESS_TIPS_COLOR,
+					SUCCESS_TIPS_DURATION,
+					nil,
+					GameTexts.GiftSuccess.key
+				)
+			else
 				ClientMsg.FireShowTopTipText(
 					GameTexts.GiftFailedFormat.source,
 					FAILURE_TIPS_COLOR,

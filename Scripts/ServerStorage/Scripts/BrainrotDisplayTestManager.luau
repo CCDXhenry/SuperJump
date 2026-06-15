@@ -16,6 +16,7 @@ local serverScripts = serverStorage:WaitForChild("Scripts")
 local ServerGameInfo = require(serverScripts:WaitForChild("ServerGameInfo"))
 local BrainrotQueueManager = require(serverScripts:WaitForChild("BrainrotQueueManager"))
 
+
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:WaitForChild("GameConfig"))
