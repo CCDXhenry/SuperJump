@@ -201,6 +201,8 @@ local function NormalizeJumpRunwayInputReport(raw: any): NetMsg.JumpRunwayInputR
 		alongBaseline = CoerceNumber(t.alongBaseline),
 		runwayForward = CoerceVector3(t.runwayForward),
 		runwayOrigin = CoerceVector3(t.runwayOrigin),
+		qteTimes = CoerceNumber(t.qteTimes),
+		qtePercent = CoerceNumber(t.qtePercent),
 	}
 	return out
 end
@@ -322,6 +324,17 @@ local function LogJumpEnd(player: Player, st: RunState, isDead: number)
 		distance,
 		isDead,
 		ServerGameInfo.GetJumpRunwayJumpCount(player)
+	)
+end
+
+local function LogJumpQte(player: Player, qteTimes: number, qtePercent: number, jumpCount: number)
+	AnalyticsTool.LogJumpQte(
+		player,
+		GetPlayerPowerLevel(player),
+		ServerGameInfo.GetResolvedWalkSpeedValue(player),
+		jumpCount,
+		qteTimes,
+		qtePercent
 	)
 end
 
@@ -920,7 +933,10 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 		LockScoreAndTeleport(player, st, nowClock, report.finalAlong)
 	elseif kind == Kind.Input then
 		if report.jumpPressed == true then
-			ServerGameInfo.IncrementJumpRunwayJumpCount(player)
+			local jumpCount = ServerGameInfo.IncrementJumpRunwayJumpCount(player)
+			if report.qteTimes ~= nil and report.qtePercent ~= nil then
+				LogJumpQte(player, report.qteTimes, report.qtePercent, jumpCount)
+			end
 		end
 		if report.finalDashThrustActive ~= nil then
 			JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, report.finalDashThrustActive == true)

@@ -31,6 +31,8 @@ export type JumpRunwayInputReport = {
 	alongBaseline: number?,
 	runwayForward: Vector3?,
 	runwayOrigin: Vector3?,
+	qteTimes: number?,
+	qtePercent: number?,
 }
 
 local NetMsg = {}

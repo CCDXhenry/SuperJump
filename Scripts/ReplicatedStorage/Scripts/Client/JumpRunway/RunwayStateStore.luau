@@ -13,6 +13,7 @@ export type RunwayStateStoreShape = {
 	jumpSpeedCurrentReductionDelta: number,
 	fuel: number,
 	ratingTier: number?,
+	lastQtePercent: number?,
 	finalScore: number?,
 	dashHeld: boolean,
 	lastSampleSendClock: number,
@@ -77,6 +78,7 @@ function RunwayStateStore.CreateDefault(phases: any, slideKindStandard: string):
 		jumpSpeedCurrentReductionDelta = 0,
 		fuel = 0,
 		ratingTier = nil,
+		lastQtePercent = nil,
 		finalScore = nil,
 		dashHeld = false,
 		lastSampleSendClock = 0,
@@ -140,6 +142,7 @@ function RunwayStateStore.ResetForIdle(localState: RunwayStateStoreShape, phases
 	localState.jumpSpeedCurrentReductionDelta = 0
 	localState.fuel = 0
 	localState.ratingTier = nil
+	localState.lastQtePercent = nil
 	localState.finalScore = nil
 	localState.finalSent = false
 	localState.groundedStableTime = 0

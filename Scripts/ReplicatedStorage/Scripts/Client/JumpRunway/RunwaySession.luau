@@ -7259,14 +7259,19 @@ function RunwaySession.NetReportJump()
 	if not NetMsg.JumpRunwayRemotesExist() then
 		return
 	end
-	NetMsg.FireRequestJumpRunwayInput({
+	local report: NetMsg.JumpRunwayInputReport = {
 		kind = Kind.Input,
 		jumpPressed = true,
 		dashHeld = localState.dashHeld,
 		finalDashThrustActive = RunwaySession.IsFinalDashThrustActive(),
 		clientClock = os.clock(),
 		clientPhase = localState.phase,
-	})
+		qteTimes = localState.takeoffCount,
+	}
+	if localState.lastQtePercent ~= nil then
+		report.qtePercent = localState.lastQtePercent
+	end
+	NetMsg.FireRequestJumpRunwayInput(report)
 end
 
 function RunwaySession.NetReportDashIfChanged()
@@ -7589,6 +7594,7 @@ function RunwaySession.JumpApplyRatingForTakeoff(
 	local addedBonus, nextMaxSpeed, cumulativeBonus, reductionDelta =
 		RunwaySession.ApplyJumpSpeedRatingForBonusRatio(bonusRatio, currentBaseSpeed)
 	localState.ratingTier = tier
+	localState.lastQtePercent = math.floor(bonusRatio * 100 + 0.5)
 	ClientMsg.FireJumpRunWayShowRatingTier(tier)
 	--RunwaySession.LogJumpRunwayRating(
 	--	jumpIndex,
@@ -7951,6 +7957,7 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	localState.jumpSpeedCurrentReductionDelta = 0
 	localState.fuel = 0
 	localState.ratingTier = nil
+	localState.lastQtePercent = nil
 	localState.finalScore = nil
 	localState.finalSent = false
 	localState.groundedStableTime = 0

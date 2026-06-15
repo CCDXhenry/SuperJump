@@ -238,6 +238,23 @@ function AnalyticsTool.LogJumpEnd(
 	})
 end
 
+function AnalyticsTool.LogJumpQte(
+	player: Player,
+	playerPowerLevel: number,
+	playerSpeed: number,
+	jumpCount: number,
+	qteTimes: number,
+	qtePercent: number
+)
+	AddCustomEvent(player, "jump_qte", {
+		{ filed = "player_powerlv", value = tostring(playerPowerLevel) },
+		{ filed = "player_speed", value = tostring(playerSpeed) },
+		{ filed = "jump_count", value = tostring(jumpCount) },
+		{ filed = "qte_times", value = tostring(qteTimes) },
+		{ filed = "qte_percent", value = tostring(qtePercent) },
+	})
+end
+
 function AnalyticsTool.LogGymGet(player: Player, gymId: number, moneyCount: number, isPay: number)
 	AddCustomEvent(player, "gym_get", {
 		{ filed = "gym_id", value = tostring(gymId) },
