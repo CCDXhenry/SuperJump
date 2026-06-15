@@ -52,6 +52,8 @@ local jumpRunWayStartEscapeRedScreenEvent: BindableEvent =
 	EnsureBindableEvent("JumpRunWayStartEscapeRedScreen")
 local jumpRunWayStopEscapeRedScreenEvent: BindableEvent =
 	EnsureBindableEvent("JumpRunWayStopEscapeRedScreen")
+local jumpRunWayRefreshTakeoffRatingBarEvent: BindableEvent =
+	EnsureBindableEvent("JumpRunWayRefreshTakeoffRatingBar")
 local localPlayerClaimedGroupRewardEvent: BindableEvent = EnsureBindableEvent("LocalPlayerClaimedGroupReward")
 local localPlayerFriendsPlayingSameGameCountChangedEvent: BindableEvent =
 	EnsureBindableEvent("LocalPlayerFriendsPlayingSameGameCountChanged")
@@ -305,6 +307,29 @@ function ClientMsg.ConnectJumpRunWayRefreshStats(callback: (
 	if jumpRunWayRefreshStatsEvent then
 		jumpRunWayRefreshStatsEvent.Event:Connect(callback)
 	end
+end
+
+-- 跑道 HUD：连续起跳评分条
+function ClientMsg.FireJumpRunWayRefreshTakeoffRatingBar(payload: {
+	visible: boolean,
+	progressRatio: number,
+	leftOkEndRatio: number,
+	perfectSplitRatio: number,
+	perfectEndRatio: number,
+	rightOkEndRatio: number,
+})
+	jumpRunWayRefreshTakeoffRatingBarEvent:Fire(payload)
+end
+
+function ClientMsg.ConnectJumpRunWayRefreshTakeoffRatingBar(callback: (payload: {
+	visible: boolean,
+	progressRatio: number,
+	leftOkEndRatio: number,
+	perfectSplitRatio: number,
+	perfectEndRatio: number,
+	rightOkEndRatio: number,
+}) -> ())
+	jumpRunWayRefreshTakeoffRatingBarEvent.Event:Connect(callback)
 end
 
 -- 跑道 HUD：评级动画
