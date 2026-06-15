@@ -517,7 +517,41 @@ function RunwaySession.CurrentAlongProgress(hrp: BasePart): number
 end
 
 function RunwaySession.ComputeFinalAlongForReport(hrp: BasePart): number
-	return RunwaySession.CurrentAlongProgress(hrp)
+	return RunwaySession.ResolveRunwayDistanceForGrant(hrp) or 0
+end
+
+function RunwaySession.ReportFinalJumpEnd(hrp: BasePart, clientPhase: number): boolean
+	if localState.finalSent == true then
+		return false
+	end
+	if not NetMsg.JumpRunwayRemotesExist() then
+		return false
+	end
+	NetMsg.FireRequestJumpRunwayInput({
+		kind = Kind.Final,
+		finalAlong = RunwaySession.ComputeFinalAlongForReport(hrp),
+		clientClock = os.clock(),
+		clientPhase = clientPhase,
+	})
+	localState.finalSent = true
+	return true
+end
+
+function RunwaySession.ReportJumpEndDistanceBeforeDeath(hrp: BasePart): boolean
+	if localState.finalSent == true then
+		return false
+	end
+	if not NetMsg.JumpRunwayRemotesExist() then
+		return false
+	end
+	NetMsg.FireRequestJumpRunwayInput({
+		kind = Kind.Abort,
+		finalAlong = RunwaySession.ComputeFinalAlongForReport(hrp),
+		clientClock = os.clock(),
+		clientPhase = localState.phase,
+	})
+	localState.finalSent = true
+	return true
 end
 
 function RunwaySession.ResolveRunwayDistanceForGrant(hrp: BasePart?): number?
@@ -6018,6 +6052,9 @@ function RunwaySession.ShouldDeferFinalReportForSlideChest(): boolean
 	if Refs.chestBounceActive == true or Refs.chestRewardWaitPose == true then
 		return true
 	end
+	if localState.phase == Ph.Slide and localState.runwaySlideKind == SlideKindObstacleBounce then
+		return true
+	end
 	if localState.phase ~= Ph.Slide then
 		return false
 	end
@@ -6395,7 +6432,13 @@ function RunwaySession.EnterLittleElfChestCarryReturn(brainrotId: number?, chest
 			hDelay:FindFirstAncestorOfClass("Model") :: Model,
 			forwardExit,
 			chaserSpeedOverride,
-			chaserFreezeDuration
+			chaserFreezeDuration,
+			function()
+				local _, _, hrpForDeath = RunwaySession.GetCharacterParts()
+				if hrpForDeath ~= nil then
+					RunwaySession.ReportJumpEndDistanceBeforeDeath(hrpForDeath)
+				end
+			end
 		)
 		RunwayCameraController.FocusChaserThenDisable(
 			workspace,
@@ -6682,25 +6725,13 @@ function RunwaySession.EnterLittleElfChestRewardWaitPose(humanoid: Humanoid, hrp
 end
 
 function RunwaySession.TryForceReportFinalAfterChestExit()
-	if localState.finalSent == true then
-		return
-	end
-	if not NetMsg.JumpRunwayRemotesExist() then
-		return
-	end
 	local _, _humanoidFinal, hrpFinal = RunwaySession.GetCharacterParts()
 	if hrpFinal == nil then
 		return
 	end
-	local finalAlong = RunwaySession.ComputeFinalAlongForReport(hrpFinal)
-	NetMsg.FireRequestJumpRunwayInput({
-		kind = Kind.Final,
-		finalAlong = finalAlong,
-		clientClock = os.clock(),
-		clientPhase = Ph.RunEnded,
-	})
-	localState.finalSent = true
-	RunwaySession.PrintDistanceLogSummary("force_final_report", hrpFinal)
+	if RunwaySession.ReportFinalJumpEnd(hrpFinal, Ph.RunEnded) then
+		RunwaySession.PrintDistanceLogSummary("force_final_report", hrpFinal)
+	end
 end
 
 function RunwaySession.IsPlayerNearLittleElfChest(hrp: BasePart, chestModel: Model, _fwdH: Vector3): boolean
@@ -6736,15 +6767,7 @@ function RunwaySession.ExitObstacleBounceBeforeStartTrigger(humanoid: Humanoid, 
 	RunwaySession.ClearScriptedSlideMotion()
 	RunwaySession.RestoreHumanoidAutoRotateAfterFinalPitch(humanoid)
 	RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(humanoid, hrp)
-	if NetMsg.JumpRunwayRemotesExist() and not localState.finalSent and Refs.missAbortSentForThisRun ~= true then
-		Refs.missAbortSentForThisRun = true
-		NetMsg.FireRequestJumpRunwayInput({
-			kind = Kind.Abort,
-			clientClock = os.clock(),
-			clientPhase = localState.phase,
-		})
-		localState.finalSent = true
-	end
+	RunwaySession.ReportFinalJumpEnd(hrp, localState.phase)
 	RunwaySession.SlideTraceScheduleDestroyAfterRunwayEnd()
 	RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(humanoid)
 	RunwaySession.ClearRunwayFlyingHumanoid(humanoid)
@@ -7141,7 +7164,8 @@ function RunwaySession.UpdateTick(dt: number)
 			dt,
 			nowClock,
 			ComputeRunwayHorizontalAlongSpeed,
-			RunwaySession.IsRunwayScriptedGrounded
+			RunwaySession.IsRunwayScriptedGrounded,
+			RunwaySession.ComputeFinalAlongForReport
 		)
 	end
 	if
@@ -7179,19 +7203,15 @@ function RunwaySession.UpdateTick(dt: number)
 			if RunwaySession.ShouldBlockFinalLandingSlideEndForChest() then
 				return
 			end
+			if localState.runwaySlideKind == SlideKindObstacleBounce then
+				RunwaySession.HandleObstacleBounceSlideStop(humanoid, hrp)
+				return
+			end
 			RunwaySession.RestorePlatformStandAfterFinalLand(humanoid)
 			RunwaySession.ClearFinalLandingSlideModuleLocals()
 			RunwaySession.RestoreHumanoidAutoRotateAfterFinalPitch(humanoid)
 			RunwaySession.RestoreRunwayHumanoidPoseAfterGameplay(humanoid, hrp)
-			if NetMsg.JumpRunwayRemotesExist() and not localState.finalSent and Refs.missAbortSentForThisRun ~= true then
-				Refs.missAbortSentForThisRun = true
-				NetMsg.FireRequestJumpRunwayInput({
-					kind = Kind.Abort,
-					clientClock = os.clock(),
-					clientPhase = localState.phase,
-				})
-				localState.finalSent = true
-			end
+			RunwaySession.ReportFinalJumpEnd(hrp, localState.phase)
 			RunwaySession.SlideTraceDestroy()
 			RunwaySession.RestoreRunwayHumanoidLocomotionFromScriptedMode(humanoid)
 			RunwaySession.ClearRunwayFlyingHumanoid(humanoid)

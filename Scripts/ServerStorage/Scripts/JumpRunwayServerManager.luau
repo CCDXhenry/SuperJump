@@ -288,6 +288,16 @@ local function MergeDistanceIntoScoreTracking(player: Player, distanceOpt: numbe
 	end
 end
 
+local function StoreReportedFinalDistance(player: Player, distanceOpt: number?): number
+	local distance = 0
+	if distanceOpt ~= nil and distanceOpt == distanceOpt then
+		distance = math.max(0, distanceOpt :: number)
+	end
+	local capped = math.min(distance, cfg.ANTI_CHEAT_DISTANCE_HARD_CAP)
+	playerFinalScore[player.UserId] = capped
+	return capped
+end
+
 local function GetPlayerPowerLevel(player: Player): number
 	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
@@ -311,11 +321,7 @@ local function LogJumpEnd(player: Player, st: RunState, isDead: number)
 		return
 	end
 	st.analyticsEndLogged = true
-	local distanceSource = playerFinalScore[player.UserId]
-	if distanceSource == nil then
-		distanceSource = maxAlongByUserId[player.UserId] or 0
-	end
-	local distance = math.min(distanceSource, cfg.ANTI_CHEAT_DISTANCE_HARD_CAP)
+	local distance = playerFinalScore[player.UserId] or 0
 	-- player_speed 埋点忽略减速，使用 JumpPower 等级对应 ExStats walkSpeed
 	AnalyticsTool.LogJumpEnd(
 		player,
@@ -403,15 +409,10 @@ local function BeginCleaning(player: Player, st: RunState)
 end
 
 local function LockScoreAndTeleport(player: Player, st: RunState, nowClock: number, finalAlongOpt: number?)
-	local scoreSource = maxAlongByUserId[player.UserId] or 0
-	if finalAlongOpt ~= nil and finalAlongOpt == finalAlongOpt then
-		scoreSource = math.max(0, finalAlongOpt :: number)
-	end
-	local capped = math.min(scoreSource, cfg.ANTI_CHEAT_DISTANCE_HARD_CAP)
+	local capped = StoreReportedFinalDistance(player, finalAlongOpt)
 	if cfg.DEBUG then
 		print("[JumpRunwayServerManager] LockScoreAndTeleport for", player.Name, "capped", capped)
 	end
-	playerFinalScore[player.UserId] = capped
 	if capped > 0 then
 		ServerGameInfo.UpdateJumpRunwayBestDistance(player, capped)
 		LeaderboardManager.TryUpdateWeeklyDistance(player, capped)
@@ -511,22 +512,27 @@ local function TryStartSession(player: Player, report: NetMsg.JumpRunwayInputRep
 		if s then
 			local fwd = s.runwayForward
 			local org = s.runwayOrigin
-			LogJumpEnd(player, s, 1)
-			DisconnectState(player, s)
-			ResetScoreTracking(player.UserId)
-			if NetMsg.JumpRunwayRemotesExist() then
-				NetMsg.FireNotifyJumpRunwayState(player, {
-					phase = Ph.Idle,
-					distance = 0,
-					windowRemainSec = nil,
-					fuel = 0,
-					takeoffCount = 0,
-					ratingTier = nil,
-					finalScore = nil,
-					runwayForward = fwd,
-					runwayOrigin = org,
-				})
-			end
+			task.delay(0.1, function()
+				if runMap[player.UserId] ~= s then
+					return
+				end
+				LogJumpEnd(player, s, 1)
+				DisconnectState(player, s)
+				ResetScoreTracking(player.UserId)
+				if NetMsg.JumpRunwayRemotesExist() then
+					NetMsg.FireNotifyJumpRunwayState(player, {
+						phase = Ph.Idle,
+						distance = 0,
+						windowRemainSec = nil,
+						fuel = 0,
+						takeoffCount = 0,
+						ratingTier = nil,
+						finalScore = nil,
+						runwayForward = fwd,
+						runwayOrigin = org,
+					})
+				end
+			end)
 		end
 	end)
 	-- 客户端全表现：开局阶段服务端不再写 Humanoid locomotion，避免与客户端推速对抗。
@@ -831,6 +837,7 @@ local function HandleLittleElfChestGrant(player: Player, finalDistance: number?)
 	if not success then
 		return
 	end
+	StoreReportedFinalDistance(player, finalDistance)
 	MergeDistanceIntoScoreTracking(player, finalDistance)
 	GetBrainrotCarryingManager().StopCarrying(player)
 	ClearJumpRunwayEscapeActive(player)
@@ -943,16 +950,7 @@ local function OnJumpRunwayReport(player: Player, rawPayload: NetMsg.JumpRunwayI
 		end
 	elseif kind == Kind.Abort then
 		JetpackManager.SetPlayerJetpackDashParticlesEnabled(player, false)
-		-- 验证 Abort 属于当前 run：需要 lastSampleClock 存在，且 Abort 的 clientClock 不应远大于最后一个 Sample 时钟
-		if st.lastSampleClock ~= nil and report.clientClock ~= nil then
-			if report.clientClock <= st.lastSampleClock + 1 then
-				BeginCleaning(player, st)
-			end
-		elseif st.lastSampleClock == nil and report.clientPhase == Ph.Slide then
-			-- 没有 Sample 但 clientPhase 是 Slide，可能旧 run 已开始但还没发 Sample 就 miss 了
-			-- 这时无法区分新旧 run，保守处理：只执行一次 BeginCleaning
-			BeginCleaning(player, st)
-		end
+		StoreReportedFinalDistance(player, report.finalAlong)
 	end
 	-- kind Input：客户端权威下服端只记录累计起跳次数，不驱动物理表现
 end

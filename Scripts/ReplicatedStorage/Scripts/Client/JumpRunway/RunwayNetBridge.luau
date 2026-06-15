@@ -80,7 +80,8 @@ function RunwayNetBridge.MaybeReportFinal(
 	dt: number,
 	nowClock: number,
 	computeRunwayHorizontalAlongSpeed: (Vector3, Vector3) -> number,
-	isRunwayScriptedGrounded: (Humanoid) -> boolean
+	isRunwayScriptedGrounded: (Humanoid) -> boolean,
+	computeFinalAlongForReport: (BasePart) -> number
 )
 	if localState.finalSent then
 		return
@@ -96,9 +97,7 @@ function RunwayNetBridge.MaybeReportFinal(
 		localState.groundedStableTime += dt
 		if localState.groundedStableTime >= cfg.K_STABLE_FRAMES * (1 / 30) then
 			if netMsg.JumpRunwayRemotesExist() then
-				local origin = localState.runwayOrigin
-				local baseline = localState.alongBaseline or 0
-				local finalAlong = if origin ~= nil then (hrp.Position - origin):Dot(forward) - baseline else 0
+				local finalAlong = computeFinalAlongForReport(hrp)
 				netMsg.FireRequestJumpRunwayInput({
 					kind = kind.Final,
 					finalAlong = finalAlong,

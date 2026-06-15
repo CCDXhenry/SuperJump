@@ -174,10 +174,17 @@ localPlayer.CharacterAdded:Connect(function(character: Model)
 	SetPlayerCollisionGroup(character)
 end)
 
-local function KillCharacter(character: Model)
+local function KillCharacter(character: Model, beforeKill: (() -> ())?)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if humanoid and humanoid.Health > 0 then
-		humanoid.Health = 0
+		if beforeKill ~= nil then
+			beforeKill()
+		end
+		task.defer(function()
+			if humanoid.Parent ~= nil and humanoid.Health > 0 then
+				humanoid.Health = 0
+			end
+		end)
 	end
 end
 
@@ -211,7 +218,8 @@ function ChaserClientManager.SpawnChaser(
 	character: Model,
 	forwardDir: Vector3,
 	speedOverride: number?,
-	freezeDurationOverrideSec: number?
+	freezeDurationOverrideSec: number?,
+	beforeKill: (() -> ())?
 ): Model?
 	InternalCleanupFull()
 	EnsureTreeCollisionGroup()
@@ -338,7 +346,7 @@ function ChaserClientManager.SpawnChaser(
 				if hitCharacter ~= localPlayer.Character then
 					return
 				end
-				KillCharacter(hitCharacter)
+				KillCharacter(hitCharacter, beforeKill)
 				if not chaserKillGuideStepSent then
 					chaserKillGuideStepSent = true
 					NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.ChaserKillExperienced)
