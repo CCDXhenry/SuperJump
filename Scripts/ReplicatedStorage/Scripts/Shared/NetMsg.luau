@@ -14,7 +14,7 @@ export type JumpRunwayStatePayload = {
 -- 客户端→服务端的统一上报载荷
 --   kind=1 Input  : 起跳/冲刺按键状态（可选附带 clientPhase 供服端日志）
 --   kind=2 Sample : 周期性物理样本（沿轴距离、速度、偏离、是否着地；可选 clientPhase）
---   kind=3 Final  : 客户端报告本局结束（落地稳定），服务端据此锁定（成绩以服端样本 maxAlong 为准）
+--   kind=3 Final  : 客户端报告本局结束（落地稳定），服务端据此锁定
 --   kind=4 Start  : 客户端权威开局（跑道轴、原点、沿轴 baseline），服端仅登记会话并做后续样本校验
 export type JumpRunwayInputReport = {
 	kind: number,
@@ -955,21 +955,22 @@ function NetMsg.ConnectRequestJumpRunwayLittleElfChestStartCarry(callback: (play
 end
 
 -- 客户端跑回 EndTrigger 后请求服务端将 pending brainrot 入背包
-function NetMsg.FireRequestJumpRunwayLittleElfChestGrant()
+function NetMsg.FireRequestJumpRunwayLittleElfChestGrant(finalDistance: number?)
 	if requestJumpRunwayLittleElfChestGrantEvent == nil then
 		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
 		return
 	end
-	requestJumpRunwayLittleElfChestGrantEvent:FireServer()
+	requestJumpRunwayLittleElfChestGrantEvent:FireServer(finalDistance)
 end
 
-function NetMsg.ConnectRequestJumpRunwayLittleElfChestGrant(callback: (player: Player) -> ())
+function NetMsg.ConnectRequestJumpRunwayLittleElfChestGrant(callback: (player: Player, finalDistance: number?) -> ())
 	if requestJumpRunwayLittleElfChestGrantEvent == nil then
 		WarnJumpRunwayLittleElfChestRemotesMissingOnce()
 		return
 	end
-	requestJumpRunwayLittleElfChestGrantEvent.OnServerEvent:Connect(function(player: Player)
-		callback(player)
+	requestJumpRunwayLittleElfChestGrantEvent.OnServerEvent:Connect(function(player: Player, finalDistance: any)
+		local resolvedFinalDistance = if typeof(finalDistance) == "number" then finalDistance :: number else nil
+		callback(player, resolvedFinalDistance)
 	end)
 end
 

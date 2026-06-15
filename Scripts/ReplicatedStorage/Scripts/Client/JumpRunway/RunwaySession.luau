@@ -516,6 +516,28 @@ function RunwaySession.CurrentAlongProgress(hrp: BasePart): number
 	return RunwayPhysicsController.CurrentAlongProgress(hrp, localState.runwayOrigin, localState.runwayForward, localState.alongBaseline)
 end
 
+function RunwaySession.ComputeFinalAlongForReport(hrp: BasePart): number
+	return RunwaySession.CurrentAlongProgress(hrp)
+end
+
+function RunwaySession.ResolveRunwayDistanceForGrant(hrp: BasePart?): number?
+	if hrp ~= nil then
+		RunwaySession.RefreshDistanceRecorderPeak(hrp)
+	end
+	local frozen = Refs.runwayDistanceRecorderFrozenStuds
+	if frozen ~= nil and frozen > 0 then
+		return frozen
+	end
+	local peak = Refs.runwayDistanceRecorderPeakStuds
+	if peak ~= nil and peak > 0 then
+		return peak
+	end
+	if hrp ~= nil then
+		return math.max(0, RunwaySession.CurrentAlongProgress(hrp))
+	end
+	return nil
+end
+
 function RunwaySession.IsDistanceLogEnabled(): boolean
 	return cfg.RUNWAY_DISTANCE_LOG_ENABLED == true
 end
@@ -6456,8 +6478,9 @@ function RunwaySession.TryDeliverLittleElfChestAtEndTrigger(endTrigger: Part)
 	Refs.chestCarryReturnActive = false
 	ChaserClientManager.StopAndFadeChaser()
 	ClientMsg.FireJumpRunWayStopEscapeRedScreen()
+	local finalDistance = RunwaySession.ResolveRunwayDistanceForGrant(hrp)
 	RunwaySession.DestroyDistanceRecorder()
-	NetMsg.FireRequestJumpRunwayLittleElfChestGrant()
+	NetMsg.FireRequestJumpRunwayLittleElfChestGrant(finalDistance)
 	ClientGameInfo.SetInJumpRunwayEscapePhase(false)
 	ClientGameInfo.SetInJumpRunway(false)
 	UIManager.CloseWindow(UIManager.WindowId.JumpRunWayFrame)
@@ -6503,7 +6526,9 @@ function RunwaySession.DeliverLittleElfChestRewardToBackpackAfterOpenAnim()
 		return
 	end
 	Refs.chestBackpackDeliverRequested = true
-	NetMsg.FireRequestJumpRunwayLittleElfChestGrant()
+	local _, _, hrp = RunwaySession.GetCharacterParts()
+	local finalDistance = RunwaySession.ResolveRunwayDistanceForGrant(hrp)
+	NetMsg.FireRequestJumpRunwayLittleElfChestGrant(finalDistance)
 	Refs.chestPendingReward = nil
 end
 
@@ -6675,10 +6700,7 @@ function RunwaySession.TryForceReportFinalAfterChestExit()
 	if hrpFinal == nil then
 		return
 	end
-	local forwardFinal = NormalizeRunwayForward(localState.runwayForward)
-	local origin = localState.runwayOrigin
-	local baseline = localState.alongBaseline or 0
-	local finalAlong = if origin ~= nil then (hrpFinal.Position - origin):Dot(forwardFinal) - baseline else 0
+	local finalAlong = RunwaySession.ComputeFinalAlongForReport(hrpFinal)
 	NetMsg.FireRequestJumpRunwayInput({
 		kind = Kind.Final,
 		finalAlong = finalAlong,

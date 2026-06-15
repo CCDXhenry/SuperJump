@@ -275,6 +275,17 @@ local function ResetScoreTracking(userId: number)
 	playerFinalScore[userId] = nil
 end
 
+local function MergeDistanceIntoScoreTracking(player: Player, distanceOpt: number?)
+	if distanceOpt == nil or distanceOpt ~= distanceOpt then
+		return
+	end
+	local userId = player.UserId
+	local capped = math.min(math.max(0, distanceOpt :: number), cfg.ANTI_CHEAT_DISTANCE_HARD_CAP)
+	if capped > (maxAlongByUserId[userId] or 0) then
+		maxAlongByUserId[userId] = capped
+	end
+end
+
 local function GetPlayerPowerLevel(player: Player): number
 	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
 	if playerInfo == nil then
@@ -785,10 +796,12 @@ local function HandleLittleElfChestStartCarry(player: Player, brainrotId: number
 			carryPart:Destroy()
 		end
 		warn("[JumpRunwayServerManager] HandleLittleElfChestStartCarry failed for", player.Name)
+	else
+		AnalyticsTool.LogModelPickUp(player, pending.brainrotId, 1, GameConfig.ItemType.Brainrot)
 	end
 end
 
-local function HandleLittleElfChestGrant(player: Player)
+local function HandleLittleElfChestGrant(player: Player, finalDistance: number?)
 	if pendingLittleElfChestRewardMap[player.UserId] == nil then
 		return
 	end
@@ -805,6 +818,7 @@ local function HandleLittleElfChestGrant(player: Player)
 	if not success then
 		return
 	end
+	MergeDistanceIntoScoreTracking(player, finalDistance)
 	GetBrainrotCarryingManager().StopCarrying(player)
 	ClearJumpRunwayEscapeActive(player)
 	EndRunwaySessionWithoutTeleport(player)
@@ -952,8 +966,8 @@ function JumpRunwayServerManager.Init()
 	NetMsg.ConnectRequestJumpRunwayLittleElfChestStartCarry(function(player: Player, brainrotId: number?, chestConfigId: number?)
 		HandleLittleElfChestStartCarry(player, brainrotId, chestConfigId)
 	end)
-	NetMsg.ConnectRequestJumpRunwayLittleElfChestGrant(function(player: Player)
-		HandleLittleElfChestGrant(player)
+	NetMsg.ConnectRequestJumpRunwayLittleElfChestGrant(function(player: Player, finalDistance: number?)
+		HandleLittleElfChestGrant(player, finalDistance)
 	end)
 	NetMsg.ConnectRequestJumpRunwayEnterEscapePhase(function(player: Player)
 		HandleEnterEscapePhase(player)
