@@ -30,6 +30,10 @@ local pickupCandidatesInitialized = false
 local pickupCandidatePartMap: { [BasePart]: boolean } = {}
 local pendingCompleteGuideStepMap: { [string]: boolean } = {}
 local observedPlacedModelClockMap: { [string]: number } = {}
+local exEquipGuideObservedOwnedCount = 0
+local exEquipGuideCompletedCycleCount = 0
+local exEquipGuidePendingRunwayRetry = false
+local exEquipGuideCycleStartJumpPowerLv = 1
 
 local GUIDE_TYPE_REFRESH_INTERVAL = 0.2
 local GUIDE_TARGET_REFRESH_INTERVAL = 0.2
@@ -192,19 +196,79 @@ local function CountOwnedGuideTargetExEquips(info: GameConfig.ClientLocalPlayerI
 	return ownedCount
 end
 
+local function GetExEquipGuideTargetCount(): number
+	return #GameConfig.GuideTargetExEquipIdList
+end
+
+local function GetSafeJumpPowerLevel(info: GameConfig.ClientLocalPlayerInfo): number
+	return math.max(1, info.jumpPower.lv or 1)
+end
+
+local function ClampExEquipGuideRuntimeState(info: GameConfig.ClientLocalPlayerInfo)
+	local ownedCount = CountOwnedGuideTargetExEquips(info)
+	local targetCount = GetExEquipGuideTargetCount()
+	if exEquipGuideObservedOwnedCount > ownedCount then
+		exEquipGuideObservedOwnedCount = ownedCount
+	end
+	if exEquipGuideCompletedCycleCount > ownedCount then
+		exEquipGuideCompletedCycleCount = ownedCount
+	end
+	if exEquipGuideObservedOwnedCount > targetCount then
+		exEquipGuideObservedOwnedCount = targetCount
+	end
+	if exEquipGuideCompletedCycleCount > targetCount then
+		exEquipGuideCompletedCycleCount = targetCount
+	end
+	if exEquipGuideCycleStartJumpPowerLv < 1 then
+		exEquipGuideCycleStartJumpPowerLv = GetSafeJumpPowerLevel(info)
+	end
+end
+
+local function SyncExEquipGuideRuntimeState(info: GameConfig.ClientLocalPlayerInfo)
+	ClampExEquipGuideRuntimeState(info)
+	local ownedCount = CountOwnedGuideTargetExEquips(info)
+	if ownedCount > exEquipGuideObservedOwnedCount then
+		exEquipGuideObservedOwnedCount = ownedCount
+		exEquipGuidePendingRunwayRetry = false
+		exEquipGuideCycleStartJumpPowerLv = GetSafeJumpPowerLevel(info)
+	end
+	if exEquipGuideCompletedCycleCount > ownedCount then
+		exEquipGuideCompletedCycleCount = ownedCount
+	end
+	if exEquipGuideCompletedCycleCount == ownedCount then
+		exEquipGuidePendingRunwayRetry = false
+	end
+	if exEquipGuideCycleStartJumpPowerLv < 1 then
+		exEquipGuideCycleStartJumpPowerLv = GetSafeJumpPowerLevel(info)
+	end
+end
+
+local function GetPendingExEquipGuideCycleCount(info: GameConfig.ClientLocalPlayerInfo): number
+	local ownedCount = CountOwnedGuideTargetExEquips(info)
+	return math.max(0, ownedCount - exEquipGuideCompletedCycleCount)
+end
+
+local function HasCompletedFirstExEquipGuideCycle(): boolean
+	return exEquipGuideCompletedCycleCount >= 1
+end
+
+local function IsBrainrotUpgradePending(info: GameConfig.ClientLocalPlayerInfo): boolean
+	return IsGuideStepDone(info, GameConfig.GuideStepKey.BrainrotCollectFinished)
+		and not IsGuideStepDone(info, GameConfig.GuideStepKey.BrainrotUpgradeFinished)
+end
+
 local function IsExEquipBuyGuidePhaseComplete(info: GameConfig.ClientLocalPlayerInfo): boolean
 	if IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
 		return true
 	end
-	return CountOwnedGuideTargetExEquips(info) >= #GameConfig.GuideTargetExEquipIdList
+	return exEquipGuideCompletedCycleCount >= GetExEquipGuideTargetCount()
 end
 
 local function GetCurrentExEquipBuyGuideTargetId(info: GameConfig.ClientLocalPlayerInfo): number?
 	if IsExEquipBuyGuidePhaseComplete(info) then
 		return nil
 	end
-	local ownedCount = CountOwnedGuideTargetExEquips(info)
-	local targetId = GameConfig.GuideTargetExEquipIdList[ownedCount + 1]
+	local targetId = GameConfig.GuideTargetExEquipIdList[exEquipGuideCompletedCycleCount + 1]
 	if targetId == nil then
 		return nil
 	end
@@ -215,7 +279,7 @@ local function GetCurrentExEquipBuyGuideTargetId(info: GameConfig.ClientLocalPla
 end
 
 local function GetCurrentExEquipBuyGuideIndex(info: GameConfig.ClientLocalPlayerInfo): number
-	return CountOwnedGuideTargetExEquips(info) + 1
+	return exEquipGuideCompletedCycleCount + 1
 end
 
 local function IsExEquipAffordable(info: GameConfig.ClientLocalPlayerInfo, equipId: number): boolean
@@ -272,6 +336,7 @@ local function TryCompleteOwnedPurchaseGuideSteps()
 	if info == nil then
 		return
 	end
+	SyncExEquipGuideRuntimeState(info)
 	if HasAnyOwnedJetpack(info) and not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished) then
 		CompleteGuideStep(GameConfig.GuideStepKey.JetpackBuyFinished)
 	end
@@ -927,6 +992,7 @@ local function ResolveGuideType(): number
 	if info == nil then
 		return GameConfig.GuideType.None
 	end
+	SyncExEquipGuideRuntimeState(info)
 
 	if not HasBrainrotPlacedOnHome(info) and not IsBrainrotPlaceFinished(info) then
 		if CountCarryingBrainrotsInQueue(info) > 0 then
@@ -967,17 +1033,56 @@ local function ResolveGuideType(): number
 	end
 
 	if IsExEquipGuideUnlocked(info) then
+		-- 优先级第一档：首次锻炼器材完整引导后，优先 brainrot 升级引导
+		if HasCompletedFirstExEquipGuideCycle() and IsBrainrotUpgradePending(info) then
+			if HasUpgradedBrainrot(info) then
+				CompleteGuideStep(GameConfig.GuideStepKey.BrainrotUpgradeFinished)
+			elseif HasAffordableUpgradeableBrainrot(info) then
+				return FilterOutsideRunwaySessionGuide(
+					MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotUpgrade)
+				)
+			end
+		end
+
+		-- 优先级第二档：第二次/第三次锻炼器材购买与后续动作引导
 		if not IsExEquipBuyGuidePhaseComplete(info) then
-			local targetEquipId = GetCurrentExEquipBuyGuideTargetId(info)
-			if targetEquipId ~= nil then
-				local guideIndex = GetCurrentExEquipBuyGuideIndex(info)
-				local affordable = IsExEquipAffordable(info, targetEquipId)
-				if guideIndex == 1 and not affordable and HasCollectableBrainrotYield(info) then
-					return FilterOutsideRunwaySessionGuide(
-						MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotCollect)
-					)
-				elseif affordable then
-					return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipBuy)
+			local pendingCycleCount = GetPendingExEquipGuideCycleCount(info)
+			if pendingCycleCount > 0 then
+				if not exEquipGuidePendingRunwayRetry then
+					local currentLv = GetSafeJumpPowerLevel(info)
+					if currentLv > exEquipGuideCycleStartJumpPowerLv then
+						exEquipGuidePendingRunwayRetry = true
+					else
+						return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipUse)
+					end
+				end
+				if exEquipGuidePendingRunwayRetry then
+					if ClientGameInfo.IsInJumpRunway() or ClientGameInfo.IsInJumpRunwayEscapePhase() then
+						exEquipGuideCompletedCycleCount = math.min(
+							exEquipGuideCompletedCycleCount + 1,
+							CountOwnedGuideTargetExEquips(info)
+						)
+						exEquipGuidePendingRunwayRetry = false
+						exEquipGuideCycleStartJumpPowerLv = GetSafeJumpPowerLevel(info)
+						if IsExEquipBuyGuidePhaseComplete(info) then
+							CompleteGuideStep(GameConfig.GuideStepKey.ExEquipBuyFinished)
+						end
+					else
+						return GameConfig.GuideType.TutorialJumpPowerRunwayRetry
+					end
+				end
+			else
+				local targetEquipId = GetCurrentExEquipBuyGuideTargetId(info)
+				if targetEquipId ~= nil then
+					local guideIndex = GetCurrentExEquipBuyGuideIndex(info)
+					local affordable = IsExEquipAffordable(info, targetEquipId)
+					if guideIndex == 1 and not affordable and HasCollectableBrainrotYield(info) then
+						return FilterOutsideRunwaySessionGuide(
+							MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotCollect)
+						)
+					elseif affordable then
+						return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipBuy)
+					end
 				end
 			end
 		else
@@ -994,10 +1099,7 @@ local function ResolveGuideType(): number
 		end
 	end
 
-	if IsGuideStepDone(info, GameConfig.GuideStepKey.BrainrotCollectFinished)
-		and IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished)
-		and not IsGuideStepDone(info, GameConfig.GuideStepKey.BrainrotUpgradeFinished)
-	then
+	if IsBrainrotUpgradePending(info) and (HasCompletedFirstExEquipGuideCycle() or IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished)) then
 		if HasUpgradedBrainrot(info) then
 			CompleteGuideStep(GameConfig.GuideStepKey.BrainrotUpgradeFinished)
 		elseif HasAffordableUpgradeableBrainrot(info) then

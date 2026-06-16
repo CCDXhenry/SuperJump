@@ -88,16 +88,78 @@ GameConfig.GuideTargetExEquipIdList = { 1, 2, 3 }
 -- 升级速度引导：最远跳跃距离需超过该值（与跑道 HUD 同 stud 语义，显示后缀 m）
 GameConfig.GuideWalkSpeedUpgradeMinBestDistance = 300
 
+-- 引导优先级档位（数字越小优先级越高）
+GameConfig.GuidePriorityTier = {
+	Tier1 = 1, -- 主线关键引导
+	Tier2 = 2, -- 次主线/成长引导
+	Tier3 = 3, -- 跑道内教学引导
+}
+
+-- 全量引导顺序（用于统一维护优先级规则）
+-- 注意：同档位内按 list 顺序判定，靠前者优先
+GameConfig.GuidePriorityOrderedTypeList = {
+	-- Tier1：主线关键引导
+	GameConfig.GuideType.TutorialBrainrotPlaceSlot,
+	GameConfig.GuideType.TutorialBrainrotPlace,
+	GameConfig.GuideType.TutorialBrainrotCollect,
+	GameConfig.GuideType.TutorialJetpackBuy,
+	GameConfig.GuideType.TutorialJetpackRunwayRetry,
+	-- 首次锻炼器材完整闭环后，brainrot 升级优先于第 2/3 次器材引导
+	GameConfig.GuideType.TutorialBrainrotUpgrade,
+	GameConfig.GuideType.TutorialExEquipBuy,
+	GameConfig.GuideType.TutorialExEquipUse,
+	GameConfig.GuideType.TutorialJumpPowerRunwayRetry,
+
+	-- Tier2：次主线/成长引导
+	GameConfig.GuideType.TutorialWalkSpeedUpgrade,
+	GameConfig.GuideType.TutorialStartTrigger,
+
+	-- Tier3：跑道内教学引导
+	GameConfig.GuideType.TutorialBeginLineJump,
+	GameConfig.GuideType.TutorialLandingJump,
+	GameConfig.GuideType.TutorialFinalDash,
+}
+
+-- 每个引导类型的档位与顺序，便于 UI/调试统一读取
+GameConfig.GuidePriorityByType = {
+	-- 1. 展台放置入口（未拿起时先提示槽位）
+	[GameConfig.GuideType.TutorialBrainrotPlaceSlot] = { tier = GameConfig.GuidePriorityTier.Tier1, order = 1 },
+	-- 2. 放置 brainrot 到家园展台
+	[GameConfig.GuideType.TutorialBrainrotPlace] = { tier = GameConfig.GuidePriorityTier.Tier1, order = 2 },
+	-- 3. 收取展台收益
+	[GameConfig.GuideType.TutorialBrainrotCollect] = { tier = GameConfig.GuidePriorityTier.Tier1, order = 3 },
+	-- 4. 购买喷气背包
+	[GameConfig.GuideType.TutorialJetpackBuy] = { tier = GameConfig.GuidePriorityTier.Tier1, order = 4 },
+	-- 5. 喷气背包后跑道重试
+	[GameConfig.GuideType.TutorialJetpackRunwayRetry] = { tier = GameConfig.GuidePriorityTier.Tier1, order = 5 },
+	-- 6. 首次器材完整闭环后，优先 brainrot 升级
+	[GameConfig.GuideType.TutorialBrainrotUpgrade] = { tier = GameConfig.GuidePriorityTier.Tier1, order = 6 },
+	-- 7. 锻炼器材购买（第 1/2/3 次）
+	[GameConfig.GuideType.TutorialExEquipBuy] = { tier = GameConfig.GuidePriorityTier.Tier1, order = 7 },
+	-- 8. 点击锻炼器材开始锻炼
+	[GameConfig.GuideType.TutorialExEquipUse] = { tier = GameConfig.GuidePriorityTier.Tier1, order = 8 },
+	-- 9. 锻炼升一级后去跳跃跑道重试
+	[GameConfig.GuideType.TutorialJumpPowerRunwayRetry] = { tier = GameConfig.GuidePriorityTier.Tier1, order = 9 },
+	-- 10. 升级速度商店引导
+	[GameConfig.GuideType.TutorialWalkSpeedUpgrade] = { tier = GameConfig.GuidePriorityTier.Tier2, order = 10 },
+	-- 11. 开始触发器（跑道入口）引导
+	[GameConfig.GuideType.TutorialStartTrigger] = { tier = GameConfig.GuidePriorityTier.Tier2, order = 11 },
+	-- 12. 跑道内起跳线教学
+	[GameConfig.GuideType.TutorialBeginLineJump] = { tier = GameConfig.GuidePriorityTier.Tier3, order = 12 },
+	-- 13. 跑道内落地时机教学
+	[GameConfig.GuideType.TutorialLandingJump] = { tier = GameConfig.GuidePriorityTier.Tier3, order = 13 },
+	-- 14. 跑道内终段冲刺教学
+	[GameConfig.GuideType.TutorialFinalDash] = { tier = GameConfig.GuidePriorityTier.Tier3, order = 14 },
+}
+
 -- 工厂玩法停用
 -- GameConfig.GuideWorldAnchorName = {
 -- 	Workbench = "Workbench",
 -- }
 
 GameConfig.GuideTextKeyMap = {
-	[GameConfig.GuideType.TutorialBrainrotPickup] = "GuideTutorialBrainrotPickup",
 	[GameConfig.GuideType.TutorialBrainrotPlace] = "GuideTutorialBrainrotPlace",
 	[GameConfig.GuideType.TutorialBrainrotPlaceSlot] = "GuideTutorialBrainrotPlaceSlot",
-	[GameConfig.GuideType.TutorialBrainrotIslandTeleport] = "GuideTutorialBrainrotIslandTeleport",
 	[GameConfig.GuideType.TutorialBrainrotCollect] = "GuideTutorialBrainrotCollect",
 	[GameConfig.GuideType.TutorialBrainrotUpgrade] = "GuideTutorialBrainrotUpgrade",
 	[GameConfig.GuideType.TutorialWalkSpeedUpgrade] = "GuideTutorialWalkSpeedUpgrade",

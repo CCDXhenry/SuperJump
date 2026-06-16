@@ -13,6 +13,7 @@ local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
 local NetMsg = require(sharedScripts:FindFirstChild("NetMsg"))
+local RunwayTreeUtil = require(script.Parent:WaitForChild("RunwayTreeUtil"))
 
 local chaserModels = replicatedStorage:FindFirstChild("Models"):FindFirstChild("Chaser")
 local chaserTemplate = if chaserModels then chaserModels:FindFirstChild("Chaser") :: Model? else nil
@@ -27,10 +28,7 @@ local chaserKillGuideStepSent = false
 
 local chaserCollisionGroup = "Chaser"
 local playerCollisionGroup = "Player"
-local treeCollisionGroup = "Tree"
-local treeFolderName = "tree"
-local treeCollisionInitialized = false
-local treeDescendantAddedConn: RBXScriptConnection? = nil
+local treeCollisionGroup = RunwayTreeUtil.TREE_COLLISION_GROUP
 
 -- 管理 Chaser 所有 BasePart 的 Touched 连接，便于清理时统一断开
 local touchConns: { RBXScriptConnection } = {}
@@ -54,49 +52,6 @@ local function ConfigureCollisionGroups()
 	pcall(function()
 		physicsService:CollisionGroupSetCollidable(chaserCollisionGroup, treeCollisionGroup, false)
 	end)
-end
-
-local function GetTreeFolder(): Folder?
-	local treeFolder = workspace:FindFirstChild(treeFolderName)
-	if treeFolder ~= nil and treeFolder:IsA("Folder") then
-		return treeFolder
-	end
-	return nil
-end
-
-local function SetTreeCollisionGroupForInstance(instance: Instance)
-	if instance:IsA("BasePart") then
-		SetCollisionGroup(instance, treeCollisionGroup)
-		instance.CanTouch = true
-	end
-end
-
-local function ConfigureTreeCollisionGroup()
-	ConfigureCollisionGroups()
-	local treeFolder = GetTreeFolder()
-	if treeFolder == nil then
-		return
-	end
-	for _, descendant in ipairs(treeFolder:GetDescendants()) do
-		SetTreeCollisionGroupForInstance(descendant)
-	end
-	if treeDescendantAddedConn ~= nil then
-		treeDescendantAddedConn:Disconnect()
-	end
-	treeDescendantAddedConn = treeFolder.DescendantAdded:Connect(SetTreeCollisionGroupForInstance)
-	treeCollisionInitialized = true
-end
-
-local function EnsureTreeCollisionGroup()
-	if treeCollisionInitialized then
-		return
-	end
-	ConfigureTreeCollisionGroup()
-end
-
-local function IsTreePart(part: BasePart): boolean
-	local treeFolder = GetTreeFolder()
-	return treeFolder ~= nil and part:IsDescendantOf(treeFolder)
 end
 
 local function ResolveChaserHipHeight(humanoid: Humanoid): number
@@ -141,7 +96,7 @@ local function GetGroundYAtPosition(pos: Vector3, excludeInstances: { Instance }
 end
 
 local function IsChaserOverlappingTree(chaserHrp: BasePart): boolean
-	local treeFolder = GetTreeFolder()
+	local treeFolder = RunwayTreeUtil.GetTreeFolder()
 	if treeFolder == nil then
 		return false
 	end
@@ -222,7 +177,7 @@ function ChaserClientManager.SpawnChaser(
 	beforeKill: (() -> ())?
 ): Model?
 	InternalCleanupFull()
-	EnsureTreeCollisionGroup()
+	RunwayTreeUtil.EnsureTreeCollisionGroup()
 
 	if chaserTemplate == nil then
 		warn("[ChaserClientManager] Chaser template not found under ReplicatedStorage.Models.Chaser")
@@ -259,7 +214,7 @@ function ChaserClientManager.SpawnChaser(
 	if character then
 		table.insert(rayExclude, character)
 	end
-	local treeFolder = GetTreeFolder()
+	local treeFolder = RunwayTreeUtil.GetTreeFolder()
 	if treeFolder ~= nil then
 		table.insert(rayExclude, treeFolder)
 	end
@@ -335,7 +290,7 @@ function ChaserClientManager.SpawnChaser(
 				if not hit or not hit.Parent then
 					return
 				end
-				if IsTreePart(hit) then
+				if RunwayTreeUtil.IsTreePart(hit) then
 					treeSlowUntilClock = math.max(treeSlowUntilClock, os.clock() + treeSlowDuration)
 					return
 				end
@@ -579,11 +534,6 @@ function ChaserClientManager.CleanupChaser()
 end
 
 ConfigureCollisionGroups()
-task.defer(ConfigureTreeCollisionGroup)
-workspace.ChildAdded:Connect(function(child: Instance)
-	if child.Name == treeFolderName and child:IsA("Folder") then
-		task.defer(ConfigureTreeCollisionGroup)
-	end
-end)
+task.defer(RunwayTreeUtil.EnsureTreeCollisionGroup)
 
 return ChaserClientManager
