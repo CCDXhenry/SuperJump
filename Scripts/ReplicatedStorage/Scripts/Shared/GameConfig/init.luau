@@ -1237,7 +1237,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- —— ③ 起跳 / 重力 / 贴地 ——
 	-- ═══════════════════════════════════════
 	-- 竖直速度相对于水平速度基准的比例（0~1 或 >1）；vy = jumpPower * 本值
-	JUMP_VERTICAL_RATIO = 0.4,
+	JUMP_VERTICAL_RATIO = 0.7,
 	-- 跑道默认有效重力比例；↓ 更飘、顶点更高
 	RUNWAY_SESSION_EFFECTIVE_GRAVITY_SCALE = 0.15,
 	-- 终局按住冲刺时重力比例；↓ 冲刺段更飘

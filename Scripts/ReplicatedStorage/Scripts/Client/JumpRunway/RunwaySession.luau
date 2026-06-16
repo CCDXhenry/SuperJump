@@ -29,6 +29,7 @@ local RunwayFxController = require(jumpRunwayScripts:WaitForChild("RunwayFxContr
 local RunwayUiController = require(jumpRunwayScripts:WaitForChild("RunwayUiController"))
 local RunwayNetBridge = require(jumpRunwayScripts:WaitForChild("RunwayNetBridge"))
 local ChaserClientManager = require(jumpRunwayScripts:WaitForChild("ChaserClientManager"))
+local RunwayTreeUtil = require(jumpRunwayScripts:WaitForChild("RunwayTreeUtil"))
 local ScpTrampolineManager = require(jumpRunwayScripts:WaitForChild("ScpTrampolineManager"))
 local ChestOpenAnimationManager = require(clientScripts:WaitForChild("ChestOpenAnimationManager"))
 local GameSoundManager = require(clientScripts:WaitForChild("GameSoundManager"))
@@ -65,6 +66,7 @@ type LastJumpWindowTakeoffCache = {
 	vy: number,
 	forward: Vector3,
 	impulseSeg: number,
+	heightOffsetStuds: number?,
 }
 type RunwayDistanceLogSegment = {
 	stageName: string,
@@ -89,6 +91,14 @@ type TakeoffRatingBarPayload = {
 
 local localPlayer = players.LocalPlayer
 local cfg = GameConfig.JumpRunway
+local RunwaySessionPrintEnabled = false
+local rawPrint = print
+
+local function print(...)
+	if RunwaySessionPrintEnabled then
+		rawPrint(...)
+	end
+end
 
 local function GetJumpPowerBaseSpeed(): number
 	local localPlayerInfo = ClientGameInfo.GetLocalPlayerInfo()
@@ -142,6 +152,8 @@ local RunwayMovementInputSinkPriority = 10000
 local GuideSlowMotionSpeedScale = 0.15
 local GuideSlowMotionAnimRenderStepName = "JumpRunwayGuideSlowMotionAnim"
 local MaxRunwayVisualOrientationDt = 1 / 30
+local TreeChainLandingContactHoldSec = 0.12
+local TreeTakeoffRatingBarBlendSec = 0.12
 local GuideSlowMotionAnimPriorities: { [Enum.AnimationPriority]: boolean } = {
 	[Enum.AnimationPriority.Movement] = true,
 	[Enum.AnimationPriority.Core] = true,
@@ -300,6 +312,17 @@ local Refs: {
 	takeoffRatingBarFrozenTotalDurationSec: number?,
 	takeoffRatingBarFrozenLastProgressRatio: number?,
 	takeoffRatingBarFrozenLastClock: number?,
+	takeoffRatingBarFeetOnTree: boolean,
+	takeoffRatingBarPrevFeetOnTree: boolean,
+	takeoffRatingBarUseHeightVelocityAfterTree: boolean,
+	takeoffRatingBarLastTreeHeightAboveBaseline: number?,
+	takeoffRatingBarTreeTakeoffHeightOffsetStuds: number?,
+	takeoffRatingBarLastTreeContactClock: number?,
+	takeoffRatingBarTreeBlendStartClock: number?,
+	takeoffRatingBarTreeBlendStartProgressRatio: number?,
+	takeoffRatingBarDebugPrevRawFeetOnTree: boolean?,
+	takeoffRatingBarDebugPrevTreeActive: boolean?,
+	chainTakeoffHeightOffsetStuds: number?,
 	finalLandPhaseADebugNextClock: number,
 	slideEndFallbackWarnNextClock: number,
 	slideMotion: ScriptedSlideMotion?,
@@ -396,6 +419,17 @@ local Refs: {
 	takeoffRatingBarFrozenTotalDurationSec = nil,
 	takeoffRatingBarFrozenLastProgressRatio = nil,
 	takeoffRatingBarFrozenLastClock = nil,
+	takeoffRatingBarFeetOnTree = false,
+	takeoffRatingBarPrevFeetOnTree = false,
+	takeoffRatingBarUseHeightVelocityAfterTree = false,
+	takeoffRatingBarLastTreeHeightAboveBaseline = nil,
+	takeoffRatingBarTreeTakeoffHeightOffsetStuds = nil,
+	takeoffRatingBarLastTreeContactClock = nil,
+	takeoffRatingBarTreeBlendStartClock = nil,
+	takeoffRatingBarTreeBlendStartProgressRatio = nil,
+	takeoffRatingBarDebugPrevRawFeetOnTree = nil,
+	takeoffRatingBarDebugPrevTreeActive = nil,
+	chainTakeoffHeightOffsetStuds = nil,
 	finalLandPhaseADebugNextClock = 0,
 	slideEndFallbackWarnNextClock = 0,
 	slideMotion = nil,
@@ -1309,6 +1343,31 @@ function RunwaySession.ComputeFallHeightAtElapsedSec(
 	return math.max(0, vy * holdSec + vy * fallElapsed - 0.5 * g * fallElapsed * fallElapsed)
 end
 
+function RunwaySession.ResolveChainTakeoffHeightOffsetStuds(): number
+	local cached = Refs.lastJumpWindowTakeoff
+	local cachedOffset = if cached ~= nil then cached.heightOffsetStuds else nil
+	if typeof(cachedOffset) == "number" and cachedOffset == cachedOffset and cachedOffset > 0 then
+		return cachedOffset
+	end
+	local offset = Refs.chainTakeoffHeightOffsetStuds
+	if typeof(offset) == "number" and offset == offset and offset > 0 then
+		return offset
+	end
+	return 0
+end
+
+function RunwaySession.ComputeRunwayHeightAtElapsedSec(
+	elapsedSec: number,
+	initialVy: number,
+	gravity: number,
+	heightOffsetStuds: number?
+): number
+	local offset = if typeof(heightOffsetStuds) == "number" and heightOffsetStuds == heightOffsetStuds
+		then math.max(0, heightOffsetStuds)
+		else 0
+	return math.max(0, offset + RunwaySession.ComputeFallHeightAtElapsedSec(elapsedSec, initialVy, gravity))
+end
+
 function RunwaySession.ResolveChainWindowStartHeightStuds(): number
 	local chainHeight = cfg.RUNWAY_CHAIN_WINDOW_START_HEIGHT_STUDS
 	if typeof(chainHeight) ~= "number" or chainHeight ~= chainHeight or chainHeight < 0 then
@@ -1317,13 +1376,20 @@ function RunwaySession.ResolveChainWindowStartHeightStuds(): number
 	return chainHeight
 end
 
-function RunwaySession.ResolveChainWindowStartElapsedSec(initialVy: number, gravity: number): number
+function RunwaySession.ResolveChainWindowStartElapsedSec(
+	initialVy: number,
+	gravity: number,
+	heightOffsetStuds: number?
+): number
 	local vy = math.max(0, initialVy)
 	local g = math.max(1e-4, gravity)
 	local holdSec = RunwaySession.ResolveRunwayJumpBoostHoldSec()
 	local chainHeight = RunwaySession.ResolveChainWindowStartHeightStuds()
+	local heightOffset = if typeof(heightOffsetStuds) == "number" and heightOffsetStuds == heightOffsetStuds
+		then math.max(0, heightOffsetStuds)
+		else 0
 	local holdHeight = vy * holdSec
-	local discriminant = math.max(0, vy * vy + 2 * g * (holdHeight - chainHeight))
+	local discriminant = math.max(0, vy * vy + 2 * g * (heightOffset + holdHeight - chainHeight))
 	local fallElapsed = (vy + math.sqrt(discriminant)) / g
 	return holdSec + fallElapsed
 end
@@ -1331,23 +1397,53 @@ end
 function RunwaySession.ResolveChainDescendingElapsedAtHeightSec(
 	heightStuds: number,
 	initialVy: number,
-	gravity: number
+	gravity: number,
+	heightOffsetStuds: number?
 ): number
 	local vy = math.max(0, initialVy)
 	local g = math.max(1e-4, gravity)
 	local holdSec = RunwaySession.ResolveRunwayJumpBoostHoldSec()
 	local holdHeight = vy * holdSec
+	local heightOffset = if typeof(heightOffsetStuds) == "number" and heightOffsetStuds == heightOffsetStuds
+		then math.max(0, heightOffsetStuds)
+		else 0
 	local height = math.max(0, heightStuds)
-	local discriminant = math.max(0, vy * vy + 2 * g * (holdHeight - height))
+	local discriminant = math.max(0, vy * vy + 2 * g * (heightOffset + holdHeight - height))
 	return holdSec + (vy + math.sqrt(discriminant)) / g
 end
 
-function RunwaySession.ResolveChainDisplayTakeoffRemainingSec(initialVy: number, gravity: number): number
+function RunwaySession.ResolveChainElapsedFromCurrentHeightVelocitySec(
+	heightStuds: number,
+	currentVy: number,
+	initialVy: number,
+	gravity: number,
+	heightOffsetStuds: number?
+): number
+	local g = math.max(1e-4, gravity)
+	local height = math.max(0, heightStuds)
+	local vyNow = if typeof(currentVy) == "number" and currentVy == currentVy then currentVy else 0
+	local remainingSec = (vyNow + math.sqrt(math.max(0, vyNow * vyNow + 2 * g * height))) / g
+	local landingElapsed = RunwaySession.ResolveChainDisplayTakeoffRemainingSec(
+		initialVy,
+		gravity,
+		heightOffsetStuds
+	)
+	return math.max(0, landingElapsed - math.max(0, remainingSec))
+end
+
+function RunwaySession.ResolveChainDisplayTakeoffRemainingSec(
+	initialVy: number,
+	gravity: number,
+	heightOffsetStuds: number?
+): number
 	local vy = math.max(0, initialVy)
 	local g = math.max(1e-4, gravity)
 	local holdSec = RunwaySession.ResolveRunwayJumpBoostHoldSec()
 	local holdHeight = vy * holdSec
-	local fallElapsed = (vy + math.sqrt(vy * vy + 2 * g * holdHeight)) / g
+	local heightOffset = if typeof(heightOffsetStuds) == "number" and heightOffsetStuds == heightOffsetStuds
+		then math.max(0, heightOffsetStuds)
+		else 0
+	local fallElapsed = (vy + math.sqrt(vy * vy + 2 * g * (heightOffset + holdHeight))) / g
 	return holdSec + fallElapsed
 end
 
@@ -1357,17 +1453,29 @@ function RunwaySession.ResolveChainDisplayApexElapsedSec(initialVy: number, grav
 	return RunwaySession.ResolveRunwayJumpBoostHoldSec() + vy / g
 end
 
-function RunwaySession.ResolveChainDisplayStartElapsedSec(initialVy: number, gravity: number): number
-	local landingElapsed = RunwaySession.ResolveChainDisplayTakeoffRemainingSec(initialVy, gravity)
+function RunwaySession.ResolveChainDisplayStartElapsedSec(
+	initialVy: number,
+	gravity: number,
+	heightOffsetStuds: number?
+): number
+	local landingElapsed = RunwaySession.ResolveChainDisplayTakeoffRemainingSec(initialVy, gravity, heightOffsetStuds)
 	return math.max(0, landingElapsed - RunwaySession.ResolveTakeoffRatingBarWindowSec())
 end
 
-function RunwaySession.ResolveChainDisplayEffectiveStartElapsedSec(initialVy: number, gravity: number): number
-	return RunwaySession.ResolveChainDisplayStartElapsedSec(initialVy, gravity)
+function RunwaySession.ResolveChainDisplayEffectiveStartElapsedSec(
+	initialVy: number,
+	gravity: number,
+	heightOffsetStuds: number?
+): number
+	return RunwaySession.ResolveChainDisplayStartElapsedSec(initialVy, gravity, heightOffsetStuds)
 end
 
 function RunwaySession.IsChainDisplayStartAtTakeoff(initialVy: number, gravity: number): boolean
-	return RunwaySession.ResolveChainDisplayEffectiveStartElapsedSec(initialVy, gravity) <= 1e-6
+	return RunwaySession.ResolveChainDisplayEffectiveStartElapsedSec(
+		initialVy,
+		gravity,
+		RunwaySession.ResolveChainTakeoffHeightOffsetStuds()
+	) <= 1e-6
 end
 
 function RunwaySession.ResolveChainElapsedSinceTakeoffSec(
@@ -1392,12 +1500,25 @@ function RunwaySession.ResolveChainElapsedSinceTakeoffSec(
 	end
 	local holdSec = RunwaySession.ResolveRunwayJumpBoostHoldSec()
 	local elapsed = holdSec + (vy - currentVy) / g
-	return math.clamp(elapsed, 0, RunwaySession.ResolveChainDisplayTakeoffRemainingSec(initialVy, gravity))
+	return math.clamp(
+		elapsed,
+		0,
+		RunwaySession.ResolveChainDisplayTakeoffRemainingSec(
+			initialVy,
+			gravity,
+			RunwaySession.ResolveChainTakeoffHeightOffsetStuds()
+		)
+	)
 end
 
 function RunwaySession.ResolveChainDisplayStartHeightStuds(initialVy: number, gravity: number): number
-	local effectiveStartElapsed = RunwaySession.ResolveChainDisplayEffectiveStartElapsedSec(initialVy, gravity)
-	return RunwaySession.ComputeFallHeightAtElapsedSec(effectiveStartElapsed, initialVy, gravity)
+	local heightOffset = RunwaySession.ResolveChainTakeoffHeightOffsetStuds()
+	local effectiveStartElapsed = RunwaySession.ResolveChainDisplayEffectiveStartElapsedSec(
+		initialVy,
+		gravity,
+		heightOffset
+	)
+	return RunwaySession.ComputeRunwayHeightAtElapsedSec(effectiveStartElapsed, initialVy, gravity, heightOffset)
 end
 
 function RunwaySession.IsRunwayChainDisplayFalling(humanoid: Humanoid): boolean
@@ -1416,7 +1537,11 @@ function RunwaySession.IsRunwayChainDisplayBandOk(humanoid: Humanoid, nowClock: 
 	local gravity = RunwaySession.ResolveRunwayRatingBarGravity()
 	local elapsedSinceTakeoff = RunwaySession.ResolveChainElapsedSinceTakeoffSec(humanoid, nowClock, initialVy, gravity)
 	if elapsedSinceTakeoff ~= nil then
-		return elapsedSinceTakeoff >= RunwaySession.ResolveChainDisplayEffectiveStartElapsedSec(initialVy, gravity)
+		return elapsedSinceTakeoff >= RunwaySession.ResolveChainDisplayEffectiveStartElapsedSec(
+			initialVy,
+			gravity,
+			RunwaySession.ResolveChainTakeoffHeightOffsetStuds()
+		)
 	end
 	if not RunwaySession.IsRunwayChainDisplayFalling(humanoid) then
 		return false
@@ -1453,6 +1578,285 @@ function RunwaySession.IsAutoBeforeLineDisplayBandOk(hrp: BasePart): boolean
 	return distToBegin <= displayDistance + 1e-3
 end
 
+function RunwaySession.ResetTakeoffRatingBarTreeState()
+	Refs.takeoffRatingBarFeetOnTree = false
+	Refs.takeoffRatingBarPrevFeetOnTree = false
+	Refs.takeoffRatingBarUseHeightVelocityAfterTree = false
+	Refs.takeoffRatingBarLastTreeHeightAboveBaseline = nil
+	Refs.takeoffRatingBarTreeTakeoffHeightOffsetStuds = nil
+	Refs.takeoffRatingBarLastTreeContactClock = nil
+	Refs.takeoffRatingBarTreeBlendStartClock = nil
+	Refs.takeoffRatingBarTreeBlendStartProgressRatio = nil
+	Refs.takeoffRatingBarDebugPrevRawFeetOnTree = nil
+	Refs.takeoffRatingBarDebugPrevTreeActive = nil
+end
+
+function RunwaySession.PrintTakeoffRatingBarTreeContactDebug(
+	eventName: string,
+	humanoid: Humanoid,
+	nowClock: number,
+	rawFeetOnTree: boolean,
+	activeOnTree: boolean,
+	treeDist: number
+)
+	local root = humanoid.RootPart
+	local vy = if root ~= nil then root.AssemblyLinearVelocity.Y else 0
+	local okGround, groundDist = RunwaySession.RaycastFeetWithProbeDown(humanoid, cfg.RUNWAY_GROUND_PROBE_DOWN)
+	local baseline = localState.preLandRayBaselineStuds
+	local groundBaseline = if typeof(baseline) == "number" and baseline == baseline then baseline else 0
+	local heightAboveBaseline = if okGround then math.max(0, groundDist - groundBaseline) else -1
+	local tHudElapsed = if localState.tHudStart ~= nil then nowClock - (localState.tHudStart :: number) else -1
+	local predictRemain = if localState.predictJumpWindowUntil ~= nil
+		then (localState.predictJumpWindowUntil :: number) - nowClock
+		else -1
+	print(
+		string.format(
+			"[RunwayTreeContact] event=%s time=%.3f raw=%s active=%s treeDist=%.3f groundDist=%.3f height=%.3f vy=%.3f phase=%d takeoffCount=%d tHudElapsed=%.3f predictRemain=%.3f awaitingGround=%s",
+			eventName,
+			nowClock,
+			tostring(rawFeetOnTree),
+			tostring(activeOnTree),
+			treeDist,
+			if okGround then groundDist else -1,
+			heightAboveBaseline,
+			vy,
+			localState.phase,
+			localState.takeoffCount,
+			tHudElapsed,
+			predictRemain,
+			tostring(localState.chainJumpWindowAwaitingGround)
+		)
+	)
+end
+
+function RunwaySession.RecordTakeoffRatingBarTreeContactDebug(
+	humanoid: Humanoid,
+	nowClock: number,
+	rawFeetOnTree: boolean,
+	activeOnTree: boolean,
+	treeDist: number
+)
+	if Refs.takeoffRatingBarDebugPrevRawFeetOnTree ~= rawFeetOnTree then
+		local eventName = if rawFeetOnTree then "raw_enter_tree" else "raw_leave_tree"
+		RunwaySession.PrintTakeoffRatingBarTreeContactDebug(
+			eventName,
+			humanoid,
+			nowClock,
+			rawFeetOnTree,
+			activeOnTree,
+			treeDist
+		)
+		Refs.takeoffRatingBarDebugPrevRawFeetOnTree = rawFeetOnTree
+	end
+	if Refs.takeoffRatingBarDebugPrevTreeActive ~= activeOnTree then
+		local eventName = if activeOnTree then "active_enter_tree" else "active_leave_tree"
+		RunwaySession.PrintTakeoffRatingBarTreeContactDebug(
+			eventName,
+			humanoid,
+			nowClock,
+			rawFeetOnTree,
+			activeOnTree,
+			treeDist
+		)
+		Refs.takeoffRatingBarDebugPrevTreeActive = activeOnTree
+	end
+end
+
+function RunwaySession.UpdateTakeoffRatingBarTreeContactState(humanoid: Humanoid)
+	local onTree = RunwaySession.IsRunwayTreeChainLandingActive(humanoid)
+	local wasOnTree = Refs.takeoffRatingBarFeetOnTree
+	Refs.takeoffRatingBarPrevFeetOnTree = Refs.takeoffRatingBarFeetOnTree
+	Refs.takeoffRatingBarFeetOnTree = onTree
+	if onTree then
+		Refs.takeoffRatingBarUseHeightVelocityAfterTree = false
+		if not wasOnTree then
+			local previousProgressRatio = Refs.takeoffRatingBarFrozenLastProgressRatio
+			if typeof(previousProgressRatio) == "number" and previousProgressRatio == previousProgressRatio then
+				Refs.takeoffRatingBarTreeBlendStartProgressRatio = math.clamp(previousProgressRatio, 0, 1)
+				Refs.takeoffRatingBarTreeBlendStartClock = os.clock()
+			else
+				Refs.takeoffRatingBarTreeBlendStartProgressRatio = nil
+				Refs.takeoffRatingBarTreeBlendStartClock = nil
+			end
+		end
+		local treeHeight = RunwaySession.ResolveRunwayHeightAboveBaseline(humanoid)
+		if treeHeight ~= nil then
+			Refs.takeoffRatingBarLastTreeHeightAboveBaseline = treeHeight
+		end
+	elseif wasOnTree then
+		Refs.takeoffRatingBarUseHeightVelocityAfterTree = true
+		Refs.takeoffRatingBarTreeBlendStartProgressRatio = nil
+		Refs.takeoffRatingBarTreeBlendStartClock = nil
+	end
+end
+
+function RunwaySession.ResolveRunwayHeightAboveBaseline(humanoid: Humanoid): number?
+	local baseline = localState.preLandRayBaselineStuds
+	local groundDist = 0
+	if typeof(baseline) == "number" and baseline == baseline then
+		groundDist = baseline
+	end
+	local initialVy = RunwaySession.ResolveJumpRatingBarInitialVy()
+	local displayStartHeight = 0
+	if initialVy ~= nil then
+		displayStartHeight =
+			RunwaySession.ResolveChainDisplayStartHeightStuds(initialVy, RunwaySession.ResolveRunwayRatingBarGravity())
+	end
+	local probeDown = math.max(cfg.RUNWAY_GROUND_PROBE_DOWN, groundDist + displayStartHeight + 1)
+	local ok, dist = RunwaySession.RaycastFeetWithProbeDown(humanoid, probeDown)
+	if not ok then
+		return nil
+	end
+	return math.max(0, dist - groundDist)
+end
+
+function RunwaySession.ResolveTreeTakeoffHeightOffsetStuds(humanoid: Humanoid): number
+	if not RunwaySession.IsRunwayTreeChainLandingActive(humanoid) then
+		return 0
+	end
+	local currentHeight = RunwaySession.ResolveRunwayHeightAboveBaseline(humanoid)
+	if currentHeight ~= nil then
+		Refs.takeoffRatingBarLastTreeHeightAboveBaseline = currentHeight
+		return math.max(0, currentHeight)
+	end
+	local cachedHeight = Refs.takeoffRatingBarLastTreeHeightAboveBaseline
+	if typeof(cachedHeight) == "number" and cachedHeight == cachedHeight then
+		return math.max(0, cachedHeight)
+	end
+	return 0
+end
+
+function RunwaySession.ResolveChainRatingBarDisplayDurations(
+	initialVy: number,
+	gravity: number
+): (number, number, number)
+	local heightOffset = RunwaySession.ResolveChainTakeoffHeightOffsetStuds()
+	local chainWindowStartElapsed = RunwaySession.ResolveChainWindowStartElapsedSec(initialVy, gravity, heightOffset)
+	local landingStartElapsed = RunwaySession.ResolveChainDisplayTakeoffRemainingSec(initialVy, gravity, heightOffset)
+	local displayStartElapsed = RunwaySession.ResolveChainDisplayEffectiveStartElapsedSec(initialVy, gravity, heightOffset)
+	local displayDuration = math.max(landingStartElapsed - displayStartElapsed, 1e-6)
+	local perfectStartElapsed = math.clamp(chainWindowStartElapsed - displayStartElapsed, 0, displayDuration)
+	print(
+		string.format(
+			"[RunwayTreeHeightOffset] stage=rating_bar_durations time=%.3f heightOffset=%.3f initialVy=%.3f gravity=%.3f displayStartElapsed=%.3f landingElapsed=%.3f perfectStartElapsed=%.3f displayDuration=%.3f takeoffCount=%d",
+			os.clock(),
+			heightOffset,
+			initialVy,
+			gravity,
+			displayStartElapsed,
+			landingStartElapsed,
+			perfectStartElapsed,
+			displayDuration,
+			localState.takeoffCount
+		)
+	)
+	return displayDuration, displayStartElapsed, perfectStartElapsed
+end
+
+function RunwaySession.ResolveChainRatingBarElapsedFromTiming(
+	humanoid: Humanoid,
+	nowClock: number
+): (number?, number?, number?)
+	local initialVy = RunwaySession.ResolveJumpRatingBarInitialVy()
+	if initialVy == nil then
+		return nil
+	end
+	local gravity = RunwaySession.ResolveRunwayRatingBarGravity()
+	local displayDuration, displayStartElapsed, perfectStartElapsed =
+		RunwaySession.ResolveChainRatingBarDisplayDurations(initialVy, gravity)
+	if localState.tHudStart ~= nil then
+		local timedElapsed = math.max(0, nowClock - (localState.tHudStart :: number))
+		return math.clamp(timedElapsed, 0, displayDuration), displayDuration, perfectStartElapsed
+	end
+	local elapsedSinceTakeoff = RunwaySession.ResolveChainElapsedSinceTakeoffSec(humanoid, nowClock, initialVy, gravity)
+	if elapsedSinceTakeoff ~= nil then
+		local elapsedFromDisplayStart = math.clamp(elapsedSinceTakeoff - displayStartElapsed, 0, displayDuration)
+		return elapsedFromDisplayStart, displayDuration, perfectStartElapsed
+	end
+	return nil
+end
+
+function RunwaySession.ResolveChainRatingBarProgressOnTree(humanoid: Humanoid, nowClock: number): number?
+	local preWindowDuration = Refs.takeoffRatingBarPreWindowDurationSec
+	local windowStartRatio = RunwaySession.ResolveTakeoffRatingBarWindowStartRatio(preWindowDuration)
+	local targetProgress: number
+	if localState.tHudStart ~= nil then
+		targetProgress = RunwaySession.MapTimedElapsedToDisplayProgress(
+			math.max(0, nowClock - (localState.tHudStart :: number)),
+			preWindowDuration
+		)
+	else
+		-- 落到 tree 即进入链式起跳计时段，目标对齐计时区起点（条中部），不从展示段头部重走
+		targetProgress = windowStartRatio
+	end
+	local blendStartProgress = Refs.takeoffRatingBarTreeBlendStartProgressRatio
+	local blendStartClock = Refs.takeoffRatingBarTreeBlendStartClock
+	local lastProgress = Refs.takeoffRatingBarFrozenLastProgressRatio
+	local tHudElapsed = if localState.tHudStart ~= nil then nowClock - (localState.tHudStart :: number) else -1
+	if
+		typeof(blendStartProgress) ~= "number"
+		or blendStartProgress ~= blendStartProgress
+		or typeof(blendStartClock) ~= "number"
+		or blendStartClock ~= blendStartClock
+	then
+		print(
+			string.format(
+				"[RunwayTreeRatingBar] stage=resolve_no_blend time=%.3f target=%.4f final=%.4f last=%.4f windowStart=%.4f tHudElapsed=%.3f",
+				nowClock,
+				targetProgress,
+				targetProgress,
+				if typeof(lastProgress) == "number" and lastProgress == lastProgress then lastProgress else -1,
+				windowStartRatio,
+				tHudElapsed
+			)
+		)
+		return targetProgress
+	end
+	local alpha = math.clamp((nowClock - blendStartClock) / TreeTakeoffRatingBarBlendSec, 0, 1)
+	if alpha >= 1 then
+		Refs.takeoffRatingBarTreeBlendStartProgressRatio = nil
+		Refs.takeoffRatingBarTreeBlendStartClock = nil
+		print(
+			string.format(
+				"[RunwayTreeRatingBar] stage=resolve_blend_done time=%.3f target=%.4f final=%.4f blendStart=%.4f alpha=%.3f last=%.4f windowStart=%.4f tHudElapsed=%.3f",
+				nowClock,
+				targetProgress,
+				targetProgress,
+				blendStartProgress,
+				alpha,
+				if typeof(lastProgress) == "number" and lastProgress == lastProgress then lastProgress else -1,
+				windowStartRatio,
+				tHudElapsed
+			)
+		)
+		return targetProgress
+	end
+	local blendedProgress = blendStartProgress + (targetProgress - blendStartProgress) * alpha
+	local finalProgress = if blendStartProgress > targetProgress then math.max(targetProgress, blendedProgress) else blendedProgress
+	print(
+		string.format(
+			"[RunwayTreeRatingBar] stage=resolve_blend time=%.3f target=%.4f final=%.4f blendStart=%.4f alpha=%.3f last=%.4f windowStart=%.4f tHudElapsed=%.3f",
+			nowClock,
+			targetProgress,
+			finalProgress,
+			blendStartProgress,
+			alpha,
+			if typeof(lastProgress) == "number" and lastProgress == lastProgress then lastProgress else -1,
+			windowStartRatio,
+			tHudElapsed
+		)
+	)
+	return finalProgress
+end
+
+function RunwaySession.ClampTreeTakeoffRatingBarProgressNonDecreasing(progressRatio: number): number
+	local lastProgress = Refs.takeoffRatingBarFrozenLastProgressRatio
+	if typeof(lastProgress) == "number" and lastProgress == lastProgress then
+		return math.max(progressRatio, math.clamp(lastProgress, 0, 1))
+	end
+	return progressRatio
+end
+
 function RunwaySession.ResolveChainDisplayBandRatingBarMetrics(
 	humanoid: Humanoid,
 	nowClock: number
@@ -1461,18 +1865,33 @@ function RunwaySession.ResolveChainDisplayBandRatingBarMetrics(
 	if initialVy == nil then
 		return nil
 	end
+	local gravity = RunwaySession.ResolveRunwayRatingBarGravity()
+	local displayDuration, displayStartElapsed, perfectStartElapsed =
+		RunwaySession.ResolveChainRatingBarDisplayDurations(initialVy, gravity)
+	if Refs.takeoffRatingBarFeetOnTree then
+		return RunwaySession.ResolveChainRatingBarElapsedFromTiming(humanoid, nowClock)
+	end
+	if Refs.takeoffRatingBarUseHeightVelocityAfterTree then
+		local root = humanoid.RootPart
+		local currentHeight = RunwaySession.ResolveRunwayHeightAboveBaseline(humanoid)
+		if currentHeight ~= nil then
+			local currentVy = if root ~= nil then root.AssemblyLinearVelocity.Y else 0
+			local currentElapsed = RunwaySession.ResolveChainElapsedFromCurrentHeightVelocitySec(
+				currentHeight,
+				currentVy,
+				initialVy,
+				gravity,
+				RunwaySession.ResolveChainTakeoffHeightOffsetStuds()
+			)
+			local elapsed = math.clamp(currentElapsed - displayStartElapsed, 0, displayDuration)
+			return elapsed, displayDuration, perfectStartElapsed
+		end
+	end
 	local baseline = localState.preLandRayBaselineStuds
 	local groundDist = 0
 	if typeof(baseline) == "number" and baseline == baseline then
 		groundDist = baseline
 	end
-	local chainHeight = RunwaySession.ResolveChainWindowStartHeightStuds()
-	local gravity = RunwaySession.ResolveRunwayRatingBarGravity()
-	local chainWindowStartElapsed = RunwaySession.ResolveChainWindowStartElapsedSec(initialVy, gravity)
-	local landingStartElapsed = RunwaySession.ResolveChainDisplayTakeoffRemainingSec(initialVy, gravity)
-	local displayStartElapsed = RunwaySession.ResolveChainDisplayEffectiveStartElapsedSec(initialVy, gravity)
-	local displayDuration = math.max(landingStartElapsed - displayStartElapsed, 1e-6)
-	local perfectStartElapsed = math.clamp(chainWindowStartElapsed - displayStartElapsed, 0, displayDuration)
 	local elapsedSinceTakeoff = RunwaySession.ResolveChainElapsedSinceTakeoffSec(humanoid, nowClock, initialVy, gravity)
 	if elapsedSinceTakeoff ~= nil then
 		local elapsedFromDisplayStart = math.clamp(elapsedSinceTakeoff - displayStartElapsed, 0, displayDuration)
@@ -1486,7 +1905,15 @@ function RunwaySession.ResolveChainDisplayBandRatingBarMetrics(
 		return nil
 	end
 	local currentHeight = math.clamp(dist - groundDist, 0, displayStartHeight)
-	local currentElapsed = RunwaySession.ResolveChainDescendingElapsedAtHeightSec(currentHeight, initialVy, gravity)
+	local root = humanoid.RootPart
+	local currentVy = if root ~= nil then root.AssemblyLinearVelocity.Y else 0
+	local currentElapsed = RunwaySession.ResolveChainElapsedFromCurrentHeightVelocitySec(
+		currentHeight,
+		currentVy,
+		initialVy,
+		gravity,
+		RunwaySession.ResolveChainTakeoffHeightOffsetStuds()
+	)
 	local elapsed = math.clamp(currentElapsed - displayStartElapsed, 0, displayDuration)
 	return elapsed, displayDuration, perfectStartElapsed
 end
@@ -1503,10 +1930,11 @@ function RunwaySession.PrintTakeoffRatingBarChainDisplayDebug(humanoid: Humanoid
 		groundDist = baseline
 	end
 	local gravity = RunwaySession.ResolveRunwayRatingBarGravity()
+	local heightOffset = RunwaySession.ResolveChainTakeoffHeightOffsetStuds()
 	local displayStartHeight = RunwaySession.ResolveChainDisplayStartHeightStuds(initialVy, gravity)
 	local displayStartRayDist = groundDist + displayStartHeight
 	local vy = math.max(0, initialVy)
-	local apexRayDist = groundDist + (vy * vy) / (2 * math.max(1e-4, gravity))
+	local apexRayDist = groundDist + heightOffset + (vy * vy) / (2 * math.max(1e-4, gravity))
 	local probeDown = math.max(cfg.RUNWAY_GROUND_PROBE_DOWN, displayStartRayDist + 1, apexRayDist + 1)
 	local ok, dist = RunwaySession.RaycastFeetWithProbeDown(humanoid, probeDown)
 	if not ok then
@@ -1521,12 +1949,12 @@ function RunwaySession.PrintTakeoffRatingBarChainDisplayDebug(humanoid: Humanoid
 	end
 	local actualHeight = dist - groundDist
 	local chainHeight = RunwaySession.ResolveChainWindowStartHeightStuds()
-	local landingStartElapsed = RunwaySession.ResolveChainDisplayTakeoffRemainingSec(initialVy, gravity)
-	local chainWindowStartElapsed = RunwaySession.ResolveChainWindowStartElapsedSec(initialVy, gravity)
+	local landingStartElapsed = RunwaySession.ResolveChainDisplayTakeoffRemainingSec(initialVy, gravity, heightOffset)
+	local chainWindowStartElapsed = RunwaySession.ResolveChainWindowStartElapsedSec(initialVy, gravity, heightOffset)
 	local chainRemaining = math.max(0, landingStartElapsed - chainWindowStartElapsed)
-	local plannedDisplayStartElapsed = RunwaySession.ResolveChainDisplayStartElapsedSec(initialVy, gravity)
+	local plannedDisplayStartElapsed = RunwaySession.ResolveChainDisplayStartElapsedSec(initialVy, gravity, heightOffset)
 	local apexElapsed = RunwaySession.ResolveChainDisplayApexElapsedSec(initialVy, gravity)
-	local displayStartElapsed = RunwaySession.ResolveChainDisplayEffectiveStartElapsedSec(initialVy, gravity)
+	local displayStartElapsed = RunwaySession.ResolveChainDisplayEffectiveStartElapsedSec(initialVy, gravity, heightOffset)
 	local displayDuration = math.max(landingStartElapsed - displayStartElapsed, 0)
 	local perfectStartElapsed = math.clamp(chainWindowStartElapsed - displayStartElapsed, 0, displayDuration)
 	local elapsedSinceTakeoff = RunwaySession.ResolveChainElapsedSinceTakeoffSec(humanoid, os.clock(), initialVy, gravity)
@@ -1685,6 +2113,7 @@ function RunwaySession.HideTakeoffRatingBar()
 	Refs.takeoffRatingBarFrozenTotalDurationSec = nil
 	Refs.takeoffRatingBarFrozenLastProgressRatio = nil
 	Refs.takeoffRatingBarFrozenLastClock = nil
+	RunwaySession.ResetTakeoffRatingBarTreeState()
 	RunwaySession.FireTakeoffRatingBarPayload(false, 0)
 end
 
@@ -1827,6 +2256,28 @@ function RunwaySession.ResolveActiveTakeoffRatingBarProgress(
 	inChainWindow: boolean
 ): number?
 	local windowStartRatio = RunwaySession.ResolveTakeoffRatingBarWindowStartRatio(Refs.takeoffRatingBarPreWindowDurationSec)
+	if inChainWindow and Refs.takeoffRatingBarFeetOnTree then
+		local progressRatio = RunwaySession.ResolveChainRatingBarProgressOnTree(humanoid, nowClock)
+		if progressRatio == nil then
+			return nil
+		end
+		return RunwaySession.ClampTreeTakeoffRatingBarProgressNonDecreasing(progressRatio)
+	end
+	if inChainWindow and Refs.takeoffRatingBarUseHeightVelocityAfterTree then
+		if localState.tHudStart ~= nil then
+			local timedProgress = RunwaySession.MapTimedElapsedToDisplayProgress(
+				math.max(0, nowClock - (localState.tHudStart :: number)),
+				Refs.takeoffRatingBarPreWindowDurationSec
+			)
+			return RunwaySession.ClampTreeTakeoffRatingBarProgressNonDecreasing(timedProgress)
+		end
+		local elapsed, displayDuration, _ = RunwaySession.ResolveChainDisplayBandRatingBarMetrics(humanoid, nowClock)
+		if elapsed == nil or displayDuration == nil then
+			return nil
+		end
+		local progressRatio = RunwaySession.MapDistanceElapsedToDisplayProgress(elapsed, displayDuration)
+		return RunwaySession.ClampTreeTakeoffRatingBarProgressNonDecreasing(progressRatio)
+	end
 	if localState.tHudStart ~= nil and (inLineWindow or inChainWindow) then
 		local timedProgress = RunwaySession.MapTimedElapsedToDisplayProgress(
 			math.max(0, nowClock - (localState.tHudStart :: number)),
@@ -1869,12 +2320,49 @@ function RunwaySession.ResolveChainDistanceRatingBarPayload(
 	humanoid: Humanoid,
 	nowClock: number
 ): (number?, number?, number?, number?, number?)
+	if Refs.takeoffRatingBarFeetOnTree then
+		local progressRatio = RunwaySession.ResolveChainRatingBarProgressOnTree(humanoid, nowClock)
+		if progressRatio == nil then
+			return nil
+		end
+		progressRatio = RunwaySession.ClampTreeTakeoffRatingBarProgressNonDecreasing(progressRatio)
+		local initialVy = RunwaySession.ResolveJumpRatingBarInitialVy()
+		if initialVy == nil then
+			return nil
+		end
+		local gravity = RunwaySession.ResolveRunwayRatingBarGravity()
+		local displayDuration, _, perfectStartElapsed =
+			RunwaySession.ResolveChainRatingBarDisplayDurations(initialVy, gravity)
+		local leftOkEndRatio, perfectSplitRatio, _, _, _ =
+			RunwaySession.BuildTakeoffRatingBarLayoutFromDisplayMetrics(perfectStartElapsed, displayDuration)
+		return progressRatio, leftOkEndRatio, perfectSplitRatio, displayDuration, perfectStartElapsed
+	end
+	if Refs.takeoffRatingBarUseHeightVelocityAfterTree and localState.tHudStart ~= nil then
+		local initialVy = RunwaySession.ResolveJumpRatingBarInitialVy()
+		if initialVy == nil then
+			return nil
+		end
+		local gravity = RunwaySession.ResolveRunwayRatingBarGravity()
+		local displayDuration, _, perfectStartElapsed =
+			RunwaySession.ResolveChainRatingBarDisplayDurations(initialVy, gravity)
+		local progressRatio = RunwaySession.MapTimedElapsedToDisplayProgress(
+			math.max(0, nowClock - (localState.tHudStart :: number)),
+			displayDuration
+		)
+		progressRatio = RunwaySession.ClampTreeTakeoffRatingBarProgressNonDecreasing(progressRatio)
+		local leftOkEndRatio, perfectSplitRatio, _, _, _ =
+			RunwaySession.BuildTakeoffRatingBarLayoutFromDisplayMetrics(perfectStartElapsed, displayDuration)
+		return progressRatio, leftOkEndRatio, perfectSplitRatio, displayDuration, perfectStartElapsed
+	end
 	local elapsed, displayDuration, perfectStartElapsed = RunwaySession.ResolveChainDisplayBandRatingBarMetrics(humanoid, nowClock)
 	if elapsed == nil or displayDuration == nil or perfectStartElapsed == nil then
 		return nil
 	end
 	local progressRatio, leftOkEndRatio, perfectSplitRatio =
 		RunwaySession.ComputeTakeoffRatingProgressByElapsed(elapsed, displayDuration, perfectStartElapsed)
+	if Refs.takeoffRatingBarUseHeightVelocityAfterTree then
+		progressRatio = RunwaySession.ClampTreeTakeoffRatingBarProgressNonDecreasing(progressRatio)
+	end
 	return progressRatio, leftOkEndRatio, perfectSplitRatio, displayDuration, perfectStartElapsed
 end
 
@@ -1912,6 +2400,14 @@ function RunwaySession.RefreshTakeoffRatingBar(humanoid: Humanoid?, hrp: BasePar
 		RunwaySession.HideTakeoffRatingBar()
 		return
 	end
+	if inChainWindow then
+		RunwaySession.UpdateTakeoffRatingBarTreeContactState(humanoid)
+	end
+	local treePointerActive = inChainWindow
+		and (
+			Refs.takeoffRatingBarFeetOnTree
+			or Refs.takeoffRatingBarUseHeightVelocityAfterTree
+		)
 	if Refs.takeoffRatingBarSessionActive then
 		local progressRatio = RunwaySession.ResolveActiveTakeoffRatingBarProgress(
 			humanoid,
@@ -1924,18 +2420,33 @@ function RunwaySession.RefreshTakeoffRatingBar(humanoid: Humanoid?, hrp: BasePar
 			RunwaySession.HideTakeoffRatingBar()
 			return
 		end
-		local lastProgressRatio = Refs.takeoffRatingBarFrozenLastProgressRatio
-		if typeof(lastProgressRatio) == "number" and lastProgressRatio == lastProgressRatio then
-			local continuousProgress = lastProgressRatio
-			local lastClock = Refs.takeoffRatingBarFrozenLastClock
-			if typeof(lastClock) == "number" and lastClock == lastClock and nowClock > lastClock then
-				local totalDuration = Refs.takeoffRatingBarFrozenTotalDurationSec
-				if typeof(totalDuration) ~= "number" or totalDuration ~= totalDuration or totalDuration <= 1e-6 then
-					totalDuration = RunwaySession.ResolveTakeoffRatingBarTotalDurationSec(Refs.takeoffRatingBarPreWindowDurationSec)
+		if not treePointerActive then
+			local lastProgressRatio = Refs.takeoffRatingBarFrozenLastProgressRatio
+			if typeof(lastProgressRatio) == "number" and lastProgressRatio == lastProgressRatio then
+				local continuousProgress = lastProgressRatio
+				local lastClock = Refs.takeoffRatingBarFrozenLastClock
+				if typeof(lastClock) == "number" and lastClock == lastClock and nowClock > lastClock then
+					local totalDuration = Refs.takeoffRatingBarFrozenTotalDurationSec
+					if typeof(totalDuration) ~= "number" or totalDuration ~= totalDuration or totalDuration <= 1e-6 then
+						totalDuration = RunwaySession.ResolveTakeoffRatingBarTotalDurationSec(Refs.takeoffRatingBarPreWindowDurationSec)
+					end
+					continuousProgress = math.min(1, lastProgressRatio + (nowClock - lastClock) / math.max(totalDuration, 1e-6))
 				end
-				continuousProgress = math.min(1, lastProgressRatio + (nowClock - lastClock) / math.max(totalDuration, 1e-6))
+				progressRatio = continuousProgress
 			end
-			progressRatio = continuousProgress
+		end
+		if treePointerActive then
+			print(
+				string.format(
+					"[RunwayTreeRatingBar] stage=send_active time=%.3f markerX=%.4f feetOnTree=%s heightVelocityAfterTree=%s tHudElapsed=%.3f predictRemain=%.3f",
+					nowClock,
+					progressRatio,
+					tostring(Refs.takeoffRatingBarFeetOnTree),
+					tostring(Refs.takeoffRatingBarUseHeightVelocityAfterTree),
+					if localState.tHudStart ~= nil then nowClock - (localState.tHudStart :: number) else -1,
+					if localState.predictJumpWindowUntil ~= nil then (localState.predictJumpWindowUntil :: number) - nowClock else -1
+				)
+			)
 		end
 		Refs.takeoffRatingBarFrozenLastProgressRatio = progressRatio
 		Refs.takeoffRatingBarFrozenLastClock = nowClock
@@ -1945,7 +2456,10 @@ function RunwaySession.RefreshTakeoffRatingBar(humanoid: Humanoid?, hrp: BasePar
 	local progressRatio: number? = nil
 	local preWindowDuration: number? = nil
 	local perfectStartElapsed: number? = nil
-	if localState.tHudStart ~= nil and (inLineWindow or inChainWindow) then
+	if inChainWindow and (Refs.takeoffRatingBarFeetOnTree or Refs.takeoffRatingBarUseHeightVelocityAfterTree) then
+		progressRatio, _, _, preWindowDuration, perfectStartElapsed =
+			RunwaySession.ResolveChainDistanceRatingBarPayload(humanoid, nowClock)
+	elseif localState.tHudStart ~= nil and (inLineWindow or inChainWindow) then
 		progressRatio, _, _, preWindowDuration = RunwaySession.ResolveTimedTakeoffRatingBarPayload(nowClock)
 	elseif inChainWindow then
 		progressRatio, _, _, preWindowDuration, perfectStartElapsed =
@@ -1981,6 +2495,22 @@ function RunwaySession.RefreshTakeoffRatingBar(humanoid: Humanoid?, hrp: BasePar
 	Refs.takeoffRatingBarFrozenTotalDurationSec = totalDuration
 	Refs.takeoffRatingBarFrozenLastProgressRatio = progressRatio
 	Refs.takeoffRatingBarFrozenLastClock = nowClock
+	if inChainWindow and (Refs.takeoffRatingBarFeetOnTree or Refs.takeoffRatingBarUseHeightVelocityAfterTree) then
+		print(
+			string.format(
+				"[RunwayTreeRatingBar] stage=send_new_session time=%.3f markerX=%.4f feetOnTree=%s heightVelocityAfterTree=%s preWindow=%.3f perfectStart=%.3f total=%.3f tHudElapsed=%.3f predictRemain=%.3f",
+				nowClock,
+				progressRatio,
+				tostring(Refs.takeoffRatingBarFeetOnTree),
+				tostring(Refs.takeoffRatingBarUseHeightVelocityAfterTree),
+				preWindowDuration,
+				if perfectStartElapsed ~= nil then perfectStartElapsed else -1,
+				totalDuration,
+				if localState.tHudStart ~= nil then nowClock - (localState.tHudStart :: number) else -1,
+				if localState.predictJumpWindowUntil ~= nil then (localState.predictJumpWindowUntil :: number) - nowClock else -1
+			)
+		)
+	end
 	RunwaySession.FireFrozenTakeoffRatingBarPayload(progressRatio)
 end
 
@@ -3788,7 +4318,7 @@ function RunwaySession.ResolveRunwayLocomotionMode(humanoid: Humanoid, nowClock:
 	if Refs.chestRewardWaitPose == true then
 		return RUNWAY_LOCOMOTION_NONE
 	end
-	local grounded = RunwaySession.IsRunwayScriptedGrounded(humanoid)
+	local grounded = RunwaySession.IsRunwayChainWindowSurfaceGrounded(humanoid)
 	if localState.phase == Ph.Airborne then
 		if not grounded then
 			return RUNWAY_LOCOMOTION_FREEFALL
@@ -5694,7 +6224,10 @@ function RunwaySession.WindowDriftPhysicsActive(humanoid: Humanoid, nowClock: nu
 	if not lineCtx and not chainCtx then
 		return false
 	end
-	if not RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid) then
+	if
+		not RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid)
+		and not RunwaySession.IsRunwayTreeChainLandingActive(humanoid)
+	then
 		return false
 	end
 	if localState.firstGroundedInWindowClock == nil then
@@ -5726,6 +6259,87 @@ function RunwaySession.CancelJumpWindowTimeoutUntilGroundedAgain()
 	localState.jumpWindowGroundedStartClock = nil
 end
 
+function RunwaySession.IsRunwayTreeChainLandingActive(humanoid: Humanoid): boolean
+	local nowClock = os.clock()
+	local rawOk, rawTreeDist = RunwayTreeUtil.RaycastTreeFeet(humanoid, nil)
+	local hip = RunwayTreeUtil.ResolveHumanoidHipHeight(humanoid)
+	local treeSlack = hip * 0.55 + 0.35
+	local rawFeetOnTree = rawOk and rawTreeDist <= treeSlack
+	local activeOnTree = false
+	local root = humanoid.RootPart
+	local maxTreeContactVy = cfg.RUNWAY_PRELAND_MAX_VY
+	if typeof(maxTreeContactVy) ~= "number" or maxTreeContactVy ~= maxTreeContactVy then
+		maxTreeContactVy = 4
+	end
+	if root ~= nil and root.AssemblyLinearVelocity.Y > maxTreeContactVy then
+		Refs.takeoffRatingBarLastTreeContactClock = nil
+	elseif rawFeetOnTree then
+		Refs.takeoffRatingBarLastTreeContactClock = nowClock
+		activeOnTree = true
+	else
+		local lastTreeContactClock = Refs.takeoffRatingBarLastTreeContactClock
+		activeOnTree = typeof(lastTreeContactClock) == "number"
+			and lastTreeContactClock == lastTreeContactClock
+			and nowClock - lastTreeContactClock <= TreeChainLandingContactHoldSec
+	end
+	RunwaySession.RecordTakeoffRatingBarTreeContactDebug(
+		humanoid,
+		nowClock,
+		rawFeetOnTree,
+		activeOnTree,
+		rawTreeDist
+	)
+	return activeOnTree
+end
+
+function RunwaySession.IsRunwayChainWindowLandingBandOk(humanoid: Humanoid): boolean
+	if RunwaySession.IsRunwayTreeChainLandingActive(humanoid) then
+		return true
+	end
+	return RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid)
+end
+
+function RunwaySession.IsRunwayChainWindowLandingHeightOk(humanoid: Humanoid): boolean
+	if RunwaySession.IsRunwayTreeChainLandingActive(humanoid) then
+		return true
+	end
+	return RunwaySession.IsRunwayChainWindowHeightOk(humanoid)
+end
+
+function RunwaySession.IsRunwayChainJumpWindowLandingTimingEligible(humanoid: Humanoid, nowClock: number): boolean
+	if nowClock < localState.jumpBoostUntilClock then
+		return false
+	end
+	local root = humanoid.RootPart
+	if root == nil then
+		return false
+	end
+	local maxVy = cfg.RUNWAY_PRELAND_MAX_VY
+	if typeof(maxVy) ~= "number" or maxVy ~= maxVy then
+		maxVy = 0
+	end
+	if root.AssemblyLinearVelocity.Y > maxVy then
+		return false
+	end
+	if not RunwaySession.IsRunwayChainWindowLandingBandOk(humanoid) then
+		return false
+	end
+	if not RunwaySession.IsRunwayChainWindowLandingHeightOk(humanoid) then
+		return false
+	end
+	if RunwaySession.IsRunwayTreeChainLandingActive(humanoid) then
+		return true
+	end
+	return RunwaySession.IsRunwayScriptedGrounded(humanoid)
+end
+
+function RunwaySession.IsRunwayChainWindowSurfaceGrounded(humanoid: Humanoid): boolean
+	if RunwaySession.IsRunwayScriptedGrounded(humanoid) then
+		return true
+	end
+	return RunwaySession.IsRunwayTreeChainLandingActive(humanoid)
+end
+
 -- 线窗触线后仍按稳定贴地启动；链式窗按近地区高度阈值启动，避免刚进 preland 就开始计时。
 function RunwaySession.MaybeStartJumpWindowTiming(humanoid: Humanoid, nowClock: number)
 	if localState.phase == Ph.JumpWindow and not localState.lineWindowConsumed and localState.tHudStart == nil then
@@ -5740,13 +6354,7 @@ function RunwaySession.MaybeStartJumpWindowTiming(humanoid: Humanoid, nowClock: 
 		and localState.takeoffCount >= 1
 		and localState.takeoffCount < cfg.N_TOTAL_JUMPS
 	if chainSeg and localState.chainJumpWindowAwaitingGround then
-		if
-			not RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid)
-			or not RunwaySession.IsRunwayChainWindowHeightOk(humanoid)
-		then
-			return
-		end
-		if not RunwaySession.IsRunwayScriptedGrounded(humanoid) then
+		if not RunwaySession.IsRunwayChainJumpWindowLandingTimingEligible(humanoid, nowClock) then
 			return
 		end
 		if localState.tHudStart == nil then
@@ -5755,13 +6363,7 @@ function RunwaySession.MaybeStartJumpWindowTiming(humanoid: Humanoid, nowClock: 
 		localState.predictJumpWindowUntil = nowClock + cfg.T_WINDOW
 		localState.chainJumpWindowAwaitingGround = false
 	elseif chainSeg and localState.predictJumpWindowUntil == nil then
-		if
-			not RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid)
-			or not RunwaySession.IsRunwayChainWindowHeightOk(humanoid)
-		then
-			return
-		end
-		if not RunwaySession.IsRunwayScriptedGrounded(humanoid) then
+		if not RunwaySession.IsRunwayChainJumpWindowLandingTimingEligible(humanoid, nowClock) then
 			return
 		end
 		if localState.tHudStart == nil then
@@ -5781,7 +6383,7 @@ function RunwaySession.UpdateLocalJumpWindowPrediction(humanoid: Humanoid, nowCl
 		RunwaySession.CancelJumpWindowTimeoutUntilGroundedAgain()
 	end
 	if lineOrChainContext then
-		if not bandOk and localState.predictJumpWindowUntil == nil then
+		if not bandOk and localState.predictJumpWindowUntil == nil and not RunwaySession.IsRunwayTreeChainLandingActive(humanoid) then
 			localState.chainJumpWindowAwaitingGround = false
 			localState.tHudStart = nil
 			localState.jumpWindowGroundedStartClock = nil
@@ -5810,16 +6412,22 @@ function RunwaySession.UpdateLocalJumpWindowPrediction(humanoid: Humanoid, nowCl
 			localState.phase == Ph.Airborne
 			and localState.takeoffCount >= 1
 			and localState.takeoffCount < cfg.N_TOTAL_JUMPS
-			and g
 		then
 			ClientMsg.FireJumpRunWayShowMiss()
 			RunwaySession.EnterSlidePhase(nowClock, SlideKindMiss, humanoid)
 			localState.predictJumpWindowUntil = nil
 			localState.chainJumpWindowAwaitingGround = false
+			localState.tHudStart = nil
 		end
 		return
 	end
-	if (RunwaySession.LineHudActive(nowClock) or RunwaySession.ChainHudActive(nowClock)) and bandOk and g then
+	local windowBandReady = bandOk or RunwaySession.IsRunwayTreeChainLandingActive(humanoid)
+	local windowSurfaceReady = RunwaySession.IsRunwayChainWindowSurfaceGrounded(humanoid)
+	if
+		(RunwaySession.LineHudActive(nowClock) or RunwaySession.ChainHudActive(nowClock))
+		and windowBandReady
+		and windowSurfaceReady
+	then
 		if localState.firstGroundedInWindowClock == nil then
 			localState.firstGroundedInWindowClock = nowClock
 		end
@@ -6285,8 +6893,7 @@ function RunwaySession.ProcessJumpWindowTimeout(nowClock: number)
 	end
 	if localState.lineJumpWindowExpireAt ~= nil and nowClock >= (localState.lineJumpWindowExpireAt :: number) then
 		local _character, humanoidTimeout, _hrpTimeout = RunwaySession.GetCharacterParts()
-		if humanoidTimeout == nil or not RunwaySession.IsRunwayScriptedGrounded(humanoidTimeout) then
-			RunwaySession.CancelJumpWindowTimeoutUntilGroundedAgain()
+		if humanoidTimeout == nil then
 			return
 		end
 		ClientMsg.FireJumpRunWayShowMiss()
@@ -6523,14 +7130,22 @@ end
 
 function RunwaySession.ClearLastJumpWindowTakeoffCache()
 	Refs.lastJumpWindowTakeoff = nil
+	Refs.chainTakeoffHeightOffsetStuds = nil
 end
 
-function RunwaySession.CacheLastJumpWindowTakeoff(forwardSpd: number, vy: number, forward: Vector3, impulseSeg: number)
+function RunwaySession.CacheLastJumpWindowTakeoff(
+	forwardSpd: number,
+	vy: number,
+	forward: Vector3,
+	impulseSeg: number,
+	heightOffsetStuds: number?
+)
 	Refs.lastJumpWindowTakeoff = {
 		forwardSpd = forwardSpd,
 		vy = vy,
 		forward = forward,
 		impulseSeg = impulseSeg,
+		heightOffsetStuds = heightOffsetStuds,
 	}
 end
 
@@ -6546,6 +7161,7 @@ function RunwaySession.TryApplyScpTrampolineBounce(humanoid: Humanoid, hrp: Base
 	local forwardSpd = cached.forwardSpd
 	local vy = cached.vy
 	local impulseSeg = cached.impulseSeg
+	Refs.chainTakeoffHeightOffsetStuds = cached.heightOffsetStuds
 	local gBase = workspace.Gravity
 	if gBase < 1e-3 then
 		gBase = 196.2
@@ -8460,6 +9076,24 @@ function RunwaySession.JumpApplyTakeoff(
 	local horizontalBaseSpeed, vy, gGrav = RunwaySession.JumpComputeSessionVy()
 	local forward = NormalizeRunwayForward(localState.runwayForward)
 	local perpTerm = RunwaySession.JumpPerpImpulseTerm(hrp, forward)
+	local takeoffHeightOffset = if inChainWindow then RunwaySession.ResolveTreeTakeoffHeightOffsetStuds(humanoid) else 0
+	if inChainWindow then
+		local currentHeight = RunwaySession.ResolveRunwayHeightAboveBaseline(humanoid)
+		local rawTreeOk, rawTreeDist = RunwayTreeUtil.RaycastTreeFeet(humanoid, nil)
+		print(
+			string.format(
+				"[RunwayTreeHeightOffset] stage=jump_apply time=%.3f takeoffHeightOffset=%.3f currentHeight=%.3f rawTreeOk=%s rawTreeDist=%.3f feetOnTree=%s heightVelocityAfterTree=%s takeoffCount=%d",
+				nowClock,
+				takeoffHeightOffset,
+				if currentHeight ~= nil then currentHeight else -1,
+				tostring(rawTreeOk),
+				rawTreeDist,
+				tostring(Refs.takeoffRatingBarFeetOnTree),
+				tostring(Refs.takeoffRatingBarUseHeightVelocityAfterTree),
+				localState.takeoffCount
+			)
+		)
+	end
 	-- 基于起跳前最终减速完的速度计算本次评级 bonus，再取冲量 max；终局叠冲刺在 UpdateAutoRunVelocity。
 	RunwaySession.JumpApplyRatingForTakeoff(humanoid, nowClock, inAuto, inLineWindow, inChainWindow)
 	local impulseSeg = math.clamp(localState.takeoffCount + 1, 1, cfg.N_TOTAL_JUMPS)
@@ -8492,6 +9126,20 @@ function RunwaySession.JumpApplyTakeoff(
 	RunwaySession.CacheFinalLandLandingAlongValue(forwardSpd)
 	localState.jumpBoostVy = vy
 	localState.jumpBoostUntilClock = nowClock + cfg.RUNWAY_JUMP_BOOST_HOLD_SEC
+	Refs.chainTakeoffHeightOffsetStuds = takeoffHeightOffset
+	Refs.takeoffRatingBarTreeTakeoffHeightOffsetStuds = if takeoffHeightOffset > 0 then takeoffHeightOffset else nil
+	if inChainWindow then
+		print(
+			string.format(
+				"[RunwayTreeHeightOffset] stage=jump_apply_cached time=%.3f chainOffset=%.3f cachedOffset=%.3f takeoffCount=%d impulseSeg=%d",
+				nowClock,
+				if Refs.chainTakeoffHeightOffsetStuds ~= nil then Refs.chainTakeoffHeightOffsetStuds else -1,
+				takeoffHeightOffset,
+				localState.takeoffCount,
+				impulseSeg
+			)
+		)
+	end
 	hrp.AssemblyLinearVelocity = forward * forwardSpd + Vector3.new(0, vy, 0) + perpTerm
 	--print(
 	--	string.format(
@@ -8512,7 +9160,7 @@ function RunwaySession.JumpApplyTakeoff(
 	end
 	RunwaySession.PlayJumpTakeoffSmokeFx(humanoid, hrp)
 	if inLineWindow or inChainWindow then
-		RunwaySession.CacheLastJumpWindowTakeoff(forwardSpd, vy, forward, impulseSeg)
+		RunwaySession.CacheLastJumpWindowTakeoff(forwardSpd, vy, forward, impulseSeg, takeoffHeightOffset)
 	end
 	RunwaySession.JumpAdvancePhaseAfterImpulse(inAuto, inLineWindow, inChainWindow)
 	-- 冲量起跳后首帧 Raycast/Humanoid 仍常判贴地或 preland；若 prev* 为 false 会被当成「着地/快触地上升沿」
@@ -8573,9 +9221,11 @@ function RunwaySession.ResolveTakeoffWindowAvailability(
 		return false, false, false
 	end
 	local inChainDistanceBand = inChainWindowPhase and RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid)
+	local inChainTreeWindow = inChainWindowPhase and RunwaySession.IsRunwayTreeChainLandingActive(humanoid)
 	local inChainWindow = inChainWindowPhase
 		and (
 			inChainDistanceBand
+			or inChainTreeWindow
 			or localState.chainJumpWindowAwaitingGround
 			or (
 				localState.predictJumpWindowUntil ~= nil
@@ -8586,7 +9236,11 @@ function RunwaySession.ResolveTakeoffWindowAvailability(
 		return false, false, false
 	end
 	if (inLineWindow or inChainWindow) and not inAuto then
-		if not RunwaySession.IsRunwayScriptedGrounded(humanoid) and not RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid) then
+		if
+			not RunwaySession.IsRunwayScriptedGrounded(humanoid)
+			and not RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid)
+			and not RunwaySession.IsRunwayTreeChainLandingActive(humanoid)
+		then
 			return false, false, false
 		end
 	end
@@ -8620,6 +9274,8 @@ function RunwaySession.ResolveTakeoffRatingBarAvailability(
 		and localState.takeoffCount < cfg.N_TOTAL_JUMPS
 	if chainSeg then
 		if localState.tHudStart ~= nil then
+			inChainWindow = true
+		elseif RunwaySession.IsRunwayTreeChainLandingActive(humanoid) then
 			inChainWindow = true
 		elseif RunwaySession.IsRunwayChainDisplayBandOk(humanoid, nowClock) then
 			inChainWindow = true
@@ -9045,6 +9701,7 @@ function RunwaySession.Init()
 		return
 	end
 	Refs.initDone = true
+	RunwayTreeUtil.EnsureTreeCollisionGroup()
 	ScpTrampolineManager.Init({
 		GetCharacterParts = RunwaySession.GetCharacterParts,
 		TryApplyBounce = RunwaySession.TryApplyScpTrampolineBounce,
