@@ -396,53 +396,44 @@ local function FindJetpackGuideButton(): GuiButton?
 	return nil
 end
 
+local function FindExEquipItemButtonById(equipId: number): GuiButton?
+	local shopFrame = FindShopFrame("ExEquipShopFrame")
+	if shopFrame == nil then
+		return nil
+	end
+	local scrollingFrame = shopFrame:FindFirstChild("ScrollingFrame")
+	if scrollingFrame == nil or not scrollingFrame:IsA("ScrollingFrame") then
+		return nil
+	end
+	for _, child in scrollingFrame:GetChildren() do
+		if child:IsA("GuiButton") and child.Visible then
+			local childEquipId = child:GetAttribute("equipId")
+			if typeof(childEquipId) == "number" and childEquipId == equipId then
+				return child
+			end
+		end
+	end
+	return nil
+end
+
 local function FindExEquipGuideButton(): GuiButton?
+	local targetEquipId = GuideManager.GetCurrentExEquipBuyGuideTargetId()
+	if targetEquipId == nil or not CanAffordExEquipByCoin(targetEquipId) then
+		return nil
+	end
+
 	local selectedBtn = FindSelectedShopItemButton("ExEquipShopFrame")
 	if selectedBtn ~= nil then
 		local selectedId = selectedBtn:GetAttribute("equipId")
-		if typeof(selectedId) == "number" and CanAffordExEquipByCoin(selectedId) then
+		if typeof(selectedId) == "number" and selectedId == targetEquipId then
 			return FindShopBuyButton("ExEquipShopFrame")
 		end
 	end
 
-	local firstBtn = FindFirstItemButtonByOrder("ExEquipShopFrame")
-	if firstBtn ~= nil then
-		local firstId = firstBtn:GetAttribute("equipId")
-		if typeof(firstId) == "number" and CanAffordExEquipByCoin(firstId) then
-			return firstBtn
-		end
-	end
-	return nil
-end
-
-local function FindTeleShopButton(): GuiButton?
-	local screenGui = FindGameScreenGui()
-	if screenGui == nil then
-		return nil
-	end
-	local lobby = screenGui:FindFirstChild("LobbyFrame") :: Frame?
-	if lobby == nil then
-		return nil
-	end
-	local teleShopBtn = lobby:FindFirstChild("TeleShopButton")
-	if teleShopBtn ~= nil and teleShopBtn:IsA("GuiButton") then
-		return teleShopBtn
-	end
-	return nil
-end
-
-local function FindTeleShopGuideButton(guideType: number): GuiButton?
-	if not GuideManager.ShouldGuideTeleShopFirst(guideType) then
-		return nil
-	end
-	return FindTeleShopButton()
+	return FindExEquipItemButtonById(targetEquipId)
 end
 
 local function ResolveShopTutorialGuideButton(guideType: number): GuiButton?
-	local teleShopBtn = FindTeleShopGuideButton(guideType)
-	if teleShopBtn ~= nil then
-		return teleShopBtn
-	end
 	if guideType == GameConfig.GuideType.TutorialJetpackBuy then
 		return FindJetpackGuideButton()
 	end

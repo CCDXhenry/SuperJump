@@ -75,7 +75,6 @@ local GameTexts = {
 	GuideTutorialStartTrigger = { key = "", source = "Follow the arrow to start the runway." },
 	GuideTutorialBeginLineJump = { key = "", source = "Press jump now!" },
 	GuideTutorialLandingJump = { key = "", source = "Press jump when you land!" },
-	GuideTutorialTeleShop = { key = "", source = "Tap the shop button above to teleport to the shop." },
 	GuideTutorialJetpackBuy = { key = "", source = "Buy a jetpack for the final dash." },
 	GuideTutorialFinalDash = { key = "", source = "Hold jump to dash!" },
 	GuideTutorialExEquipBuy = { key = "", source = "Buy training equipment." },

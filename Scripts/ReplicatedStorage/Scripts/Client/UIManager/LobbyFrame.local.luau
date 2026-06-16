@@ -63,6 +63,12 @@ local storeBundleEntryFrame: Frame? = (lobbyFrame:FindFirstChild("StoreBundleFra
 local storeBundleButton: GuiButton? = if storeBundleEntryFrame then (storeBundleEntryFrame:FindFirstChild("Button") :: any) else nil
 local teleHomeButton: ImageButton? = lobbyFrame:FindFirstChild("TeleHomeButton") :: ImageButton?
 local teleShopButton: ImageButton? = lobbyFrame:FindFirstChild("TeleShopButton") :: ImageButton?
+if teleHomeButton then
+	teleHomeButton.Visible = false
+end
+if teleShopButton then
+	teleShopButton.Visible = false
+end
 local onlineRewardButton: ImageButton? = lobbyFrame:FindFirstChild("OnlineRewardButton") :: ImageButton?
 if onlineRewardButton == nil and bottomButtonsFrame then
 	onlineRewardButton = bottomButtonsFrame:FindFirstChild("OnlineRewardButton") :: ImageButton?
@@ -111,16 +117,6 @@ end
 
 local function IsInJumpRunwaySession(): boolean
 	return ClientGameInfo.IsInJumpRunway() or ClientGameInfo.IsInJumpRunwayEscapePhase()
-end
-
-local function RefreshTeleportButtonsVisible()
-	local visible = not IsInJumpRunwaySession()
-	if teleHomeButton then
-		teleHomeButton.Visible = visible
-	end
-	if teleShopButton then
-		teleShopButton.Visible = visible
-	end
 end
 
 local function IsRebirthRedPointConditionMet(): boolean
@@ -260,24 +256,6 @@ end
 if jetpackButton then
 	jetpackButton.Activated:Connect(function()
 		UIManager.OpenWindow(UIManager.WindowId.JetpackShop)
-	end)
-end
-
-if teleHomeButton then
-	teleHomeButton.Activated:Connect(function()
-		if IsInJumpRunwaySession() then
-			return
-		end
-		NetMsg.FireRequestTeleportToHome()
-	end)
-end
-
-if teleShopButton then
-	teleShopButton.Activated:Connect(function()
-		if IsInJumpRunwaySession() then
-			return
-		end
-		NetMsg.FireRequestTeleportToShop()
 	end)
 end
 
@@ -659,10 +637,8 @@ ClientMsg.ConnectLocalPlayerJetpackInventoryUpdate(function()
 end)
 
 ClientMsg.ConnectCurrentGuideTypeChanged(function()
-	RefreshTeleportButtonsVisible()
 	RefreshUpgradeValues()
 end)
-RefreshTeleportButtonsVisible()
 
 -- 跑道模式中轮询实时燃料显示
 local runService: RunService = game:GetService("RunService")

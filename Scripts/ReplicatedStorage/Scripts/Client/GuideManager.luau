@@ -178,8 +178,49 @@ local function GetEstimatedCollectableYield(pointIndexStr: string, placed: GameC
 	return if elapsed >= GUIDE_COLLECT_MIN_ELAPSED_SEC then perSecond * elapsed else 0
 end
 
-local function IsTargetExEquipOwned(info: GameConfig.ClientLocalPlayerInfo): boolean
-	return info.exEquipInventory.ownedList[tostring(GameConfig.GuideTargetExEquipId)] == true
+local function IsExEquipOwned(info: GameConfig.ClientLocalPlayerInfo, equipId: number): boolean
+	return info.exEquipInventory.ownedList[tostring(equipId)] == true
+end
+
+local function CountOwnedGuideTargetExEquips(info: GameConfig.ClientLocalPlayerInfo): number
+	local ownedCount = 0
+	for _, equipId in ipairs(GameConfig.GuideTargetExEquipIdList) do
+		if IsExEquipOwned(info, equipId) then
+			ownedCount += 1
+		end
+	end
+	return ownedCount
+end
+
+local function IsExEquipBuyGuidePhaseComplete(info: GameConfig.ClientLocalPlayerInfo): boolean
+	if IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
+		return true
+	end
+	return CountOwnedGuideTargetExEquips(info) >= #GameConfig.GuideTargetExEquipIdList
+end
+
+local function GetCurrentExEquipBuyGuideTargetId(info: GameConfig.ClientLocalPlayerInfo): number?
+	if IsExEquipBuyGuidePhaseComplete(info) then
+		return nil
+	end
+	local ownedCount = CountOwnedGuideTargetExEquips(info)
+	local targetId = GameConfig.GuideTargetExEquipIdList[ownedCount + 1]
+	if targetId == nil then
+		return nil
+	end
+	if IsExEquipOwned(info, targetId) then
+		return nil
+	end
+	return targetId
+end
+
+local function GetCurrentExEquipBuyGuideIndex(info: GameConfig.ClientLocalPlayerInfo): number
+	return CountOwnedGuideTargetExEquips(info) + 1
+end
+
+local function IsExEquipAffordable(info: GameConfig.ClientLocalPlayerInfo, equipId: number): boolean
+	local equipData = GameConfig.ExEquipDataMap[equipId]
+	return equipData ~= nil and GetCoinCount(info) >= equipData.costCoin
 end
 
 local function HasAnyOwnedJetpack(info: GameConfig.ClientLocalPlayerInfo): boolean
@@ -203,11 +244,6 @@ end
 local function IsTargetJetpackAffordable(info: GameConfig.ClientLocalPlayerInfo): boolean
 	local jetpackData = GameConfig.JetpackDataMap[GameConfig.GuideTargetJetpackId]
 	return jetpackData ~= nil and GetCoinCount(info) >= jetpackData.costCoin
-end
-
-local function IsTargetExEquipAffordable(info: GameConfig.ClientLocalPlayerInfo): boolean
-	local equipData = GameConfig.ExEquipDataMap[GameConfig.GuideTargetExEquipId]
-	return equipData ~= nil and GetCoinCount(info) >= equipData.costCoin
 end
 
 local function IsExEquipGuideUnlocked(info: GameConfig.ClientLocalPlayerInfo): boolean
@@ -239,7 +275,7 @@ local function TryCompleteOwnedPurchaseGuideSteps()
 	if HasAnyOwnedJetpack(info) and not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished) then
 		CompleteGuideStep(GameConfig.GuideStepKey.JetpackBuyFinished)
 	end
-	if HasAnyOwnedExEquip(info) and not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
+	if IsExEquipBuyGuidePhaseComplete(info) and not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
 		CompleteGuideStep(GameConfig.GuideStepKey.ExEquipBuyFinished)
 	end
 end
@@ -785,31 +821,6 @@ local function ResolveWorldTargetForGuide(guideType: number): Vector3?
 	return nil
 end
 
-local function IsTeleShopGuideType(guideType: number): boolean
-	return guideType == GameConfig.GuideType.TutorialJetpackBuy
-		or guideType == GameConfig.GuideType.TutorialExEquipBuy
-		or guideType == GameConfig.GuideType.TutorialWalkSpeedUpgrade
-end
-
-local function IsPlayerFarFromShopGuideTarget(guideType: number): boolean
-	if not IsTeleShopGuideType(guideType) then
-		return false
-	end
-	local target = ResolveWorldTargetForGuide(guideType)
-	if target == nil then
-		return false
-	end
-	local hrp = GetLocalPlayerHrp()
-	if hrp == nil then
-		return false
-	end
-	return (hrp.Position - target).Magnitude > GameConfig.GuideShopTeleportDistanceThreshold
-end
-
-function GuideManager.ShouldGuideTeleShopFirst(guideType: number): boolean
-	return IsPlayerFarFromShopGuideTarget(guideType)
-end
-
 local function IsRunwayGuideType(guideType: number): boolean
 	return guideType == GameConfig.GuideType.TutorialBeginLineJump
 		or guideType == GameConfig.GuideType.TutorialLandingJump
@@ -875,10 +886,6 @@ local function UpdateGuideArrow()
 		or guideType == GameConfig.GuideType.TutorialJetpackBuy
 		or guideType == GameConfig.GuideType.TutorialExEquipBuy
 	if not needsWorldArrow then
-		guideArrowModel.Parent = nil
-		return
-	end
-	if IsPlayerFarFromShopGuideTarget(guideType) then
 		guideArrowModel.Parent = nil
 		return
 	end
@@ -960,11 +967,20 @@ local function ResolveGuideType(): number
 	end
 
 	if IsExEquipGuideUnlocked(info) then
-		local hasAnyOwnedExEquip = HasAnyOwnedExEquip(info)
-		if hasAnyOwnedExEquip and not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished) then
-			CompleteGuideStep(GameConfig.GuideStepKey.ExEquipBuyFinished)
-		end
-		if hasAnyOwnedExEquip then
+		if not IsExEquipBuyGuidePhaseComplete(info) then
+			local targetEquipId = GetCurrentExEquipBuyGuideTargetId(info)
+			if targetEquipId ~= nil then
+				local guideIndex = GetCurrentExEquipBuyGuideIndex(info)
+				local affordable = IsExEquipAffordable(info, targetEquipId)
+				if guideIndex == 1 and not affordable and HasCollectableBrainrotYield(info) then
+					return FilterOutsideRunwaySessionGuide(
+						MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotCollect)
+					)
+				elseif affordable then
+					return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipBuy)
+				end
+			end
+		else
 			if not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipUseFinished) then
 				return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipUse)
 			end
@@ -975,11 +991,6 @@ local function ResolveGuideType(): number
 			then
 				return GameConfig.GuideType.TutorialJumpPowerRunwayRetry
 			end
-		elseif not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished)
-			and not HasAnyOwnedExEquip(info)
-			and IsTargetExEquipAffordable(info)
-		then
-			return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipBuy)
 		end
 	end
 
@@ -1179,6 +1190,14 @@ function GuideManager.Init()
 		RefreshGuideType()
 		UpdateGuideArrow()
 	end)
+end
+
+function GuideManager.GetCurrentExEquipBuyGuideTargetId(): number?
+	local info = ClientGameInfo.GetLocalPlayerInfo()
+	if info == nil then
+		return nil
+	end
+	return GetCurrentExEquipBuyGuideTargetId(info)
 end
 
 return GuideManager
