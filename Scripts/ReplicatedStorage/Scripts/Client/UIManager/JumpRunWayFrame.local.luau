@@ -35,8 +35,6 @@ type TakeoffRatingBarPayload = {
 local RATING_ROOT_ZINDEX = 92
 local TipTextPopOffset = UDim2.new(0, 0, 0, -18)
 local TipTextTotalSec = 1.35
-local TakeoffRatingBarInactiveColor = Color3.fromRGB(116, 124, 132)
-local TakeoffRatingBarPerfectColor = Color3.fromRGB(70, 220, 95)
 
 local cfg = GameConfig.JumpRunway
 
@@ -105,13 +103,16 @@ local windowStartM = 0
 local movementBarInitialized = false
 local movementBarLastDistance = 0
 local takeoffRatingBarBg: Frame? = nil
-local takeoffRatingRegionsFrame: Frame? = nil
-local takeoffLeftOkFrame: Frame? = nil
-local takeoffPerfectFrame: Frame? = nil
-local takeoffRightOkFrame: Frame? = nil
-local takeoffLateFrame: Frame? = nil
-local takeoffPerfectSplitFrame: Frame? = nil
-local takeoffMarkerFrame: Frame? = nil
+local takeoffBarBgImage: ImageLabel? = nil
+local takeoffPerfectImage: ImageLabel? = nil
+local takeoffPerfectSplitImage: ImageLabel? = nil
+local takeoffTriangleImage: ImageLabel? = nil
+local takeoffMarkerImage: ImageLabel? = nil
+local takeoffPerfectImageBaseY: UDim? = nil
+local takeoffPerfectImageBaseSizeY: UDim? = nil
+local takeoffPerfectSplitImageBaseY: UDim? = nil
+local takeoffTriangleImageBaseY: UDim? = nil
+local takeoffMarkerImageBaseY: UDim? = nil
 local takeoffRatingBarUiSessionActive = false
 local takeoffRatingBarUiFrozenPayload: TakeoffRatingBarPayload? = nil
 
@@ -361,45 +362,22 @@ local function ResolveMovementBar()
 	end)
 end
 
-local function ConfigureTakeoffSegment(frame: Frame, color: Color3, zIndex: number)
-	frame.BackgroundColor3 = color
-	frame.BackgroundTransparency = 0
-	frame.BorderSizePixel = 0
-	frame.ZIndex = zIndex
-end
-
-local function EnsureTakeoffSegment(parent: Frame, name: string, color: Color3, zIndex: number): Frame
+local function ResolveTakeoffImage(parent: GuiObject, name: string): ImageLabel?
 	local existing = parent:FindFirstChild(name)
-	if existing and existing:IsA("Frame") then
-		ConfigureTakeoffSegment(existing, color, zIndex)
+	if existing and existing:IsA("ImageLabel") then
 		return existing
 	end
-	local frame = Instance.new("Frame")
-	frame.Name = name
-	frame.Parent = parent
-	ConfigureTakeoffSegment(frame, color, zIndex)
-	return frame
+	warn("[JumpRunWayFrame] TakeoffRatingBarBg." .. name .. " missing or not ImageLabel")
+	return nil
 end
 
-local function EnsureTakeoffRatingBarCorner(parent: GuiObject, radius: UDim)
-	local corner = parent:FindFirstChildOfClass("UICorner") :: UICorner?
-	if corner == nil then
-		corner = Instance.new("UICorner")
-		corner.Parent = parent
-	end
-	corner.CornerRadius = radius
-end
-
-local function EnsureTakeoffRatingBarStroke(parent: GuiObject)
-	local stroke = parent:FindFirstChildOfClass("UIStroke") :: UIStroke?
-	if stroke == nil then
-		stroke = Instance.new("UIStroke")
-		stroke.Parent = parent
-	end
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Color = Color3.fromRGB(0, 0, 0)
-	stroke.Thickness = 3
-	stroke.Transparency = 0.15
+local function IsTakeoffRatingBarReady(): boolean
+	return takeoffRatingBarBg ~= nil
+		and takeoffBarBgImage ~= nil
+		and takeoffPerfectImage ~= nil
+		and takeoffPerfectSplitImage ~= nil
+		and takeoffTriangleImage ~= nil
+		and takeoffMarkerImage ~= nil
 end
 
 local function ResolveTakeoffRatingBar()
@@ -411,96 +389,35 @@ local function ResolveTakeoffRatingBar()
 	takeoffRatingBarBg = bar
 	takeoffRatingBarBg.Visible = false
 	takeoffRatingBarBg.ClipsDescendants = false
-	takeoffRatingBarBg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-	takeoffRatingBarBg.BackgroundTransparency = 0.35
+	takeoffRatingBarBg.BackgroundTransparency = 1
 	takeoffRatingBarBg.BorderSizePixel = 0
 	takeoffRatingBarBg.ZIndex = math.max(takeoffRatingBarBg.ZIndex, RATING_ROOT_ZINDEX + 2)
-	EnsureTakeoffRatingBarCorner(takeoffRatingBarBg, UDim.new(0.35, 0))
-	EnsureTakeoffRatingBarStroke(takeoffRatingBarBg)
 
-	local regions = takeoffRatingBarBg:FindFirstChild("RegionsFrame")
-	if regions == nil or not regions:IsA("Frame") then
-		regions = Instance.new("Frame")
-		regions.Name = "RegionsFrame"
-		regions.Parent = takeoffRatingBarBg
-	end
-	takeoffRatingRegionsFrame = regions
-	takeoffRatingRegionsFrame.BackgroundTransparency = 1
-	takeoffRatingRegionsFrame.BorderSizePixel = 0
-	takeoffRatingRegionsFrame.ClipsDescendants = true
-	takeoffRatingRegionsFrame.Position = UDim2.fromScale(0.02, 0.18)
-	takeoffRatingRegionsFrame.Size = UDim2.fromScale(0.96, 0.64)
-	takeoffRatingRegionsFrame.ZIndex = takeoffRatingBarBg.ZIndex + 1
-	EnsureTakeoffRatingBarCorner(takeoffRatingRegionsFrame, UDim.new(0.28, 0))
+	takeoffBarBgImage = ResolveTakeoffImage(takeoffRatingBarBg, "BarBgImage")
+	takeoffPerfectImage = ResolveTakeoffImage(takeoffRatingBarBg, "PerfectImage")
+	takeoffPerfectSplitImage = ResolveTakeoffImage(takeoffRatingBarBg, "SplitWhiteImage")
+	takeoffTriangleImage = ResolveTakeoffImage(takeoffRatingBarBg, "TriangleImage")
+	takeoffMarkerImage = ResolveTakeoffImage(takeoffRatingBarBg, "MarkerCircleImage")
 
-	local segmentZIndex = takeoffRatingRegionsFrame.ZIndex + 1
-	takeoffLeftOkFrame = EnsureTakeoffSegment(
-		takeoffRatingRegionsFrame,
-		"LeftOkFrame",
-		TakeoffRatingBarInactiveColor,
-		segmentZIndex
-	)
-	takeoffPerfectFrame = EnsureTakeoffSegment(
-		takeoffRatingRegionsFrame,
-		"PerfectFrame",
-		TakeoffRatingBarPerfectColor,
-		segmentZIndex
-	)
-	takeoffRightOkFrame = EnsureTakeoffSegment(
-		takeoffRatingRegionsFrame,
-		"RightOkFrame",
-		TakeoffRatingBarInactiveColor,
-		segmentZIndex
-	)
-	takeoffLateFrame = EnsureTakeoffSegment(
-		takeoffRatingRegionsFrame,
-		"LateFrame",
-		TakeoffRatingBarInactiveColor,
-		segmentZIndex
-	)
-
-	local split = takeoffRatingRegionsFrame:FindFirstChild("PerfectSplitFrame")
-	if split == nil or not split:IsA("Frame") then
-		split = Instance.new("Frame")
-		split.Name = "PerfectSplitFrame"
-		split.Parent = takeoffRatingRegionsFrame
-	end
-	takeoffPerfectSplitFrame = split
-	takeoffPerfectSplitFrame.AnchorPoint = Vector2.new(0.5, 0)
-	takeoffPerfectSplitFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	takeoffPerfectSplitFrame.BackgroundTransparency = 0.12
-	takeoffPerfectSplitFrame.BorderSizePixel = 0
-	takeoffPerfectSplitFrame.Position = UDim2.fromScale(0.5, 0)
-	takeoffPerfectSplitFrame.Size = UDim2.fromScale(0.008, 1)
-	takeoffPerfectSplitFrame.ZIndex = segmentZIndex + 1
-
-	local marker = takeoffRatingBarBg:FindFirstChild("MarkerFrame")
-	if marker == nil or not marker:IsA("Frame") then
-		marker = Instance.new("Frame")
-		marker.Name = "MarkerFrame"
-		marker.Parent = takeoffRatingBarBg
-	end
-	takeoffMarkerFrame = marker
-	takeoffMarkerFrame.AnchorPoint = Vector2.new(0.5, 1)
-	takeoffMarkerFrame.Position = UDim2.fromScale(0, 0.08)
-	takeoffMarkerFrame.Size = UDim2.fromScale(0.032, 0.5)
-	takeoffMarkerFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	takeoffMarkerFrame.BackgroundTransparency = 0
-	takeoffMarkerFrame.BorderSizePixel = 0
-	takeoffMarkerFrame.ZIndex = takeoffRatingBarBg.ZIndex + 8
-	EnsureTakeoffRatingBarCorner(takeoffMarkerFrame, UDim.new(0.25, 0))
-	EnsureTakeoffRatingBarStroke(takeoffMarkerFrame)
-end
-
-local function ApplyTakeoffSegmentFrame(frame: Frame?, startRatio: number, endRatio: number)
-	if frame == nil then
+	local perfectImage = takeoffPerfectImage
+	local perfectSplitImage = takeoffPerfectSplitImage
+	local triangleImage = takeoffTriangleImage
+	local markerImage = takeoffMarkerImage
+	if
+		takeoffBarBgImage == nil
+		or perfectImage == nil
+		or perfectSplitImage == nil
+		or triangleImage == nil
+		or markerImage == nil
+	then
 		return
 	end
-	local startClamped = math.clamp(startRatio, 0, 1)
-	local endClamped = math.clamp(math.max(endRatio, startClamped), 0, 1)
-	frame.Position = UDim2.fromScale(startClamped, 0)
-	frame.Size = UDim2.fromScale(endClamped - startClamped, 1)
-	frame.Visible = endClamped > startClamped
+
+	takeoffPerfectImageBaseY = perfectImage.Position.Y
+	takeoffPerfectImageBaseSizeY = perfectImage.Size.Y
+	takeoffPerfectSplitImageBaseY = perfectSplitImage.Position.Y
+	takeoffTriangleImageBaseY = triangleImage.Position.Y
+	takeoffMarkerImageBaseY = markerImage.Position.Y
 end
 
 local function ResetTakeoffRatingBarUiSession()
@@ -516,28 +433,47 @@ local function HideTakeoffRatingBar()
 end
 
 local function ApplyTakeoffRatingBarLayout(payload: TakeoffRatingBarPayload)
-	if takeoffRatingBarBg == nil or takeoffMarkerFrame == nil then
+	local bar = takeoffRatingBarBg
+	local perfectImage = takeoffPerfectImage
+	local perfectSplitImage = takeoffPerfectSplitImage
+	local triangleImage = takeoffTriangleImage
+	local markerImage = takeoffMarkerImage
+	if
+		bar == nil
+		or takeoffBarBgImage == nil
+		or perfectImage == nil
+		or perfectSplitImage == nil
+		or triangleImage == nil
+		or markerImage == nil
+	then
 		return
 	end
 	local leftOkEndRatio = math.clamp(payload.leftOkEndRatio, 0, 1)
 	local perfectEndRatio = math.clamp(math.max(payload.perfectEndRatio, leftOkEndRatio), 0, 1)
-	local rightOkEndRatio = math.clamp(math.max(payload.rightOkEndRatio, perfectEndRatio), 0, 1)
 	local perfectSplitRatio = math.clamp(payload.perfectSplitRatio, leftOkEndRatio, perfectEndRatio)
-	ApplyTakeoffSegmentFrame(takeoffLeftOkFrame, 0, leftOkEndRatio)
-	ApplyTakeoffSegmentFrame(takeoffPerfectFrame, leftOkEndRatio, perfectEndRatio)
-	ApplyTakeoffSegmentFrame(takeoffRightOkFrame, perfectEndRatio, rightOkEndRatio)
-	ApplyTakeoffSegmentFrame(takeoffLateFrame, rightOkEndRatio, 1)
-	if takeoffPerfectSplitFrame ~= nil then
-		takeoffPerfectSplitFrame.Position = UDim2.fromScale(perfectSplitRatio, 0)
-		takeoffPerfectSplitFrame.Visible = perfectEndRatio > leftOkEndRatio
-	end
+	local perfectWidth = perfectEndRatio - leftOkEndRatio
+	local hasPerfectRegion = perfectWidth > 0
+	local perfectY = if takeoffPerfectImageBaseY ~= nil then takeoffPerfectImageBaseY else perfectImage.Position.Y
+	local perfectSizeY = if takeoffPerfectImageBaseSizeY ~= nil then takeoffPerfectImageBaseSizeY else perfectImage.Size.Y
+	local splitY = if takeoffPerfectSplitImageBaseY ~= nil then takeoffPerfectSplitImageBaseY else perfectSplitImage.Position.Y
+	local triangleY = if takeoffTriangleImageBaseY ~= nil then takeoffTriangleImageBaseY else triangleImage.Position.Y
+	perfectImage.Position = UDim2.new(leftOkEndRatio, 0, perfectY.Scale, perfectY.Offset)
+	perfectImage.Size = UDim2.new(perfectWidth, 0, perfectSizeY.Scale, perfectSizeY.Offset)
+	perfectImage.Visible = hasPerfectRegion
+	perfectSplitImage.Position = UDim2.new(perfectSplitRatio, 0, splitY.Scale, splitY.Offset)
+	perfectSplitImage.Visible = hasPerfectRegion
+	triangleImage.Position = UDim2.new(perfectSplitRatio, 0, triangleY.Scale, triangleY.Offset)
+	triangleImage.Visible = hasPerfectRegion
 	local markerRatio = math.clamp(payload.progressRatio, 0, 1)
-	takeoffMarkerFrame.Position = UDim2.fromScale(markerRatio, 0.08)
-	takeoffRatingBarBg.Visible = true
+	local markerY = if takeoffMarkerImageBaseY ~= nil then takeoffMarkerImageBaseY else markerImage.Position.Y
+	markerImage.Position = UDim2.new(markerRatio, 0, markerY.Scale, markerY.Offset)
+	bar.Visible = true
 end
 
 local function RefreshTakeoffRatingBar(payload: TakeoffRatingBarPayload)
-	if takeoffRatingBarBg == nil or takeoffMarkerFrame == nil then
+	local bar = takeoffRatingBarBg
+	local markerImage = takeoffMarkerImage
+	if not IsTakeoffRatingBarReady() or bar == nil or markerImage == nil then
 		return
 	end
 	if escapeHudModeActive or not payload.visible then
@@ -546,8 +482,9 @@ local function RefreshTakeoffRatingBar(payload: TakeoffRatingBarPayload)
 	end
 	if takeoffRatingBarUiSessionActive and takeoffRatingBarUiFrozenPayload ~= nil then
 		local markerRatio = math.clamp(payload.progressRatio, 0, 1)
-		takeoffMarkerFrame.Position = UDim2.fromScale(markerRatio, 0.08)
-		takeoffRatingBarBg.Visible = true
+		local markerY = if takeoffMarkerImageBaseY ~= nil then takeoffMarkerImageBaseY else markerImage.Position.Y
+		markerImage.Position = UDim2.new(markerRatio, 0, markerY.Scale, markerY.Offset)
+		bar.Visible = true
 		return
 	end
 	takeoffRatingBarUiFrozenPayload = {
