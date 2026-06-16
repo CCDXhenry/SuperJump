@@ -2084,6 +2084,7 @@ export type PlayerCarriedInfo = {} -- bricks 已废弃
 export type GuideProgressSaveInfo = {
 	guideStepDoneMap: { [string]: boolean },
 	appearedGuideTypeInfo: { [string]: boolean },
+	exEquipBuyGuideCompletedCount: number,
 }
 
 export type ShopInfo = {
@@ -2203,6 +2204,7 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 		guideProgressInfo = {
 			guideStepDoneMap = {},
 			appearedGuideTypeInfo = {},
+			exEquipBuyGuideCompletedCount = 0,
 		},
 		discoveredIslandIds = {},
 		hasClaimedGroupReward = false,

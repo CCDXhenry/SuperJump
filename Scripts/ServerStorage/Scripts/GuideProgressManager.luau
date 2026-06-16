@@ -34,6 +34,7 @@ local function OnRequestCompleteGuideStep(player: Player, stepKey: string)
 		guideProgressInfo = {
 			guideStepDoneMap = {},
 			appearedGuideTypeInfo = {},
+			exEquipBuyGuideCompletedCount = 0,
 		}
 		playerInfo.guideProgressInfo = guideProgressInfo
 	end

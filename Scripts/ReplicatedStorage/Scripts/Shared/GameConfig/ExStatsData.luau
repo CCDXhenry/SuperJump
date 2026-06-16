@@ -5,7 +5,7 @@ return {
 		["ability"] = 16,
 		["lv"] = 1,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 30,
+		["walkSpeed"] = 54,
 	},
 	[2] = {
 		["type"] = 1,
@@ -13,7 +13,7 @@ return {
 		["ability"] = 18,
 		["lv"] = 2,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 30,
+		["walkSpeed"] = 72,
 	},
 	[3] = {
 		["type"] = 1,
@@ -21,7 +21,7 @@ return {
 		["ability"] = 20,
 		["lv"] = 3,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 30,
+		["walkSpeed"] = 79,
 	},
 	[4] = {
 		["type"] = 1,
@@ -29,7 +29,7 @@ return {
 		["ability"] = 22,
 		["lv"] = 4,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 30,
+		["walkSpeed"] = 86,
 	},
 	[5] = {
 		["type"] = 1,
@@ -37,7 +37,7 @@ return {
 		["ability"] = 23,
 		["lv"] = 5,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 30,
+		["walkSpeed"] = 46,
 	},
 	[6] = {
 		["type"] = 1,
@@ -45,7 +45,7 @@ return {
 		["ability"] = 24,
 		["lv"] = 6,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 30,
+		["walkSpeed"] = 47,
 	},
 	[7] = {
 		["type"] = 1,
@@ -53,7 +53,7 @@ return {
 		["ability"] = 25,
 		["lv"] = 7,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 30,
+		["walkSpeed"] = 49,
 	},
 	[8] = {
 		["type"] = 1,
@@ -61,7 +61,7 @@ return {
 		["ability"] = 26,
 		["lv"] = 8,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 31,
+		["walkSpeed"] = 51,
 	},
 	[9] = {
 		["type"] = 1,
@@ -69,7 +69,7 @@ return {
 		["ability"] = 27,
 		["lv"] = 9,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 31,
+		["walkSpeed"] = 53,
 	},
 	[10] = {
 		["type"] = 1,
@@ -77,7 +77,7 @@ return {
 		["ability"] = 28,
 		["lv"] = 10,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 31,
+		["walkSpeed"] = 55,
 	},
 	[11] = {
 		["type"] = 1,
@@ -85,7 +85,7 @@ return {
 		["ability"] = 29,
 		["lv"] = 11,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 32,
+		["walkSpeed"] = 56,
 	},
 	[12] = {
 		["type"] = 1,
@@ -93,7 +93,7 @@ return {
 		["ability"] = 30,
 		["lv"] = 12,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 32,
+		["walkSpeed"] = 58,
 	},
 	[13] = {
 		["type"] = 1,
@@ -101,7 +101,7 @@ return {
 		["ability"] = 31,
 		["lv"] = 13,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 33,
+		["walkSpeed"] = 60,
 	},
 	[14] = {
 		["type"] = 1,
@@ -109,7 +109,7 @@ return {
 		["ability"] = 32,
 		["lv"] = 14,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 33,
+		["walkSpeed"] = 62,
 	},
 	[15] = {
 		["type"] = 1,
@@ -117,7 +117,7 @@ return {
 		["ability"] = 33,
 		["lv"] = 15,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 34,
+		["walkSpeed"] = 64,
 	},
 	[16] = {
 		["type"] = 1,
@@ -125,7 +125,7 @@ return {
 		["ability"] = 34,
 		["lv"] = 16,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 34,
+		["walkSpeed"] = 65,
 	},
 	[17] = {
 		["type"] = 1,
@@ -133,7 +133,7 @@ return {
 		["ability"] = 35,
 		["lv"] = 17,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 34,
+		["walkSpeed"] = 67,
 	},
 	[18] = {
 		["type"] = 1,
@@ -141,7 +141,7 @@ return {
 		["ability"] = 36,
 		["lv"] = 18,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 35,
+		["walkSpeed"] = 69,
 	},
 	[19] = {
 		["type"] = 1,
@@ -149,7 +149,7 @@ return {
 		["ability"] = 37,
 		["lv"] = 19,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 35,
+		["walkSpeed"] = 71,
 	},
 	[20] = {
 		["type"] = 1,
@@ -157,7 +157,7 @@ return {
 		["ability"] = 38,
 		["lv"] = 20,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 36,
+		["walkSpeed"] = 73,
 	},
 	[21] = {
 		["type"] = 1,
@@ -165,7 +165,7 @@ return {
 		["ability"] = 39,
 		["lv"] = 21,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 36,
+		["walkSpeed"] = 74,
 	},
 	[22] = {
 		["type"] = 1,
@@ -173,7 +173,7 @@ return {
 		["ability"] = 40,
 		["lv"] = 22,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 37,
+		["walkSpeed"] = 76,
 	},
 	[23] = {
 		["type"] = 1,
@@ -181,7 +181,7 @@ return {
 		["ability"] = 41,
 		["lv"] = 23,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 37,
+		["walkSpeed"] = 78,
 	},
 	[24] = {
 		["type"] = 1,
@@ -189,7 +189,7 @@ return {
 		["ability"] = 42,
 		["lv"] = 24,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 38,
+		["walkSpeed"] = 80,
 	},
 	[25] = {
 		["type"] = 1,
@@ -197,7 +197,7 @@ return {
 		["ability"] = 43,
 		["lv"] = 25,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 38,
+		["walkSpeed"] = 82,
 	},
 	[26] = {
 		["type"] = 1,
@@ -205,7 +205,7 @@ return {
 		["ability"] = 44,
 		["lv"] = 26,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 39,
+		["walkSpeed"] = 83,
 	},
 	[27] = {
 		["type"] = 1,
@@ -213,7 +213,7 @@ return {
 		["ability"] = 45,
 		["lv"] = 27,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 41,
+		["walkSpeed"] = 85,
 	},
 	[28] = {
 		["type"] = 1,
@@ -221,7 +221,7 @@ return {
 		["ability"] = 46,
 		["lv"] = 28,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 43,
+		["walkSpeed"] = 87,
 	},
 	[29] = {
 		["type"] = 1,
@@ -229,7 +229,7 @@ return {
 		["ability"] = 47,
 		["lv"] = 29,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 44,
+		["walkSpeed"] = 89,
 	},
 	[30] = {
 		["type"] = 1,
@@ -237,7 +237,7 @@ return {
 		["ability"] = 48,
 		["lv"] = 30,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 46,
+		["walkSpeed"] = 90,
 	},
 	[31] = {
 		["type"] = 1,
@@ -245,7 +245,7 @@ return {
 		["ability"] = 49,
 		["lv"] = 31,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 48,
+		["walkSpeed"] = 92,
 	},
 	[32] = {
 		["type"] = 1,
@@ -253,7 +253,7 @@ return {
 		["ability"] = 50,
 		["lv"] = 32,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 50,
+		["walkSpeed"] = 94,
 	},
 	[33] = {
 		["type"] = 1,
@@ -261,7 +261,7 @@ return {
 		["ability"] = 51,
 		["lv"] = 33,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 52,
+		["walkSpeed"] = 96,
 	},
 	[34] = {
 		["type"] = 1,
@@ -269,7 +269,7 @@ return {
 		["ability"] = 52,
 		["lv"] = 34,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 54,
+		["walkSpeed"] = 98,
 	},
 	[35] = {
 		["type"] = 1,
@@ -277,7 +277,7 @@ return {
 		["ability"] = 53,
 		["lv"] = 35,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 57,
+		["walkSpeed"] = 99,
 	},
 	[36] = {
 		["type"] = 1,
@@ -285,7 +285,7 @@ return {
 		["ability"] = 54,
 		["lv"] = 36,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 59,
+		["walkSpeed"] = 101,
 	},
 	[37] = {
 		["type"] = 1,
@@ -293,7 +293,7 @@ return {
 		["ability"] = 55,
 		["lv"] = 37,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 61,
+		["walkSpeed"] = 103,
 	},
 	[38] = {
 		["type"] = 1,
@@ -301,7 +301,7 @@ return {
 		["ability"] = 56,
 		["lv"] = 38,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 63,
+		["walkSpeed"] = 105,
 	},
 	[39] = {
 		["type"] = 1,
@@ -309,7 +309,7 @@ return {
 		["ability"] = 57,
 		["lv"] = 39,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 65,
+		["walkSpeed"] = 107,
 	},
 	[40] = {
 		["type"] = 1,
@@ -317,7 +317,7 @@ return {
 		["ability"] = 58,
 		["lv"] = 40,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 68,
+		["walkSpeed"] = 108,
 	},
 	[41] = {
 		["type"] = 1,
@@ -325,7 +325,7 @@ return {
 		["ability"] = 59,
 		["lv"] = 41,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 70,
+		["walkSpeed"] = 110,
 	},
 	[42] = {
 		["type"] = 1,
@@ -333,7 +333,7 @@ return {
 		["ability"] = 60,
 		["lv"] = 42,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 72,
+		["walkSpeed"] = 112,
 	},
 	[43] = {
 		["type"] = 1,
@@ -341,7 +341,7 @@ return {
 		["ability"] = 61,
 		["lv"] = 43,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 75,
+		["walkSpeed"] = 114,
 	},
 	[44] = {
 		["type"] = 1,
@@ -349,7 +349,7 @@ return {
 		["ability"] = 62,
 		["lv"] = 44,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 77,
+		["walkSpeed"] = 116,
 	},
 	[45] = {
 		["type"] = 1,
@@ -357,7 +357,7 @@ return {
 		["ability"] = 63,
 		["lv"] = 45,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 80,
+		["walkSpeed"] = 117,
 	},
 	[46] = {
 		["type"] = 1,
@@ -365,7 +365,7 @@ return {
 		["ability"] = 64,
 		["lv"] = 46,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 82,
+		["walkSpeed"] = 119,
 	},
 	[47] = {
 		["type"] = 1,
@@ -373,7 +373,7 @@ return {
 		["ability"] = 65,
 		["lv"] = 47,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 85,
+		["walkSpeed"] = 121,
 	},
 	[48] = {
 		["type"] = 1,
@@ -381,7 +381,7 @@ return {
 		["ability"] = 66,
 		["lv"] = 48,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 87,
+		["walkSpeed"] = 123,
 	},
 	[49] = {
 		["type"] = 1,
@@ -389,7 +389,7 @@ return {
 		["ability"] = 67,
 		["lv"] = 49,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 90,
+		["walkSpeed"] = 125,
 	},
 	[50] = {
 		["type"] = 1,
@@ -397,7 +397,7 @@ return {
 		["ability"] = 68,
 		["lv"] = 50,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 93,
+		["walkSpeed"] = 126,
 	},
 	[51] = {
 		["type"] = 1,
@@ -405,7 +405,7 @@ return {
 		["ability"] = 69,
 		["lv"] = 51,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 95,
+		["walkSpeed"] = 128,
 	},
 	[52] = {
 		["type"] = 1,
@@ -413,7 +413,7 @@ return {
 		["ability"] = 70,
 		["lv"] = 52,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 98,
+		["walkSpeed"] = 130,
 	},
 	[53] = {
 		["type"] = 1,
@@ -421,7 +421,7 @@ return {
 		["ability"] = 71,
 		["lv"] = 53,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 101,
+		["walkSpeed"] = 132,
 	},
 	[54] = {
 		["type"] = 1,
@@ -429,7 +429,7 @@ return {
 		["ability"] = 72,
 		["lv"] = 54,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 104,
+		["walkSpeed"] = 133,
 	},
 	[55] = {
 		["type"] = 1,
@@ -437,7 +437,7 @@ return {
 		["ability"] = 73,
 		["lv"] = 55,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 106,
+		["walkSpeed"] = 135,
 	},
 	[56] = {
 		["type"] = 1,
@@ -445,7 +445,7 @@ return {
 		["ability"] = 74,
 		["lv"] = 56,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 109,
+		["walkSpeed"] = 137,
 	},
 	[57] = {
 		["type"] = 1,
@@ -453,7 +453,7 @@ return {
 		["ability"] = 75,
 		["lv"] = 57,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 112,
+		["walkSpeed"] = 139,
 	},
 	[58] = {
 		["type"] = 1,
@@ -461,7 +461,7 @@ return {
 		["ability"] = 76,
 		["lv"] = 58,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 115,
+		["walkSpeed"] = 141,
 	},
 	[59] = {
 		["type"] = 1,
@@ -469,7 +469,7 @@ return {
 		["ability"] = 77,
 		["lv"] = 59,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 118,
+		["walkSpeed"] = 142,
 	},
 	[60] = {
 		["type"] = 1,
@@ -477,7 +477,7 @@ return {
 		["ability"] = 78,
 		["lv"] = 60,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 121,
+		["walkSpeed"] = 144,
 	},
 	[61] = {
 		["type"] = 1,
@@ -485,7 +485,7 @@ return {
 		["ability"] = 79,
 		["lv"] = 61,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 124,
+		["walkSpeed"] = 146,
 	},
 	[62] = {
 		["type"] = 1,
@@ -493,7 +493,7 @@ return {
 		["ability"] = 80,
 		["lv"] = 62,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 127,
+		["walkSpeed"] = 148,
 	},
 	[63] = {
 		["type"] = 1,
@@ -501,7 +501,7 @@ return {
 		["ability"] = 81,
 		["lv"] = 63,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 130,
+		["walkSpeed"] = 150,
 	},
 	[64] = {
 		["type"] = 1,
@@ -509,7 +509,7 @@ return {
 		["ability"] = 82,
 		["lv"] = 64,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 134,
+		["walkSpeed"] = 151,
 	},
 	[65] = {
 		["type"] = 1,
@@ -517,7 +517,7 @@ return {
 		["ability"] = 83,
 		["lv"] = 65,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 137,
+		["walkSpeed"] = 153,
 	},
 	[66] = {
 		["type"] = 1,
@@ -525,7 +525,7 @@ return {
 		["ability"] = 84,
 		["lv"] = 66,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 140,
+		["walkSpeed"] = 155,
 	},
 	[67] = {
 		["type"] = 1,
@@ -533,7 +533,7 @@ return {
 		["ability"] = 85,
 		["lv"] = 67,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 143,
+		["walkSpeed"] = 157,
 	},
 	[68] = {
 		["type"] = 1,
@@ -541,7 +541,7 @@ return {
 		["ability"] = 86,
 		["lv"] = 68,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 147,
+		["walkSpeed"] = 159,
 	},
 	[69] = {
 		["type"] = 1,
@@ -549,7 +549,7 @@ return {
 		["ability"] = 87,
 		["lv"] = 69,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 150,
+		["walkSpeed"] = 160,
 	},
 	[70] = {
 		["type"] = 1,
@@ -557,7 +557,7 @@ return {
 		["ability"] = 88,
 		["lv"] = 70,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 153,
+		["walkSpeed"] = 162,
 	},
 	[71] = {
 		["type"] = 1,
@@ -565,7 +565,7 @@ return {
 		["ability"] = 89,
 		["lv"] = 71,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 157,
+		["walkSpeed"] = 164,
 	},
 	[72] = {
 		["type"] = 1,
@@ -573,7 +573,7 @@ return {
 		["ability"] = 90,
 		["lv"] = 72,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 160,
+		["walkSpeed"] = 166,
 	},
 	[73] = {
 		["type"] = 1,
@@ -581,7 +581,7 @@ return {
 		["ability"] = 91,
 		["lv"] = 73,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 164,
+		["walkSpeed"] = 168,
 	},
 	[74] = {
 		["type"] = 1,
@@ -589,7 +589,7 @@ return {
 		["ability"] = 92,
 		["lv"] = 74,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 167,
+		["walkSpeed"] = 169,
 	},
 	[75] = {
 		["type"] = 1,
@@ -605,7 +605,7 @@ return {
 		["ability"] = 94,
 		["lv"] = 76,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 174,
+		["walkSpeed"] = 173,
 	},
 	[77] = {
 		["type"] = 1,
@@ -613,7 +613,7 @@ return {
 		["ability"] = 95,
 		["lv"] = 77,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 178,
+		["walkSpeed"] = 175,
 	},
 	[78] = {
 		["type"] = 1,
@@ -621,7 +621,7 @@ return {
 		["ability"] = 96,
 		["lv"] = 78,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 181,
+		["walkSpeed"] = 176,
 	},
 	[79] = {
 		["type"] = 1,
@@ -629,7 +629,7 @@ return {
 		["ability"] = 97,
 		["lv"] = 79,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 185,
+		["walkSpeed"] = 178,
 	},
 	[80] = {
 		["type"] = 1,
@@ -637,7 +637,7 @@ return {
 		["ability"] = 98,
 		["lv"] = 80,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 189,
+		["walkSpeed"] = 180,
 	},
 	[81] = {
 		["type"] = 1,
@@ -645,7 +645,7 @@ return {
 		["ability"] = 99,
 		["lv"] = 81,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 193,
+		["walkSpeed"] = 182,
 	},
 	[82] = {
 		["type"] = 1,
@@ -653,7 +653,7 @@ return {
 		["ability"] = 100,
 		["lv"] = 82,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 196,
+		["walkSpeed"] = 184,
 	},
 	[83] = {
 		["type"] = 1,
@@ -661,7 +661,7 @@ return {
 		["ability"] = 101,
 		["lv"] = 83,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 200,
+		["walkSpeed"] = 185,
 	},
 	[84] = {
 		["type"] = 1,
@@ -669,7 +669,7 @@ return {
 		["ability"] = 102,
 		["lv"] = 84,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 204,
+		["walkSpeed"] = 187,
 	},
 	[85] = {
 		["type"] = 1,
@@ -677,7 +677,7 @@ return {
 		["ability"] = 103,
 		["lv"] = 85,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 208,
+		["walkSpeed"] = 189,
 	},
 	[86] = {
 		["type"] = 1,
@@ -685,7 +685,7 @@ return {
 		["ability"] = 104,
 		["lv"] = 86,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 212,
+		["walkSpeed"] = 191,
 	},
 	[87] = {
 		["type"] = 1,
@@ -693,7 +693,7 @@ return {
 		["ability"] = 105,
 		["lv"] = 87,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 216,
+		["walkSpeed"] = 193,
 	},
 	[88] = {
 		["type"] = 1,
@@ -701,7 +701,7 @@ return {
 		["ability"] = 106,
 		["lv"] = 88,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 220,
+		["walkSpeed"] = 194,
 	},
 	[89] = {
 		["type"] = 1,
@@ -709,7 +709,7 @@ return {
 		["ability"] = 107,
 		["lv"] = 89,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 224,
+		["walkSpeed"] = 196,
 	},
 	[90] = {
 		["type"] = 1,
@@ -717,7 +717,7 @@ return {
 		["ability"] = 108,
 		["lv"] = 90,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 228,
+		["walkSpeed"] = 198,
 	},
 	[91] = {
 		["type"] = 1,
@@ -725,7 +725,7 @@ return {
 		["ability"] = 109,
 		["lv"] = 91,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 232,
+		["walkSpeed"] = 200,
 	},
 	[92] = {
 		["type"] = 1,
@@ -733,7 +733,7 @@ return {
 		["ability"] = 110,
 		["lv"] = 92,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 236,
+		["walkSpeed"] = 202,
 	},
 	[93] = {
 		["type"] = 1,
@@ -741,7 +741,7 @@ return {
 		["ability"] = 111,
 		["lv"] = 93,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 241,
+		["walkSpeed"] = 203,
 	},
 	[94] = {
 		["type"] = 1,
@@ -749,7 +749,7 @@ return {
 		["ability"] = 112,
 		["lv"] = 94,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 245,
+		["walkSpeed"] = 205,
 	},
 	[95] = {
 		["type"] = 1,
@@ -757,7 +757,7 @@ return {
 		["ability"] = 113,
 		["lv"] = 95,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 249,
+		["walkSpeed"] = 207,
 	},
 	[96] = {
 		["type"] = 1,
@@ -765,7 +765,7 @@ return {
 		["ability"] = 114,
 		["lv"] = 96,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 253,
+		["walkSpeed"] = 209,
 	},
 	[97] = {
 		["type"] = 1,
@@ -773,7 +773,7 @@ return {
 		["ability"] = 115,
 		["lv"] = 97,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 258,
+		["walkSpeed"] = 211,
 	},
 	[98] = {
 		["type"] = 1,
@@ -781,7 +781,7 @@ return {
 		["ability"] = 116,
 		["lv"] = 98,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 262,
+		["walkSpeed"] = 212,
 	},
 	[99] = {
 		["type"] = 1,
@@ -789,7 +789,7 @@ return {
 		["ability"] = 117,
 		["lv"] = 99,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 267,
+		["walkSpeed"] = 214,
 	},
 	[100] = {
 		["type"] = 1,
@@ -797,7 +797,7 @@ return {
 		["ability"] = 118,
 		["lv"] = 100,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 271,
+		["walkSpeed"] = 216,
 	},
 	[101] = {
 		["type"] = 1,
@@ -805,7 +805,7 @@ return {
 		["ability"] = 119,
 		["lv"] = 101,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 275,
+		["walkSpeed"] = 218,
 	},
 	[102] = {
 		["type"] = 1,
@@ -813,7 +813,7 @@ return {
 		["ability"] = 120,
 		["lv"] = 102,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 280,
+		["walkSpeed"] = 219,
 	},
 	[103] = {
 		["type"] = 1,
@@ -821,7 +821,7 @@ return {
 		["ability"] = 121,
 		["lv"] = 103,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 284,
+		["walkSpeed"] = 221,
 	},
 	[104] = {
 		["type"] = 1,
@@ -829,7 +829,7 @@ return {
 		["ability"] = 122,
 		["lv"] = 104,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 289,
+		["walkSpeed"] = 223,
 	},
 	[105] = {
 		["type"] = 1,
@@ -837,7 +837,7 @@ return {
 		["ability"] = 123,
 		["lv"] = 105,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 294,
+		["walkSpeed"] = 225,
 	},
 	[106] = {
 		["type"] = 1,
@@ -845,7 +845,7 @@ return {
 		["ability"] = 124,
 		["lv"] = 106,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 298,
+		["walkSpeed"] = 227,
 	},
 	[107] = {
 		["type"] = 1,
@@ -853,7 +853,7 @@ return {
 		["ability"] = 125,
 		["lv"] = 107,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 228,
 	},
 	[108] = {
 		["type"] = 1,
@@ -861,7 +861,7 @@ return {
 		["ability"] = 126,
 		["lv"] = 108,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 230,
 	},
 	[109] = {
 		["type"] = 1,
@@ -869,7 +869,7 @@ return {
 		["ability"] = 127,
 		["lv"] = 109,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[110] = {
 		["type"] = 1,
@@ -877,7 +877,7 @@ return {
 		["ability"] = 128,
 		["lv"] = 110,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[111] = {
 		["type"] = 1,
@@ -885,7 +885,7 @@ return {
 		["ability"] = 129,
 		["lv"] = 111,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[112] = {
 		["type"] = 1,
@@ -893,7 +893,7 @@ return {
 		["ability"] = 130,
 		["lv"] = 112,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[113] = {
 		["type"] = 1,
@@ -901,7 +901,7 @@ return {
 		["ability"] = 131,
 		["lv"] = 113,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[114] = {
 		["type"] = 1,
@@ -909,7 +909,7 @@ return {
 		["ability"] = 132,
 		["lv"] = 114,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[115] = {
 		["type"] = 1,
@@ -917,7 +917,7 @@ return {
 		["ability"] = 133,
 		["lv"] = 115,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[116] = {
 		["type"] = 1,
@@ -925,7 +925,7 @@ return {
 		["ability"] = 134,
 		["lv"] = 116,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[117] = {
 		["type"] = 1,
@@ -933,7 +933,7 @@ return {
 		["ability"] = 135,
 		["lv"] = 117,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[118] = {
 		["type"] = 1,
@@ -941,7 +941,7 @@ return {
 		["ability"] = 136,
 		["lv"] = 118,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[119] = {
 		["type"] = 1,
@@ -949,7 +949,7 @@ return {
 		["ability"] = 137,
 		["lv"] = 119,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[120] = {
 		["type"] = 1,
@@ -957,7 +957,7 @@ return {
 		["ability"] = 138,
 		["lv"] = 120,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[121] = {
 		["type"] = 1,
@@ -965,7 +965,7 @@ return {
 		["ability"] = 139,
 		["lv"] = 121,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[122] = {
 		["type"] = 1,
@@ -973,7 +973,7 @@ return {
 		["ability"] = 140,
 		["lv"] = 122,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[123] = {
 		["type"] = 1,
@@ -981,7 +981,7 @@ return {
 		["ability"] = 141,
 		["lv"] = 123,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[124] = {
 		["type"] = 1,
@@ -989,7 +989,7 @@ return {
 		["ability"] = 142,
 		["lv"] = 124,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[125] = {
 		["type"] = 1,
@@ -997,7 +997,7 @@ return {
 		["ability"] = 143,
 		["lv"] = 125,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[126] = {
 		["type"] = 1,
@@ -1005,7 +1005,7 @@ return {
 		["ability"] = 144,
 		["lv"] = 126,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[127] = {
 		["type"] = 1,
@@ -1013,7 +1013,7 @@ return {
 		["ability"] = 145,
 		["lv"] = 127,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[128] = {
 		["type"] = 1,
@@ -1021,7 +1021,7 @@ return {
 		["ability"] = 146,
 		["lv"] = 128,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[129] = {
 		["type"] = 1,
@@ -1029,7 +1029,7 @@ return {
 		["ability"] = 147,
 		["lv"] = 129,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[130] = {
 		["type"] = 1,
@@ -1037,7 +1037,7 @@ return {
 		["ability"] = 148,
 		["lv"] = 130,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[131] = {
 		["type"] = 1,
@@ -1045,7 +1045,7 @@ return {
 		["ability"] = 149,
 		["lv"] = 131,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[132] = {
 		["type"] = 1,
@@ -1053,7 +1053,7 @@ return {
 		["ability"] = 150,
 		["lv"] = 132,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[133] = {
 		["type"] = 1,
@@ -1061,7 +1061,7 @@ return {
 		["ability"] = 151,
 		["lv"] = 133,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[134] = {
 		["type"] = 1,
@@ -1069,7 +1069,7 @@ return {
 		["ability"] = 152,
 		["lv"] = 134,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[135] = {
 		["type"] = 1,
@@ -1077,7 +1077,7 @@ return {
 		["ability"] = 153,
 		["lv"] = 135,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[136] = {
 		["type"] = 0,
@@ -1085,7 +1085,7 @@ return {
 		["ability"] = 154,
 		["lv"] = 136,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[137] = {
 		["type"] = 0,
@@ -1093,7 +1093,7 @@ return {
 		["ability"] = 155,
 		["lv"] = 137,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[138] = {
 		["type"] = 0,
@@ -1101,7 +1101,7 @@ return {
 		["ability"] = 156,
 		["lv"] = 138,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[139] = {
 		["type"] = 0,
@@ -1109,7 +1109,7 @@ return {
 		["ability"] = 157,
 		["lv"] = 139,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[140] = {
 		["type"] = 0,
@@ -1117,7 +1117,7 @@ return {
 		["ability"] = 158,
 		["lv"] = 140,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[141] = {
 		["type"] = 0,
@@ -1125,7 +1125,7 @@ return {
 		["ability"] = 159,
 		["lv"] = 141,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[142] = {
 		["type"] = 0,
@@ -1133,7 +1133,7 @@ return {
 		["ability"] = 160,
 		["lv"] = 142,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[143] = {
 		["type"] = 0,
@@ -1141,7 +1141,7 @@ return {
 		["ability"] = 161,
 		["lv"] = 143,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[144] = {
 		["type"] = 0,
@@ -1149,7 +1149,7 @@ return {
 		["ability"] = 162,
 		["lv"] = 144,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[145] = {
 		["type"] = 0,
@@ -1157,7 +1157,7 @@ return {
 		["ability"] = 163,
 		["lv"] = 145,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[146] = {
 		["type"] = 0,
@@ -1165,7 +1165,7 @@ return {
 		["ability"] = 164,
 		["lv"] = 146,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[147] = {
 		["type"] = 0,
@@ -1173,7 +1173,7 @@ return {
 		["ability"] = 165,
 		["lv"] = 147,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[148] = {
 		["type"] = 0,
@@ -1181,7 +1181,7 @@ return {
 		["ability"] = 166,
 		["lv"] = 148,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[149] = {
 		["type"] = 0,
@@ -1189,7 +1189,7 @@ return {
 		["ability"] = 167,
 		["lv"] = 149,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[150] = {
 		["type"] = 0,
@@ -1197,7 +1197,7 @@ return {
 		["ability"] = 168,
 		["lv"] = 150,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[151] = {
 		["type"] = 0,
@@ -1205,7 +1205,7 @@ return {
 		["ability"] = 169,
 		["lv"] = 151,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[152] = {
 		["type"] = 0,
@@ -1213,7 +1213,7 @@ return {
 		["ability"] = 170,
 		["lv"] = 152,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[153] = {
 		["type"] = 0,
@@ -1221,7 +1221,7 @@ return {
 		["ability"] = 171,
 		["lv"] = 153,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[154] = {
 		["type"] = 0,
@@ -1229,7 +1229,7 @@ return {
 		["ability"] = 172,
 		["lv"] = 154,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[155] = {
 		["type"] = 0,
@@ -1237,7 +1237,7 @@ return {
 		["ability"] = 173,
 		["lv"] = 155,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[156] = {
 		["type"] = 0,
@@ -1245,7 +1245,7 @@ return {
 		["ability"] = 174,
 		["lv"] = 156,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[157] = {
 		["type"] = 0,
@@ -1253,7 +1253,7 @@ return {
 		["ability"] = 175,
 		["lv"] = 157,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[158] = {
 		["type"] = 0,
@@ -1261,7 +1261,7 @@ return {
 		["ability"] = 176,
 		["lv"] = 158,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[159] = {
 		["type"] = 0,
@@ -1269,7 +1269,7 @@ return {
 		["ability"] = 177,
 		["lv"] = 159,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[160] = {
 		["type"] = 0,
@@ -1277,7 +1277,7 @@ return {
 		["ability"] = 178,
 		["lv"] = 160,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[161] = {
 		["type"] = 0,
@@ -1285,7 +1285,7 @@ return {
 		["ability"] = 179,
 		["lv"] = 161,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[162] = {
 		["type"] = 0,
@@ -1293,7 +1293,7 @@ return {
 		["ability"] = 180,
 		["lv"] = 162,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[163] = {
 		["type"] = 0,
@@ -1301,7 +1301,7 @@ return {
 		["ability"] = 181,
 		["lv"] = 163,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[164] = {
 		["type"] = 0,
@@ -1309,7 +1309,7 @@ return {
 		["ability"] = 182,
 		["lv"] = 164,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[165] = {
 		["type"] = 0,
@@ -1317,7 +1317,7 @@ return {
 		["ability"] = 183,
 		["lv"] = 165,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[166] = {
 		["type"] = 0,
@@ -1325,7 +1325,7 @@ return {
 		["ability"] = 184,
 		["lv"] = 166,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[167] = {
 		["type"] = 0,
@@ -1333,7 +1333,7 @@ return {
 		["ability"] = 185,
 		["lv"] = 167,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[168] = {
 		["type"] = 0,
@@ -1341,7 +1341,7 @@ return {
 		["ability"] = 186,
 		["lv"] = 168,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[169] = {
 		["type"] = 0,
@@ -1349,7 +1349,7 @@ return {
 		["ability"] = 187,
 		["lv"] = 169,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[170] = {
 		["type"] = 0,
@@ -1357,7 +1357,7 @@ return {
 		["ability"] = 188,
 		["lv"] = 170,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[171] = {
 		["type"] = 0,
@@ -1365,7 +1365,7 @@ return {
 		["ability"] = 189,
 		["lv"] = 171,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[172] = {
 		["type"] = 0,
@@ -1373,7 +1373,7 @@ return {
 		["ability"] = 190,
 		["lv"] = 172,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[173] = {
 		["type"] = 0,
@@ -1381,7 +1381,7 @@ return {
 		["ability"] = 191,
 		["lv"] = 173,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[174] = {
 		["type"] = 0,
@@ -1389,7 +1389,7 @@ return {
 		["ability"] = 192,
 		["lv"] = 174,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[175] = {
 		["type"] = 0,
@@ -1397,7 +1397,7 @@ return {
 		["ability"] = 193,
 		["lv"] = 175,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[176] = {
 		["type"] = 0,
@@ -1405,7 +1405,7 @@ return {
 		["ability"] = 194,
 		["lv"] = 176,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[177] = {
 		["type"] = 0,
@@ -1413,7 +1413,7 @@ return {
 		["ability"] = 195,
 		["lv"] = 177,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[178] = {
 		["type"] = 0,
@@ -1421,7 +1421,7 @@ return {
 		["ability"] = 196,
 		["lv"] = 178,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[179] = {
 		["type"] = 0,
@@ -1429,7 +1429,7 @@ return {
 		["ability"] = 197,
 		["lv"] = 179,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[180] = {
 		["type"] = 0,
@@ -1437,7 +1437,7 @@ return {
 		["ability"] = 198,
 		["lv"] = 180,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[181] = {
 		["type"] = 0,
@@ -1445,7 +1445,7 @@ return {
 		["ability"] = 199,
 		["lv"] = 181,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[182] = {
 		["type"] = 0,
@@ -1453,7 +1453,7 @@ return {
 		["ability"] = 200,
 		["lv"] = 182,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[183] = {
 		["type"] = 0,
@@ -1461,7 +1461,7 @@ return {
 		["ability"] = 201,
 		["lv"] = 183,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[184] = {
 		["type"] = 0,
@@ -1469,7 +1469,7 @@ return {
 		["ability"] = 202,
 		["lv"] = 184,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[185] = {
 		["type"] = 0,
@@ -1477,7 +1477,7 @@ return {
 		["ability"] = 203,
 		["lv"] = 185,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[186] = {
 		["type"] = 0,
@@ -1485,7 +1485,7 @@ return {
 		["ability"] = 204,
 		["lv"] = 186,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[187] = {
 		["type"] = 0,
@@ -1493,7 +1493,7 @@ return {
 		["ability"] = 205,
 		["lv"] = 187,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[188] = {
 		["type"] = 0,
@@ -1501,7 +1501,7 @@ return {
 		["ability"] = 206,
 		["lv"] = 188,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[189] = {
 		["type"] = 0,
@@ -1509,7 +1509,7 @@ return {
 		["ability"] = 207,
 		["lv"] = 189,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[190] = {
 		["type"] = 0,
@@ -1517,7 +1517,7 @@ return {
 		["ability"] = 208,
 		["lv"] = 190,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[191] = {
 		["type"] = 0,
@@ -1525,7 +1525,7 @@ return {
 		["ability"] = 209,
 		["lv"] = 191,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[192] = {
 		["type"] = 0,
@@ -1533,7 +1533,7 @@ return {
 		["ability"] = 210,
 		["lv"] = 192,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[193] = {
 		["type"] = 0,
@@ -1541,7 +1541,7 @@ return {
 		["ability"] = 211,
 		["lv"] = 193,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[194] = {
 		["type"] = 0,
@@ -1549,7 +1549,7 @@ return {
 		["ability"] = 212,
 		["lv"] = 194,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[195] = {
 		["type"] = 0,
@@ -1557,7 +1557,7 @@ return {
 		["ability"] = 213,
 		["lv"] = 195,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[196] = {
 		["type"] = 0,
@@ -1565,7 +1565,7 @@ return {
 		["ability"] = 214,
 		["lv"] = 196,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[197] = {
 		["type"] = 0,
@@ -1573,7 +1573,7 @@ return {
 		["ability"] = 215,
 		["lv"] = 197,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[198] = {
 		["type"] = 0,
@@ -1581,7 +1581,7 @@ return {
 		["ability"] = 216,
 		["lv"] = 198,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[199] = {
 		["type"] = 0,
@@ -1589,7 +1589,7 @@ return {
 		["ability"] = 217,
 		["lv"] = 199,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[200] = {
 		["type"] = 0,
@@ -1597,7 +1597,7 @@ return {
 		["ability"] = 218,
 		["lv"] = 200,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[201] = {
 		["type"] = 0,
@@ -1605,7 +1605,7 @@ return {
 		["ability"] = 219,
 		["lv"] = 201,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[202] = {
 		["type"] = 0,
@@ -1613,7 +1613,7 @@ return {
 		["ability"] = 220,
 		["lv"] = 202,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[203] = {
 		["type"] = 0,
@@ -1621,7 +1621,7 @@ return {
 		["ability"] = 221,
 		["lv"] = 203,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[204] = {
 		["type"] = 0,
@@ -1629,7 +1629,7 @@ return {
 		["ability"] = 222,
 		["lv"] = 204,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[205] = {
 		["type"] = 0,
@@ -1637,7 +1637,7 @@ return {
 		["ability"] = 223,
 		["lv"] = 205,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[206] = {
 		["type"] = 0,
@@ -1645,7 +1645,7 @@ return {
 		["ability"] = 224,
 		["lv"] = 206,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[207] = {
 		["type"] = 0,
@@ -1653,7 +1653,7 @@ return {
 		["ability"] = 225,
 		["lv"] = 207,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[208] = {
 		["type"] = 0,
@@ -1661,7 +1661,7 @@ return {
 		["ability"] = 226,
 		["lv"] = 208,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[209] = {
 		["type"] = 0,
@@ -1669,7 +1669,7 @@ return {
 		["ability"] = 227,
 		["lv"] = 209,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[210] = {
 		["type"] = 0,
@@ -1677,7 +1677,7 @@ return {
 		["ability"] = 228,
 		["lv"] = 210,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[211] = {
 		["type"] = 0,
@@ -1685,7 +1685,7 @@ return {
 		["ability"] = 229,
 		["lv"] = 211,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[212] = {
 		["type"] = 0,
@@ -1693,7 +1693,7 @@ return {
 		["ability"] = 230,
 		["lv"] = 212,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[213] = {
 		["type"] = 0,
@@ -1701,7 +1701,7 @@ return {
 		["ability"] = 231,
 		["lv"] = 213,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[214] = {
 		["type"] = 0,
@@ -1709,7 +1709,7 @@ return {
 		["ability"] = 232,
 		["lv"] = 214,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[215] = {
 		["type"] = 0,
@@ -1717,7 +1717,7 @@ return {
 		["ability"] = 233,
 		["lv"] = 215,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[216] = {
 		["type"] = 0,
@@ -1725,7 +1725,7 @@ return {
 		["ability"] = 234,
 		["lv"] = 216,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[217] = {
 		["type"] = 0,
@@ -1733,7 +1733,7 @@ return {
 		["ability"] = 235,
 		["lv"] = 217,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[218] = {
 		["type"] = 0,
@@ -1741,7 +1741,7 @@ return {
 		["ability"] = 236,
 		["lv"] = 218,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[219] = {
 		["type"] = 0,
@@ -1749,7 +1749,7 @@ return {
 		["ability"] = 237,
 		["lv"] = 219,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[220] = {
 		["type"] = 0,
@@ -1757,7 +1757,7 @@ return {
 		["ability"] = 238,
 		["lv"] = 220,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[221] = {
 		["type"] = 0,
@@ -1765,7 +1765,7 @@ return {
 		["ability"] = 239,
 		["lv"] = 221,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[222] = {
 		["type"] = 0,
@@ -1773,7 +1773,7 @@ return {
 		["ability"] = 240,
 		["lv"] = 222,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[223] = {
 		["type"] = 0,
@@ -1781,7 +1781,7 @@ return {
 		["ability"] = 241,
 		["lv"] = 223,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[224] = {
 		["type"] = 0,
@@ -1789,7 +1789,7 @@ return {
 		["ability"] = 242,
 		["lv"] = 224,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[225] = {
 		["type"] = 0,
@@ -1797,7 +1797,7 @@ return {
 		["ability"] = 243,
 		["lv"] = 225,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[226] = {
 		["type"] = 0,
@@ -1805,7 +1805,7 @@ return {
 		["ability"] = 244,
 		["lv"] = 226,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[227] = {
 		["type"] = 0,
@@ -1813,7 +1813,7 @@ return {
 		["ability"] = 245,
 		["lv"] = 227,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[228] = {
 		["type"] = 0,
@@ -1821,7 +1821,7 @@ return {
 		["ability"] = 246,
 		["lv"] = 228,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[229] = {
 		["type"] = 0,
@@ -1829,7 +1829,7 @@ return {
 		["ability"] = 247,
 		["lv"] = 229,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[230] = {
 		["type"] = 0,
@@ -1837,7 +1837,7 @@ return {
 		["ability"] = 248,
 		["lv"] = 230,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[231] = {
 		["type"] = 0,
@@ -1845,7 +1845,7 @@ return {
 		["ability"] = 249,
 		["lv"] = 231,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[232] = {
 		["type"] = 0,
@@ -1853,7 +1853,7 @@ return {
 		["ability"] = 250,
 		["lv"] = 232,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[233] = {
 		["type"] = 0,
@@ -1861,7 +1861,7 @@ return {
 		["ability"] = 251,
 		["lv"] = 233,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[234] = {
 		["type"] = 0,
@@ -1869,7 +1869,7 @@ return {
 		["ability"] = 252,
 		["lv"] = 234,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[235] = {
 		["type"] = 0,
@@ -1877,7 +1877,7 @@ return {
 		["ability"] = 253,
 		["lv"] = 235,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[236] = {
 		["type"] = 0,
@@ -1885,7 +1885,7 @@ return {
 		["ability"] = 254,
 		["lv"] = 236,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[237] = {
 		["type"] = 0,
@@ -1893,7 +1893,7 @@ return {
 		["ability"] = 255,
 		["lv"] = 237,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[238] = {
 		["type"] = 0,
@@ -1901,7 +1901,7 @@ return {
 		["ability"] = 256,
 		["lv"] = 238,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[239] = {
 		["type"] = 0,
@@ -1909,7 +1909,7 @@ return {
 		["ability"] = 257,
 		["lv"] = 239,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[240] = {
 		["type"] = 0,
@@ -1917,7 +1917,7 @@ return {
 		["ability"] = 258,
 		["lv"] = 240,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[241] = {
 		["type"] = 0,
@@ -1925,7 +1925,7 @@ return {
 		["ability"] = 259,
 		["lv"] = 241,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[242] = {
 		["type"] = 0,
@@ -1933,7 +1933,7 @@ return {
 		["ability"] = 260,
 		["lv"] = 242,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[243] = {
 		["type"] = 0,
@@ -1941,7 +1941,7 @@ return {
 		["ability"] = 261,
 		["lv"] = 243,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[244] = {
 		["type"] = 0,
@@ -1949,7 +1949,7 @@ return {
 		["ability"] = 262,
 		["lv"] = 244,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[245] = {
 		["type"] = 0,
@@ -1957,7 +1957,7 @@ return {
 		["ability"] = 263,
 		["lv"] = 245,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[246] = {
 		["type"] = 0,
@@ -1965,7 +1965,7 @@ return {
 		["ability"] = 264,
 		["lv"] = 246,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[247] = {
 		["type"] = 0,
@@ -1973,7 +1973,7 @@ return {
 		["ability"] = 265,
 		["lv"] = 247,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[248] = {
 		["type"] = 0,
@@ -1981,7 +1981,7 @@ return {
 		["ability"] = 266,
 		["lv"] = 248,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[249] = {
 		["type"] = 0,
@@ -1989,7 +1989,7 @@ return {
 		["ability"] = 267,
 		["lv"] = 249,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[250] = {
 		["type"] = 0,
@@ -1997,7 +1997,7 @@ return {
 		["ability"] = 268,
 		["lv"] = 250,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[251] = {
 		["type"] = 0,
@@ -2005,7 +2005,7 @@ return {
 		["ability"] = 269,
 		["lv"] = 251,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[252] = {
 		["type"] = 0,
@@ -2013,7 +2013,7 @@ return {
 		["ability"] = 270,
 		["lv"] = 252,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[253] = {
 		["type"] = 0,
@@ -2021,7 +2021,7 @@ return {
 		["ability"] = 271,
 		["lv"] = 253,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[254] = {
 		["type"] = 0,
@@ -2029,7 +2029,7 @@ return {
 		["ability"] = 272,
 		["lv"] = 254,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[255] = {
 		["type"] = 0,
@@ -2037,7 +2037,7 @@ return {
 		["ability"] = 273,
 		["lv"] = 255,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[256] = {
 		["type"] = 0,
@@ -2045,7 +2045,7 @@ return {
 		["ability"] = 274,
 		["lv"] = 256,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[257] = {
 		["type"] = 0,
@@ -2053,7 +2053,7 @@ return {
 		["ability"] = 275,
 		["lv"] = 257,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[258] = {
 		["type"] = 0,
@@ -2061,7 +2061,7 @@ return {
 		["ability"] = 276,
 		["lv"] = 258,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[259] = {
 		["type"] = 0,
@@ -2069,7 +2069,7 @@ return {
 		["ability"] = 277,
 		["lv"] = 259,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[260] = {
 		["type"] = 0,
@@ -2077,7 +2077,7 @@ return {
 		["ability"] = 278,
 		["lv"] = 260,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[261] = {
 		["type"] = 0,
@@ -2085,7 +2085,7 @@ return {
 		["ability"] = 279,
 		["lv"] = 261,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[262] = {
 		["type"] = 0,
@@ -2093,7 +2093,7 @@ return {
 		["ability"] = 280,
 		["lv"] = 262,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[263] = {
 		["type"] = 0,
@@ -2101,7 +2101,7 @@ return {
 		["ability"] = 281,
 		["lv"] = 263,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[264] = {
 		["type"] = 0,
@@ -2109,7 +2109,7 @@ return {
 		["ability"] = 282,
 		["lv"] = 264,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[265] = {
 		["type"] = 0,
@@ -2117,7 +2117,7 @@ return {
 		["ability"] = 283,
 		["lv"] = 265,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[266] = {
 		["type"] = 0,
@@ -2125,7 +2125,7 @@ return {
 		["ability"] = 284,
 		["lv"] = 266,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[267] = {
 		["type"] = 0,
@@ -2133,7 +2133,7 @@ return {
 		["ability"] = 285,
 		["lv"] = 267,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 	[268] = {
 		["type"] = 0,
@@ -2141,6 +2141,6 @@ return {
 		["ability"] = 286,
 		["lv"] = 268,
 		["name_t"] = "Jumppower",
-		["walkSpeed"] = 300,
+		["walkSpeed"] = 500,
 	},
 }

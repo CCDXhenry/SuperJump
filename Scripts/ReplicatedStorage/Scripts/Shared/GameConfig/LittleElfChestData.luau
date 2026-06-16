@@ -11,7 +11,7 @@ return {
 	[2] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box2",
-		["distance"] = 200,
+		["distance"] = 300,
 		["id"] = 2,
 		["iconImageId"] = "rbxassetid://92022275554709",
 		["name_t"] = "Cyber Grid Box",
@@ -20,7 +20,7 @@ return {
 	[3] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box3",
-		["distance"] = 300,
+		["distance"] = 450,
 		["id"] = 3,
 		["iconImageId"] = "rbxassetid://129022654862676",
 		["name_t"] = "Radiant Gilded Box",
@@ -29,7 +29,7 @@ return {
 	[4] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box4",
-		["distance"] = 600,
+		["distance"] = 900,
 		["id"] = 4,
 		["iconImageId"] = "rbxassetid://99426019150398",
 		["name_t"] = "Pastel Prism Box",
@@ -38,7 +38,7 @@ return {
 	[5] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box5",
-		["distance"] = 900,
+		["distance"] = 1350,
 		["id"] = 5,
 		["iconImageId"] = "rbxassetid://100504318605769",
 		["name_t"] = "Nebula Starbox",
@@ -47,7 +47,7 @@ return {
 	[6] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box1",
-		["distance"] = 1200,
+		["distance"] = 1800,
 		["id"] = 6,
 		["iconImageId"] = "rbxassetid://119836096425123",
 		["name_t"] = "Abyssal Shadow Box",
@@ -56,7 +56,7 @@ return {
 	[7] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box2",
-		["distance"] = 1500,
+		["distance"] = 2250,
 		["id"] = 7,
 		["iconImageId"] = "rbxassetid://92022275554709",
 		["name_t"] = "Inferno Ember Box",
@@ -65,7 +65,7 @@ return {
 	[8] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box3",
-		["distance"] = 1800,
+		["distance"] = 2700,
 		["id"] = 8,
 		["iconImageId"] = "rbxassetid://129022654862676",
 		["name_t"] = "Cloudy Recruit Box",
@@ -74,7 +74,7 @@ return {
 	[9] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box4",
-		["distance"] = 2100,
+		["distance"] = 3150,
 		["id"] = 9,
 		["iconImageId"] = "rbxassetid://99426019150398",
 		["name_t"] = "Cyber Grid Box",
@@ -83,7 +83,7 @@ return {
 	[10] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box5",
-		["distance"] = 2400,
+		["distance"] = 3600,
 		["id"] = 10,
 		["iconImageId"] = "rbxassetid://100504318605769",
 		["name_t"] = "Radiant Gilded Box",
@@ -92,7 +92,7 @@ return {
 	[11] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box1",
-		["distance"] = 2700,
+		["distance"] = 4050,
 		["id"] = 11,
 		["iconImageId"] = "rbxassetid://119836096425123",
 		["name_t"] = "Pastel Prism Box",
@@ -101,7 +101,7 @@ return {
 	[12] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box2",
-		["distance"] = 3000,
+		["distance"] = 4500,
 		["id"] = 12,
 		["iconImageId"] = "rbxassetid://92022275554709",
 		["name_t"] = "Nebula Starbox",
@@ -110,7 +110,7 @@ return {
 	[13] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box3",
-		["distance"] = 3300,
+		["distance"] = 4950,
 		["id"] = 13,
 		["iconImageId"] = "rbxassetid://129022654862676",
 		["name_t"] = "Abyssal Shadow Box",
@@ -119,7 +119,7 @@ return {
 	[14] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box4",
-		["distance"] = 3600,
+		["distance"] = 5400,
 		["id"] = 14,
 		["iconImageId"] = "rbxassetid://99426019150398",
 		["name_t"] = "Inferno Ember Box",
@@ -128,7 +128,7 @@ return {
 	[15] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box5",
-		["distance"] = 3900,
+		["distance"] = 5850,
 		["id"] = 15,
 		["iconImageId"] = "rbxassetid://100504318605769",
 		["name_t"] = "Cloudy Recruit Box",
@@ -137,7 +137,7 @@ return {
 	[16] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box1",
-		["distance"] = 4200,
+		["distance"] = 6300,
 		["id"] = 16,
 		["iconImageId"] = "rbxassetid://119836096425123",
 		["name_t"] = "Cyber Grid Box",
@@ -146,7 +146,7 @@ return {
 	[17] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box2",
-		["distance"] = 4500,
+		["distance"] = 6750,
 		["id"] = 17,
 		["iconImageId"] = "rbxassetid://92022275554709",
 		["name_t"] = "Radiant Gilded Box",
@@ -155,7 +155,7 @@ return {
 	[18] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box3",
-		["distance"] = 5000,
+		["distance"] = 7500,
 		["id"] = 18,
 		["iconImageId"] = "rbxassetid://129022654862676",
 		["name_t"] = "Pastel Prism Box",
@@ -164,7 +164,7 @@ return {
 	[19] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box4",
-		["distance"] = 5500,
+		["distance"] = 8250,
 		["id"] = 19,
 		["iconImageId"] = "rbxassetid://99426019150398",
 		["name_t"] = "Nebula Starbox",
@@ -173,7 +173,7 @@ return {
 	[20] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box5",
-		["distance"] = 6300,
+		["distance"] = 9450,
 		["id"] = 20,
 		["iconImageId"] = "rbxassetid://100504318605769",
 		["name_t"] = "Abyssal Shadow Box",
@@ -182,7 +182,7 @@ return {
 	[21] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box1",
-		["distance"] = 7100,
+		["distance"] = 10650,
 		["id"] = 21,
 		["iconImageId"] = "rbxassetid://119836096425123",
 		["name_t"] = "Inferno Ember Box",
@@ -191,7 +191,7 @@ return {
 	[22] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box2",
-		["distance"] = 7900,
+		["distance"] = 11850,
 		["id"] = 22,
 		["iconImageId"] = "rbxassetid://92022275554709",
 		["name_t"] = "Cloudy Recruit Box",
@@ -200,7 +200,7 @@ return {
 	[23] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box3",
-		["distance"] = 8700,
+		["distance"] = 13050,
 		["id"] = 23,
 		["iconImageId"] = "rbxassetid://129022654862676",
 		["name_t"] = "Cyber Grid Box",
@@ -209,7 +209,7 @@ return {
 	[24] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box4",
-		["distance"] = 9500,
+		["distance"] = 14250,
 		["id"] = 24,
 		["iconImageId"] = "rbxassetid://99426019150398",
 		["name_t"] = "Radiant Gilded Box",
@@ -218,7 +218,7 @@ return {
 	[25] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box5",
-		["distance"] = 10500,
+		["distance"] = 15750,
 		["id"] = 25,
 		["iconImageId"] = "rbxassetid://100504318605769",
 		["name_t"] = "Pastel Prism Box",
@@ -227,7 +227,7 @@ return {
 	[26] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box1",
-		["distance"] = 11500,
+		["distance"] = 17250,
 		["id"] = 26,
 		["iconImageId"] = "rbxassetid://119836096425123",
 		["name_t"] = "Nebula Starbox",
@@ -236,7 +236,7 @@ return {
 	[27] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box2",
-		["distance"] = 12500,
+		["distance"] = 18750,
 		["id"] = 27,
 		["iconImageId"] = "rbxassetid://92022275554709",
 		["name_t"] = "Abyssal Shadow Box",
@@ -245,7 +245,7 @@ return {
 	[28] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box3",
-		["distance"] = 13500,
+		["distance"] = 20250,
 		["id"] = 28,
 		["iconImageId"] = "rbxassetid://129022654862676",
 		["name_t"] = "Inferno Ember Box",
@@ -254,7 +254,7 @@ return {
 	[29] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box4",
-		["distance"] = 14800,
+		["distance"] = 22200,
 		["id"] = 29,
 		["iconImageId"] = "rbxassetid://99426019150398",
 		["name_t"] = "Cloudy Recruit Box",
@@ -263,7 +263,7 @@ return {
 	[30] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box5",
-		["distance"] = 16100,
+		["distance"] = 24150,
 		["id"] = 30,
 		["iconImageId"] = "rbxassetid://100504318605769",
 		["name_t"] = "Cyber Grid Box",
@@ -272,7 +272,7 @@ return {
 	[31] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box1",
-		["distance"] = 17400,
+		["distance"] = 26100,
 		["id"] = 31,
 		["iconImageId"] = "rbxassetid://119836096425123",
 		["name_t"] = "Radiant Gilded Box",
@@ -281,7 +281,7 @@ return {
 	[32] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box2",
-		["distance"] = 18700,
+		["distance"] = 28050,
 		["id"] = 32,
 		["iconImageId"] = "rbxassetid://92022275554709",
 		["name_t"] = "Pastel Prism Box",
@@ -290,7 +290,7 @@ return {
 	[33] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box3",
-		["distance"] = 20000,
+		["distance"] = 30000,
 		["id"] = 33,
 		["iconImageId"] = "rbxassetid://129022654862676",
 		["name_t"] = "Nebula Starbox",
@@ -299,7 +299,7 @@ return {
 	[34] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box4",
-		["distance"] = 21300,
+		["distance"] = 31950,
 		["id"] = 34,
 		["iconImageId"] = "rbxassetid://99426019150398",
 		["name_t"] = "Abyssal Shadow Box",
@@ -308,7 +308,7 @@ return {
 	[35] = {
 		["onlyPay"] = 0,
 		["resourceName"] = "box5",
-		["distance"] = 22600,
+		["distance"] = 33900,
 		["id"] = 35,
 		["iconImageId"] = "rbxassetid://100504318605769",
 		["name_t"] = "Inferno Ember Box",

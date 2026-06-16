@@ -48,7 +48,11 @@ function ClientGameInfo.InitPlayerInfo(
 		guideProgressInfo = {
 			guideStepDoneMap = {},
 			appearedGuideTypeInfo = {},
+			exEquipBuyGuideCompletedCount = 0,
 		}
+	end
+	if guideProgressInfo.exEquipBuyGuideCompletedCount == nil then
+		guideProgressInfo.exEquipBuyGuideCompletedCount = 0
 	end
 	localPlayerInfo = {
 		settingInfo = localPlayerSaveInfo.settingInfo,
@@ -514,6 +518,9 @@ end
 function ClientGameInfo.UpdateGuideProgressInfo(guideProgressInfo: GameConfig.GuideProgressSaveInfo)
 	if localPlayerInfo == nil then
 		return
+	end
+	if guideProgressInfo.exEquipBuyGuideCompletedCount == nil then
+		guideProgressInfo.exEquipBuyGuideCompletedCount = 0
 	end
 	localPlayerInfo.guideProgressInfo = guideProgressInfo
 	ClientMsg.FireCurrentGuideTypeChanged()

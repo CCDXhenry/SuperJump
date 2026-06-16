@@ -203,6 +203,7 @@ function ServerGameInfo.InitPlayerInfo(
 		guideProgressInfo = playerSaveInfo.guideProgressInfo or {
 			guideStepDoneMap = {},
 			appearedGuideTypeInfo = {},
+			exEquipBuyGuideCompletedCount = 0,
 		},
 		discoveredIslandIds = playerSaveInfo.discoveredIslandIds or {},
 		hasClaimedGroupReward = playerSaveInfo.hasClaimedGroupReward or false,
@@ -226,6 +227,10 @@ function ServerGameInfo.InitPlayerInfo(
 		playerInfo.ownedGamePassMap[ownedGamePassId] = true
 	end
 	if ClampShopAndHomeLevelsFromConfig(playerInfo.shopInfo, playerInfo.homeInfo) then
+		playerInfo.playerInfoChanged = true
+	end
+	if playerInfo.guideProgressInfo.exEquipBuyGuideCompletedCount == nil then
+		playerInfo.guideProgressInfo.exEquipBuyGuideCompletedCount = 0
 		playerInfo.playerInfoChanged = true
 	end
 	local previousActivePlayer = currentActivePlayer
@@ -1376,6 +1381,26 @@ function ServerGameInfo.AddExEquipToInventory(player: Player, equipId: string)
 		return
 	end
 	playerInfo.exEquipInventory.ownedList[equipId] = true
+	local guideProgressInfo = playerInfo.guideProgressInfo
+	if guideProgressInfo == nil then
+		guideProgressInfo = {
+			guideStepDoneMap = {},
+			appearedGuideTypeInfo = {},
+			exEquipBuyGuideCompletedCount = 0,
+		}
+		playerInfo.guideProgressInfo = guideProgressInfo
+	end
+	local ownedGuideExEquipCount = 0
+	for _, targetExEquipId in ipairs(GameConfig.GuideTargetExEquipIdList) do
+		if playerInfo.exEquipInventory.ownedList[tostring(targetExEquipId)] == true then
+			ownedGuideExEquipCount += 1
+		end
+	end
+	local clampedGuideCount = math.clamp(ownedGuideExEquipCount, 0, #GameConfig.GuideTargetExEquipIdList)
+	if guideProgressInfo.exEquipBuyGuideCompletedCount ~= clampedGuideCount then
+		guideProgressInfo.exEquipBuyGuideCompletedCount = clampedGuideCount
+		NetMsg.FireNotifyGuideProgressInfo(player, guideProgressInfo)
+	end
 	playerInfo.playerInfoChanged = true
 	print("[ServerGameInfo] AddExEquipToInventory", player.Name, equipId)
 	NetMsg.FireNotifyPlayerExEquipInventoryUpdate(player, playerInfo.exEquipInventory)
