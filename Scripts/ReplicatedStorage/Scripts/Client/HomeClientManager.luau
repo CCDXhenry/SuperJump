@@ -38,7 +38,16 @@ local floorModelsCache: { [string]: { [number]: Model } } = {}
 local localSlotInteractionResetLevelBySlot: { [string]: number } = {}
 local upgradeUITemplateBackup: SurfaceGui? = nil
 local FLOOR_HEIGHT = 32.6
-local MAX_FLOOR_COUNT = 3 -- 最大楼层上限
+local DEFAULT_MAX_FLOOR_COUNT = 3 -- 配置缺失时兜底楼层上限
+local function ResolveMaxFloorCount(): number
+	local homeShop = GameConfig.Shop and GameConfig.Shop.HomeLevel
+	local configuredMaxLevel = if homeShop then tonumber(homeShop.maxLevel) else nil
+	if configuredMaxLevel and configuredMaxLevel > 0 then
+		return math.max(1, math.floor(configuredMaxLevel))
+	end
+	return DEFAULT_MAX_FLOOR_COUNT
+end
+local MAX_FLOOR_COUNT = ResolveMaxFloorCount()
 local FLOOR_PLACE_MODELS_NORMALIZED_PLOTS_ATTR = "PlaceModelsNormalizedPlotsPerFloor"
 local FLOOR_COLLECT_TOUCH_RESET_ATTR = "CollectTouchReset"
 local function GetFloorNumber(inst: Instance): number?
