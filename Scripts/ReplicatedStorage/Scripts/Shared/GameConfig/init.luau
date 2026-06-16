@@ -1548,7 +1548,7 @@ GameConfig.JumpRunway = {
 	-- 沿轴速度全局上限（客户端起跳/Dash/弹飞等 clamp；与 DASH_MAX_SPEED 等数值需一致考虑）
 	ANTI_CHEAT_MAX_ALONG_SPEED = 600,
 	-- 防作弊：单局沿轴成绩硬上限，避免序列化异常或外挂虚报
-	ANTI_CHEAT_DISTANCE_HARD_CAP = 45000,
+	ANTI_CHEAT_DISTANCE_HARD_CAP = 60000,
 
 	-- —— 脚下跑道环 FX ——
 	-- 脚下跑道环：为 false 时不克隆（无环 FX）

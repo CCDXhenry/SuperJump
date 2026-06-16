@@ -636,7 +636,7 @@ function RunwaySession.ResolveRunwayDistanceForGrant(hrp: BasePart?): number?
 end
 
 function RunwaySession.IsDistanceLogEnabled(): boolean
-	return cfg.RUNWAY_DISTANCE_LOG_ENABLED == true
+	return RunwaySessionPrintEnabled or cfg.RUNWAY_DISTANCE_LOG_ENABLED == true
 end
 
 function RunwaySession.ResetDistanceLog()
@@ -1609,24 +1609,24 @@ function RunwaySession.PrintTakeoffRatingBarTreeContactDebug(
 	local predictRemain = if localState.predictJumpWindowUntil ~= nil
 		then (localState.predictJumpWindowUntil :: number) - nowClock
 		else -1
-	print(
-		string.format(
-			"[RunwayTreeContact] event=%s time=%.3f raw=%s active=%s treeDist=%.3f groundDist=%.3f height=%.3f vy=%.3f phase=%d takeoffCount=%d tHudElapsed=%.3f predictRemain=%.3f awaitingGround=%s",
-			eventName,
-			nowClock,
-			tostring(rawFeetOnTree),
-			tostring(activeOnTree),
-			treeDist,
-			if okGround then groundDist else -1,
-			heightAboveBaseline,
-			vy,
-			localState.phase,
-			localState.takeoffCount,
-			tHudElapsed,
-			predictRemain,
-			tostring(localState.chainJumpWindowAwaitingGround)
-		)
-	)
+	-- print(
+	-- 	string.format(
+	-- 		"[RunwayTreeContact] event=%s time=%.3f raw=%s active=%s treeDist=%.3f groundDist=%.3f height=%.3f vy=%.3f phase=%d takeoffCount=%d tHudElapsed=%.3f predictRemain=%.3f awaitingGround=%s",
+	-- 		eventName,
+	-- 		nowClock,
+	-- 		tostring(rawFeetOnTree),
+	-- 		tostring(activeOnTree),
+	-- 		treeDist,
+	-- 		if okGround then groundDist else -1,
+	-- 		heightAboveBaseline,
+	-- 		vy,
+	-- 		localState.phase,
+	-- 		localState.takeoffCount,
+	-- 		tHudElapsed,
+	-- 		predictRemain,
+	-- 		tostring(localState.chainJumpWindowAwaitingGround)
+	-- 	)
+	-- )
 end
 
 function RunwaySession.RecordTakeoffRatingBarTreeContactDebug(
@@ -1736,20 +1736,20 @@ function RunwaySession.ResolveChainRatingBarDisplayDurations(
 	local displayStartElapsed = RunwaySession.ResolveChainDisplayEffectiveStartElapsedSec(initialVy, gravity, heightOffset)
 	local displayDuration = math.max(landingStartElapsed - displayStartElapsed, 1e-6)
 	local perfectStartElapsed = math.clamp(chainWindowStartElapsed - displayStartElapsed, 0, displayDuration)
-	print(
-		string.format(
-			"[RunwayTreeHeightOffset] stage=rating_bar_durations time=%.3f heightOffset=%.3f initialVy=%.3f gravity=%.3f displayStartElapsed=%.3f landingElapsed=%.3f perfectStartElapsed=%.3f displayDuration=%.3f takeoffCount=%d",
-			os.clock(),
-			heightOffset,
-			initialVy,
-			gravity,
-			displayStartElapsed,
-			landingStartElapsed,
-			perfectStartElapsed,
-			displayDuration,
-			localState.takeoffCount
-		)
-	)
+	-- print(
+	-- 	string.format(
+	-- 		"[RunwayTreeHeightOffset] stage=rating_bar_durations time=%.3f heightOffset=%.3f initialVy=%.3f gravity=%.3f displayStartElapsed=%.3f landingElapsed=%.3f perfectStartElapsed=%.3f displayDuration=%.3f takeoffCount=%d",
+	-- 		os.clock(),
+	-- 		heightOffset,
+	-- 		initialVy,
+	-- 		gravity,
+	-- 		displayStartElapsed,
+	-- 		landingStartElapsed,
+	-- 		perfectStartElapsed,
+	-- 		displayDuration,
+	-- 		localState.takeoffCount
+	-- 	)
+	-- )
 	return displayDuration, displayStartElapsed, perfectStartElapsed
 end
 
