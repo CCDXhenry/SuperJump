@@ -35,10 +35,8 @@ type TakeoffRatingBarPayload = {
 local RATING_ROOT_ZINDEX = 92
 local TipTextPopOffset = UDim2.new(0, 0, 0, -18)
 local TipTextTotalSec = 1.35
-local TakeoffRatingBarLeftOkColor = Color3.fromRGB(70, 220, 95)
-local TakeoffRatingBarPerfectColor = Color3.fromRGB(255, 204, 45)
-local TakeoffRatingBarRightOkColor = Color3.fromRGB(70, 220, 95)
-local TakeoffRatingBarLateColor = Color3.fromRGB(255, 82, 82)
+local TakeoffRatingBarInactiveColor = Color3.fromRGB(116, 124, 132)
+local TakeoffRatingBarPerfectColor = Color3.fromRGB(70, 220, 95)
 
 local cfg = GameConfig.JumpRunway
 
@@ -114,6 +112,8 @@ local takeoffRightOkFrame: Frame? = nil
 local takeoffLateFrame: Frame? = nil
 local takeoffPerfectSplitFrame: Frame? = nil
 local takeoffMarkerFrame: Frame? = nil
+local takeoffRatingBarUiSessionActive = false
+local takeoffRatingBarUiFrozenPayload: TakeoffRatingBarPayload? = nil
 
 local function IsEscapeHudExemptGui(gui: GuiObject): boolean
 	if redScreen ~= nil and gui == redScreen then
@@ -437,7 +437,7 @@ local function ResolveTakeoffRatingBar()
 	takeoffLeftOkFrame = EnsureTakeoffSegment(
 		takeoffRatingRegionsFrame,
 		"LeftOkFrame",
-		TakeoffRatingBarLeftOkColor,
+		TakeoffRatingBarInactiveColor,
 		segmentZIndex
 	)
 	takeoffPerfectFrame = EnsureTakeoffSegment(
@@ -449,13 +449,13 @@ local function ResolveTakeoffRatingBar()
 	takeoffRightOkFrame = EnsureTakeoffSegment(
 		takeoffRatingRegionsFrame,
 		"RightOkFrame",
-		TakeoffRatingBarRightOkColor,
+		TakeoffRatingBarInactiveColor,
 		segmentZIndex
 	)
 	takeoffLateFrame = EnsureTakeoffSegment(
 		takeoffRatingRegionsFrame,
 		"LateFrame",
-		TakeoffRatingBarLateColor,
+		TakeoffRatingBarInactiveColor,
 		segmentZIndex
 	)
 
@@ -503,21 +503,22 @@ local function ApplyTakeoffSegmentFrame(frame: Frame?, startRatio: number, endRa
 	frame.Visible = endClamped > startClamped
 end
 
+local function ResetTakeoffRatingBarUiSession()
+	takeoffRatingBarUiSessionActive = false
+	takeoffRatingBarUiFrozenPayload = nil
+end
+
 local function HideTakeoffRatingBar()
 	if takeoffRatingBarBg ~= nil then
 		takeoffRatingBarBg.Visible = false
 	end
+	ResetTakeoffRatingBarUiSession()
 end
 
-local function RefreshTakeoffRatingBar(payload: TakeoffRatingBarPayload)
+local function ApplyTakeoffRatingBarLayout(payload: TakeoffRatingBarPayload)
 	if takeoffRatingBarBg == nil or takeoffMarkerFrame == nil then
 		return
 	end
-	if escapeHudModeActive or not payload.visible then
-		HideTakeoffRatingBar()
-		return
-	end
-
 	local leftOkEndRatio = math.clamp(payload.leftOkEndRatio, 0, 1)
 	local perfectEndRatio = math.clamp(math.max(payload.perfectEndRatio, leftOkEndRatio), 0, 1)
 	local rightOkEndRatio = math.clamp(math.max(payload.rightOkEndRatio, perfectEndRatio), 0, 1)
@@ -530,10 +531,35 @@ local function RefreshTakeoffRatingBar(payload: TakeoffRatingBarPayload)
 		takeoffPerfectSplitFrame.Position = UDim2.fromScale(perfectSplitRatio, 0)
 		takeoffPerfectSplitFrame.Visible = perfectEndRatio > leftOkEndRatio
 	end
-
 	local markerRatio = math.clamp(payload.progressRatio, 0, 1)
 	takeoffMarkerFrame.Position = UDim2.fromScale(markerRatio, 0.08)
 	takeoffRatingBarBg.Visible = true
+end
+
+local function RefreshTakeoffRatingBar(payload: TakeoffRatingBarPayload)
+	if takeoffRatingBarBg == nil or takeoffMarkerFrame == nil then
+		return
+	end
+	if escapeHudModeActive or not payload.visible then
+		HideTakeoffRatingBar()
+		return
+	end
+	if takeoffRatingBarUiSessionActive and takeoffRatingBarUiFrozenPayload ~= nil then
+		local markerRatio = math.clamp(payload.progressRatio, 0, 1)
+		takeoffMarkerFrame.Position = UDim2.fromScale(markerRatio, 0.08)
+		takeoffRatingBarBg.Visible = true
+		return
+	end
+	takeoffRatingBarUiFrozenPayload = {
+		visible = true,
+		progressRatio = math.clamp(payload.progressRatio, 0, 1),
+		leftOkEndRatio = math.clamp(payload.leftOkEndRatio, 0, 1),
+		perfectSplitRatio = math.clamp(payload.perfectSplitRatio, 0, 1),
+		perfectEndRatio = math.clamp(payload.perfectEndRatio, 0, 1),
+		rightOkEndRatio = math.clamp(payload.rightOkEndRatio, 0, 1),
+	}
+	takeoffRatingBarUiSessionActive = true
+	ApplyTakeoffRatingBarLayout(takeoffRatingBarUiFrozenPayload :: TakeoffRatingBarPayload)
 end
 
 local function ResolveRedScreen()
