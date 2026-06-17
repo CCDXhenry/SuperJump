@@ -124,6 +124,17 @@ local CHEST_GROUND_RAISE_STUDS = 0.2
 local ChestHitHorizontalMaxDistStudsDefault = 14
 local CHEST_FALL_MAX_HEIGHT_STUDS = 8
 local CHEST_FALL_DURATION_SEC = 0.5
+local RunwayZoneProbeHeightY = 0.839
+local RunwayZoneProbeSize = Vector3.new(4, 4, 4)
+local RunwayChestFollowBehindStudsDefault = 6
+local RunwayChestFollowHeightOffsetStudsDefault = 1.2
+local RunwayChestFollowFloatAmplitudeStudsDefault = 0.45
+local RunwayChestFollowFloatFrequencyDefault = 3.2
+local RunwayChestFollowMinSmoothSpeedDefault = 4
+local RunwayChestFollowMaxSmoothSpeedDefault = 22
+local RunwayChestFollowFastDistanceStudsDefault = 22
+local RunwayChestFollowMaxDistanceStudsDefault = 12
+local RunwayChestOpenExtraForwardStudsDefault = 8
 local PlayerSlideCollisionGroupName = "PlayerSlideState"
 local ChestCollisionGroupName = "Chest"
 local JumpRunwayLittleElfChestCarryAttr = "JumpRunwayLittleElfChestCarry"
@@ -181,6 +192,22 @@ end
 
 local function ResolveChestCarryPresentHoldSec(): number
 	return ResolveChestHoldDelaySec(cfg.RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC, 0.5)
+end
+
+local function ResolvePositiveConfigNumber(rawValue: any, fallbackValue: number): number
+	local value = ResolveConfigNumber(rawValue, fallbackValue)
+	if value <= 0 then
+		return fallbackValue
+	end
+	return value
+end
+
+local function ResolveNonNegativeConfigNumber(rawValue: any, fallbackValue: number): number
+	local value = ResolveConfigNumber(rawValue, fallbackValue)
+	if value < 0 then
+		return fallbackValue
+	end
+	return value
 end
 
 local DurationPollIntervalSec = 0.03
@@ -262,6 +289,12 @@ local Refs: {
 	slideTraceDestroyScheduleToken: number,
 	prevGroundedHeartbeat: boolean,
 	slideCollisionGroupOriginalMap: { [BasePart]: string },
+	runwayZoneProbePart: Part?,
+	runwayZoneProbeLastX: number?,
+	chestFollowModel: Model?,
+	chestFollowConfigId: number?,
+	chestFollowZoneName: string?,
+	chestFollowCFrame: CFrame?,
 	chestSpawnedForThisRun: boolean?,
 	chestSpawnedModel: Model?,
 	chestSpawnedConnList: { RBXScriptConnection }?,
@@ -368,6 +401,12 @@ local Refs: {
 	slideTraceDestroyScheduleToken = 0,
 	prevGroundedHeartbeat = true,
 	slideCollisionGroupOriginalMap = {},
+	runwayZoneProbePart = nil,
+	runwayZoneProbeLastX = nil,
+	chestFollowModel = nil,
+	chestFollowConfigId = nil,
+	chestFollowZoneName = nil,
+	chestFollowCFrame = nil,
 	finalPitchSmoothedExtraDeg = 0,
 	chestSpawnedForThisRun = false,
 	chestSpawnedModel = nil,
@@ -454,8 +493,314 @@ local Refs: {
 
 local localState: RunwayLocalState = RunwayStateStore.CreateDefault(Ph, SlideKindStandard)
 
+-- 与 SendSampleIfDue 上报的 sampleAlongSpeed 一致：水平速度在跑道前向轴上的分量（forward 须为 NormalizeRunwayForward 结果）
+local HorizontalVelocity = RunwayPhysicsController.HorizontalVelocity
+local NormalizeRunwayForward = RunwayPhysicsController.NormalizeRunwayForward
+local ComputeRunwayHorizontalAlongSpeed = RunwayPhysicsController.ComputeRunwayHorizontalAlongSpeed
+
 -- ChainHudActive: (nowClock: number) -> boolean
 -- LineHudActive: (nowClock: number) -> boolean
+
+function RunwaySession.ResolveRunwayZoneFolder(): Instance?
+	local groundFolder = workspace:FindFirstChild("Ground")
+	if groundFolder == nil then
+		return nil
+	end
+	return groundFolder:FindFirstChild("Zone")
+end
+
+function RunwaySession.DestroyRunwayZoneProbe()
+	local probe = Refs.runwayZoneProbePart
+	if probe ~= nil and probe.Parent ~= nil then
+		probe:Destroy()
+	end
+	Refs.runwayZoneProbePart = nil
+	Refs.runwayZoneProbeLastX = nil
+end
+
+function RunwaySession.ResolveRunwayZoneProbeSize(): Vector3
+	local rawSize = cfg.RUNWAY_CHEST_ZONE_PROBE_SIZE
+	if typeof(rawSize) == "Vector3" and rawSize.X > 0 and rawSize.Y > 0 and rawSize.Z > 0 then
+		return rawSize
+	end
+	return RunwayZoneProbeSize
+end
+
+function RunwaySession.EnsureRunwayZoneProbe(): Part
+	local probe = Refs.runwayZoneProbePart
+	if probe ~= nil and probe.Parent ~= nil then
+		return probe
+	end
+	probe = Instance.new("Part")
+	probe.Name = "RunwayZoneProbe"
+	probe.Size = RunwaySession.ResolveRunwayZoneProbeSize()
+	probe.Transparency = 1
+	probe.Anchored = true
+	probe.CanCollide = false
+	probe.CanTouch = false
+	probe.CanQuery = true
+	probe.Parent = RunwaySession.GetJumpRunwayLocalFxFolder()
+	Refs.runwayZoneProbePart = probe
+	return probe
+end
+
+function RunwaySession.UpdateRunwayZoneProbe(hrp: BasePart): Part
+	local probe = RunwaySession.EnsureRunwayZoneProbe()
+	local origin = localState.runwayOrigin
+	local z = if origin ~= nil then origin.Z else hrp.Position.Z
+	probe.Size = RunwaySession.ResolveRunwayZoneProbeSize()
+	probe.CFrame = CFrame.new(hrp.Position.X, RunwayZoneProbeHeightY, z)
+	return probe
+end
+
+function RunwaySession.ResolveRunwayZoneNameAtHrp(hrp: BasePart): string?
+	local zoneFolder = RunwaySession.ResolveRunwayZoneFolder()
+	if zoneFolder == nil then
+		return nil
+	end
+	local probe = RunwaySession.UpdateRunwayZoneProbe(hrp)
+	local probeSize = RunwaySession.ResolveRunwayZoneProbeSize()
+	local currentX = hrp.Position.X
+	local lastX = Refs.runwayZoneProbeLastX
+	local lookaheadSec = ResolveNonNegativeConfigNumber(cfg.RUNWAY_CHEST_ZONE_PROBE_LOOKAHEAD_SEC, 0.08)
+	local velocityX = hrp.AssemblyLinearVelocity.X
+	local predictedX = currentX + velocityX * lookaheadSec
+	local minX = math.min(currentX, predictedX)
+	local maxX = math.max(currentX, predictedX)
+	if lastX ~= nil then
+		minX = math.min(minX, lastX :: number)
+		maxX = math.max(maxX, lastX :: number)
+	end
+	Refs.runwayZoneProbeLastX = currentX
+	local sweepCenterX = (minX + maxX) * 0.5
+	local sweepSizeX = math.max(probeSize.X, (maxX - minX) + probeSize.X)
+	local sweepCFrame = CFrame.new(sweepCenterX, probe.Position.Y, probe.Position.Z)
+	local sweepSize = Vector3.new(sweepSizeX, probeSize.Y, probeSize.Z)
+	local overlapParams = OverlapParams.new()
+	overlapParams.FilterType = Enum.RaycastFilterType.Include
+	overlapParams.FilterDescendantsInstances = { zoneFolder }
+	overlapParams.MaxParts = 20
+	overlapParams.RespectCanCollide = false
+	local parts = workspace:GetPartBoundsInBox(sweepCFrame, sweepSize, overlapParams)
+	local bestPart: BasePart? = nil
+	local bestDistance = math.huge
+	for _, part in ipairs(parts) do
+		if part:IsA("BasePart") then
+			local localX = part.CFrame:PointToObjectSpace(Vector3.new(currentX, part.Position.Y, part.Position.Z)).X
+			local halfX = part.Size.X * 0.5
+			local distance = math.max(math.abs(localX) - halfX, 0)
+			if distance < bestDistance then
+				bestDistance = distance
+				bestPart = part
+			end
+		end
+	end
+	return if bestPart ~= nil then bestPart.Name else nil
+end
+
+function RunwaySession.ResolveRunwayLittleElfChestConfigId(hrp: BasePart): number
+	local zoneName = RunwaySession.ResolveRunwayZoneNameAtHrp(hrp)
+	if zoneName ~= nil then
+		local zoneChest = GameConfig.GetLittleElfChestByZoneName(zoneName)
+		if zoneChest ~= nil then
+			Refs.chestFollowZoneName = zoneName
+			return zoneChest.id
+		end
+	end
+	if Refs.chestFollowConfigId ~= nil then
+		return Refs.chestFollowConfigId :: number
+	end
+	return cfg.RUNWAY_CHEST_CONFIG_ID
+end
+
+function RunwaySession.ConfigureLittleElfChestVisualModel(chestModel: Model)
+	RunwaySession.SetModelCollisionGroup(chestModel, ChestCollisionGroupName)
+	for _, inst in ipairs(chestModel:GetDescendants()) do
+		if inst:IsA("BasePart") then
+			local part = inst :: BasePart
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanTouch = false
+			part.CanQuery = false
+			part.Massless = true
+		end
+	end
+end
+
+function RunwaySession.DestroyLittleElfChestFollowModel()
+	local followModel = Refs.chestFollowModel
+	if followModel ~= nil and followModel.Parent ~= nil then
+		followModel:Destroy()
+	end
+	Refs.chestFollowModel = nil
+	Refs.chestFollowConfigId = nil
+	Refs.chestFollowCFrame = nil
+end
+
+function RunwaySession.EnsureLittleElfChestFollowModel(chestConfigId: number, initialCFrame: CFrame?): Model?
+	local followModel = Refs.chestFollowModel
+	if followModel ~= nil and followModel.Parent ~= nil and Refs.chestFollowConfigId == chestConfigId then
+		return followModel
+	end
+	Refs.chestFollowCFrame = if followModel ~= nil and followModel.Parent ~= nil then followModel:GetPivot() else Refs.chestFollowCFrame
+	RunwaySession.DestroyLittleElfChestFollowModel()
+	if actualChests == nil then
+		warn("[RunwaySession] LittleElfChests folder missing under ReplicatedStorage.Models")
+		return nil
+	end
+	local chestConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
+	if chestConfig == nil or not GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig) then
+		return nil
+	end
+	local template = GameConfig.FindResourceTemplateByResourceName(actualChests, chestConfig.resourceName)
+	if template == nil then
+		return nil
+	end
+	local clone = GameConfig.CloneTemplateAsModel(template)
+	clone.Name = "RunwayLittleElfChestFollow"
+	RunwaySession.ConfigureLittleElfChestVisualModel(clone)
+	clone:PivotTo(initialCFrame or Refs.chestFollowCFrame or CFrame.new())
+	clone.Parent = RunwaySession.GetJumpRunwayLocalFxFolder()
+	Refs.chestFollowModel = clone
+	Refs.chestFollowConfigId = chestConfigId
+	Refs.chestFollowCFrame = clone:GetPivot()
+	return clone
+end
+
+function RunwaySession.ClampLittleElfChestFollowCFrameToMaxDistance(hrp: BasePart, sourceCFrame: CFrame): CFrame
+	local maxDistance = ResolvePositiveConfigNumber(cfg.RUNWAY_CHEST_FOLLOW_MAX_DISTANCE_STUDS, RunwayChestFollowMaxDistanceStudsDefault)
+	local playerToChest = sourceCFrame.Position - hrp.Position
+	if playerToChest.Magnitude <= maxDistance then
+		return sourceCFrame
+	end
+	local clampedPosition = hrp.Position + playerToChest.Unit * maxDistance
+	return CFrame.new(clampedPosition) * (sourceCFrame - sourceCFrame.Position)
+end
+
+function RunwaySession.BuildLittleElfChestFollowTargetCFrame(hrp: BasePart, chestModel: Model?): CFrame
+	local forward = NormalizeRunwayForward(localState.runwayForward)
+	if forward.Magnitude < 1e-4 then
+		local look = hrp.CFrame.LookVector
+		forward = Vector3.new(look.X, 0, look.Z)
+		if forward.Magnitude < 1e-4 then
+			forward = Vector3.new(0, 0, -1)
+		else
+			forward = forward.Unit
+		end
+	end
+	local behindStuds = ResolvePositiveConfigNumber(cfg.RUNWAY_CHEST_FOLLOW_BEHIND_STUDS, RunwayChestFollowBehindStudsDefault)
+	local heightOffset = ResolveConfigNumber(cfg.RUNWAY_CHEST_FOLLOW_HEIGHT_OFFSET_STUDS, RunwayChestFollowHeightOffsetStudsDefault)
+	local floatAmplitude = ResolveNonNegativeConfigNumber(
+		cfg.RUNWAY_CHEST_FOLLOW_FLOAT_AMPLITUDE_STUDS,
+		RunwayChestFollowFloatAmplitudeStudsDefault
+	)
+	local floatFrequency = ResolveNonNegativeConfigNumber(cfg.RUNWAY_CHEST_FOLLOW_FLOAT_FREQUENCY, RunwayChestFollowFloatFrequencyDefault)
+	local targetXZ = hrp.Position - forward * behindStuds
+	local floatY = math.sin(os.clock() * floatFrequency) * floatAmplitude
+	local targetPos = Vector3.new(targetXZ.X, hrp.Position.Y + heightOffset + floatY, targetXZ.Z)
+	return RunwaySession.BuildLittleElfChestOpenCFrame(targetPos, forward, chestModel)
+end
+
+function RunwaySession.UpdateLittleElfChestFollow(dt: number, hrp: BasePart)
+	if not RunwaySession.IsRunwayActivePhase(localState.phase) then
+		return
+	end
+	if Refs.chestRunwayAwaitingExit == true or Refs.chestRewardPresentationStarted == true then
+		return
+	end
+	local chestConfigId = RunwaySession.ResolveRunwayLittleElfChestConfigId(hrp)
+	local followModel = RunwaySession.EnsureLittleElfChestFollowModel(chestConfigId, Refs.chestFollowCFrame)
+	if followModel == nil then
+		return
+	end
+	local targetCFrame = RunwaySession.BuildLittleElfChestFollowTargetCFrame(hrp, followModel)
+	local currentCFrame = Refs.chestFollowCFrame or followModel:GetPivot()
+	local distance = (targetCFrame.Position - currentCFrame.Position).Magnitude
+	local fastDistance = ResolvePositiveConfigNumber(cfg.RUNWAY_CHEST_FOLLOW_FAST_DISTANCE_STUDS, RunwayChestFollowFastDistanceStudsDefault)
+	local minSmoothSpeed = ResolvePositiveConfigNumber(cfg.RUNWAY_CHEST_FOLLOW_MIN_SMOOTH_SPEED, RunwayChestFollowMinSmoothSpeedDefault)
+	local maxSmoothSpeed = ResolvePositiveConfigNumber(cfg.RUNWAY_CHEST_FOLLOW_MAX_SMOOTH_SPEED, RunwayChestFollowMaxSmoothSpeedDefault)
+	local distanceAlpha = math.clamp(distance / fastDistance, 0, 1)
+	local smoothSpeed = minSmoothSpeed + (math.max(minSmoothSpeed, maxSmoothSpeed) - minSmoothSpeed) * distanceAlpha
+	local alpha = 1 - math.exp(-smoothSpeed * math.max(dt, 0))
+	local nextCFrame = currentCFrame:Lerp(targetCFrame, alpha)
+	nextCFrame = RunwaySession.ClampLittleElfChestFollowCFrameToMaxDistance(hrp, nextCFrame)
+	followModel:PivotTo(nextCFrame)
+	Refs.chestFollowCFrame = nextCFrame
+end
+
+function RunwaySession.StartLittleElfChestFollowForRun(hrp: BasePart)
+	local chestConfigId = RunwaySession.ResolveRunwayLittleElfChestConfigId(hrp)
+	local targetCFrame = RunwaySession.ClampLittleElfChestFollowCFrameToMaxDistance(
+		hrp,
+		RunwaySession.BuildLittleElfChestFollowTargetCFrame(hrp, nil)
+	)
+	Refs.chestFollowCFrame = targetCFrame
+	local followModel = RunwaySession.EnsureLittleElfChestFollowModel(chestConfigId, targetCFrame)
+	if followModel ~= nil then
+		followModel:PivotTo(targetCFrame)
+		Refs.chestFollowCFrame = targetCFrame
+	end
+end
+
+function RunwaySession.PlaceLittleElfChestFollowAtOpenPosition(openCFrame: CFrame, chestConfigId: number): Model?
+	local followModel = RunwaySession.EnsureLittleElfChestFollowModel(chestConfigId, Refs.chestFollowCFrame or openCFrame)
+	if followModel == nil then
+		return nil
+	end
+	followModel.Name = "RunwayLittleElfChest"
+	RunwaySession.ConfigureLittleElfChestVisualModel(followModel)
+	followModel:PivotTo(openCFrame)
+	Refs.chestFollowModel = nil
+	Refs.chestFollowConfigId = nil
+	Refs.chestFollowCFrame = nil
+	Refs.chestSpawnedModel = followModel
+	return followModel
+end
+
+function RunwaySession.OpenLittleElfChestAtPosition(chestConfigId: number, spawnPos: Vector3, faceFwdH: Vector3, humanoid: Humanoid, hrp: BasePart)
+	if Refs.chestRunwayAwaitingExit == true or Refs.chestRewardPresentationStarted == true then
+		return
+	end
+	local chestConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
+	if chestConfig == nil or not GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig) then
+		return
+	end
+	local probeModel = Refs.chestFollowModel
+	local openForward = Vector3.new(faceFwdH.X, 0, faceFwdH.Z)
+	if openForward.Magnitude < 1e-4 then
+		openForward = NormalizeRunwayForward(localState.runwayForward)
+	else
+		openForward = openForward.Unit
+	end
+	local extraForwardStuds = ResolveNonNegativeConfigNumber(
+		cfg.RUNWAY_CHEST_OPEN_EXTRA_FORWARD_STUDS,
+		RunwayChestOpenExtraForwardStudsDefault
+	)
+	local openSpawnPos = spawnPos + openForward * extraForwardStuds
+	local landPos = RunwaySession.ResolveLittleElfChestGroundPosition(openSpawnPos, probeModel)
+	local openCFrame = RunwaySession.BuildLittleElfChestOpenCFrame(landPos, faceFwdH, probeModel)
+	local chestModel = RunwaySession.PlaceLittleElfChestFollowAtOpenPosition(openCFrame, chestConfigId)
+	if chestModel == nil then
+		return
+	end
+	Refs.chestSpawnedForThisRun = true
+	Refs.chestGroundOpenCFrame = openCFrame
+	Refs.chestOpenCFrame = openCFrame
+	Refs.chestLandedOnGround = true
+	Refs.chestReadyForHit = false
+	Refs.chestRunwayAwaitingExit = true
+	Refs.chestBounceActive = false
+	Refs.chestHitSequenceActive = true
+	Refs.chestPickedConfigId = chestConfigId
+	Refs.chestPickedBrainrotId = nil
+	Refs.chestPickedVariantId = nil
+	Refs.chestPendingReward = nil
+	Refs.chestRewardPresentationStarted = false
+	localState.slideEndClock = math.huge
+	RunwaySession.EnterLittleElfChestRewardWaitPose(humanoid, hrp)
+	NetMsg.FireRequestJumpRunwayLittleElfChestReward(chestConfigId)
+	task.spawn(RunwaySession.TryPresentLittleElfChestReward)
+end
 
 function RunwaySession.ResolveSceneParts(): (Part?, Part?)
 	local startPoint = workspace:FindFirstChild("StartPoint")
@@ -569,11 +914,6 @@ end
 function RunwaySession.IsRunwayActivePhase(phase: number): boolean
 	return RunwayConstants.IsRunwayActivePhase(phase)
 end
-
--- 与 SendSampleIfDue 上报的 sampleAlongSpeed 一致：水平速度在跑道前向轴上的分量（forward 须为 NormalizeRunwayForward 结果）
-local HorizontalVelocity = RunwayPhysicsController.HorizontalVelocity
-local NormalizeRunwayForward = RunwayPhysicsController.NormalizeRunwayForward
-local ComputeRunwayHorizontalAlongSpeed = RunwayPhysicsController.ComputeRunwayHorizontalAlongSpeed
 
 function RunwaySession.CurrentAlongProgress(hrp: BasePart): number
 	return RunwayPhysicsController.CurrentAlongProgress(hrp, localState.runwayOrigin, localState.runwayForward, localState.alongBaseline)
@@ -3902,6 +4242,21 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 			end
 			return
 		end
+		local reachedPathEnd = motion ~= nil and motion.lastDistance >= motion.totalDistance - 0.05
+		if reachedPathEnd and Refs.chestRunwayAwaitingExit ~= true then
+			local chestConfigId = if Refs.chestFollowConfigId ~= nil
+				then Refs.chestFollowConfigId
+				elseif Refs.chestDynamicConfigId ~= nil then Refs.chestDynamicConfigId
+				else cfg.RUNWAY_CHEST_CONFIG_ID
+			local spawnPos = Refs.chestScheduledSpawnPos
+			if spawnPos == nil then
+				local placeDistance = Refs.chestPredictedPlaceDistance or RunwaySession.ResolveProneSlidePlaceDistance()
+				spawnPos = RunwaySession.ComputeLittleElfChestSpawnPosition(hrp, fwdH, placeDistance)
+				Refs.chestScheduledSpawnPos = spawnPos
+			end
+			RunwaySession.OpenLittleElfChestAtPosition(chestConfigId, spawnPos, fwdH, humanoid, hrp)
+			return
+		end
 		local chestModel = Refs.chestSpawnedModel
 		if chestModel ~= nil and chestModel.Parent ~= nil and Refs.chestRunwayAwaitingExit ~= true then
 			local reachedPathHit = motion ~= nil and motion.lastDistance >= motion.totalDistance - 0.05
@@ -7215,19 +7570,17 @@ function RunwaySession.TryApplyScpTrampolineBounce(humanoid: Humanoid, hrp: Base
 	end)
 	return true
 end
--- 子阶段 B 入口：宝箱直接落在地面，滑行全程由宝箱当前位置驱动。
+-- 子阶段 B 入口：记录原宝箱落点；滑行结束时把跟随宝箱放到该位置直接开箱。
 function RunwaySession.ScheduleLittleElfChestAtPhaseBEnter(
 	fwdH: Vector3,
 	spawnPos: Vector3
 )
-	if Refs.chestSpawnedForThisRun == true then
+	if Refs.chestSpawnedForThisRun == true or Refs.chestRunwayAwaitingExit == true then
 		return
 	end
 	Refs.chestSlideFwdH = fwdH
 	Refs.chestScheduledSpawnPos = spawnPos
-
 	Refs.chestSpawnDelayToken += 1
-	RunwaySession.SpawnLittleElfChestAtPosition(fwdH, spawnPos)
 end
 
 function RunwaySession.ResolveObstacleBounceChestForward(hrp: BasePart): Vector3
@@ -7490,6 +7843,8 @@ end
 function RunwaySession.ClearLittleElfChestRefs()
 	Refs.chestSpawnDelayToken += 1
 	RunwaySession.DestroyLittleElfChestSpawnedModel()
+	RunwaySession.DestroyLittleElfChestFollowModel()
+	RunwaySession.DestroyRunwayZoneProbe()
 	Refs.chestSpawnedForThisRun = false
 	Refs.chestPickedBrainrotId = nil
 	Refs.chestPickedVariantId = nil
@@ -7511,6 +7866,7 @@ function RunwaySession.ClearLittleElfChestRefs()
 	Refs.chestDynamicConfigId = nil
 	Refs.chestScheduledSpawnPos = nil
 	Refs.chestPredictedPlaceDistance = nil
+	Refs.chestFollowZoneName = nil
 	Refs.chestBackpackDeliverRequested = false
 	Refs.lastRunAlongDistance = nil
 	Refs.obstacleBounceForward = nil
@@ -7566,8 +7922,7 @@ end
 
 function RunwaySession.ResolveLittleElfChestConfigIdByDropPosition(spawnPos: Vector3): (number?, number)
 	local dropDistance = RunwaySession.GetLittleElfChestDropDistance(spawnPos)
-	local chestByDist = GameConfig.GetLittleElfChestByDistance(dropDistance)
-	local chestConfigId = if chestByDist then chestByDist.id else nil
+	local chestConfigId = if Refs.chestFollowConfigId ~= nil then Refs.chestFollowConfigId else cfg.RUNWAY_CHEST_CONFIG_ID
 	return chestConfigId, dropDistance
 end
 
@@ -8213,52 +8568,7 @@ function RunwaySession.OpenLittleElfChestAfterObstacleBounceStop(humanoid: Human
 	Refs.lastRunAlongDistance = dropDistance
 	Refs.chestDynamicConfigId = chestIdOverride
 	local chestConfigId = if chestIdOverride ~= nil then chestIdOverride else cfg.RUNWAY_CHEST_CONFIG_ID
-	local chestConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
-	if
-		chestConfig == nil
-		or not GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig)
-		or actualChests == nil
-	then
-		return
-	end
-	local template = GameConfig.FindResourceTemplateByResourceName(actualChests, chestConfig.resourceName)
-	if not template then
-		return
-	end
-	local chestModel = GameConfig.CloneTemplateAsModel(template)
-	chestModel.Name = "RunwayLittleElfChest"
-	RunwaySession.SetModelCollisionGroup(chestModel, ChestCollisionGroupName)
-	local landPos = RunwaySession.ResolveLittleElfChestGroundPosition(spawnPos, chestModel)
-	local openCFrame = RunwaySession.BuildLittleElfChestOpenCFrame(landPos, faceFwdH, chestModel)
-	for _, part in ipairs(chestModel:GetDescendants()) do
-		if part:IsA("BasePart") then
-			part.Anchored = true
-			part.CanCollide = false
-			part.CanQuery = true
-			part.CanTouch = false
-			part.Massless = true
-		end
-	end
-	chestModel:PivotTo(openCFrame)
-	chestModel.Parent = workspace
-	Refs.chestSpawnedForThisRun = true
-	Refs.chestSpawnedModel = chestModel
-	Refs.chestGroundOpenCFrame = openCFrame
-	Refs.chestOpenCFrame = openCFrame
-	Refs.chestLandedOnGround = true
-	Refs.chestReadyForHit = false
-	Refs.chestRunwayAwaitingExit = true
-	Refs.chestBounceActive = false
-	Refs.chestHitSequenceActive = true
-	Refs.chestPickedConfigId = chestConfigId
-	Refs.chestPickedBrainrotId = nil
-	Refs.chestPickedVariantId = nil
-	Refs.chestPendingReward = nil
-	Refs.chestRewardPresentationStarted = false
-	localState.slideEndClock = math.huge
-	RunwaySession.EnterLittleElfChestRewardWaitPose(humanoid, hrp)
-	NetMsg.FireRequestJumpRunwayLittleElfChestReward(chestConfigId)
-	task.spawn(RunwaySession.TryPresentLittleElfChestReward)
+	RunwaySession.OpenLittleElfChestAtPosition(chestConfigId, spawnPos, faceFwdH, humanoid, hrp)
 end
 
 function RunwaySession.ProcessLittleElfChestHit(chestModel: Model, fwdH: Vector3, chestConfigId: number, allowPathTerminalHit: boolean?)
@@ -9544,6 +9854,7 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	RunwaySession.UpdateRunwayGravityForce(hrp)
 	RunwaySession.EnsureRunwayRing()
 	RunwaySession.UpdateRunwayRingTransform(humanoid, hrp, 0)
+	RunwaySession.StartLittleElfChestFollowForRun(hrp)
 	local okBaseline, baselineDist = RunwaySession.RaycastFeet(humanoid)
 	localState.preLandRayBaselineStuds = if okBaseline then baselineDist else nil
 	localState.prevLocalGroundedForLand = RunwaySession.IsRunwayScriptedGrounded(humanoid)
@@ -9624,6 +9935,10 @@ end
 
 function RunwaySession.OnHeartbeat(dt: number)
 	RunwaySession.UpdateTick(dt)
+	local _, _, hrpForChestFollow = RunwaySession.GetCharacterParts()
+	if hrpForChestFollow ~= nil then
+		RunwaySession.UpdateLittleElfChestFollow(dt, hrpForChestFollow)
+	end
 	RunwaySession.UpdateStartTriggerReentryState()
 	RunwaySession.UpdateEndTriggerReentryState()
 	RunwaySession.NetReportDashIfChanged()

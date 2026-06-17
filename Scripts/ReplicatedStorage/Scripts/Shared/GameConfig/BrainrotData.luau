@@ -144,11 +144,11 @@ return {
 		["quality"] = 2,
 	},
 	[19] = {
-		["resourceName"] = "MAKANAN KUIH",
+		["resourceName"] = "Statutino Libertino",
 		["baseAbility"] = 410,
 		["id"] = 19,
-		["iconImageId"] = "rbxassetid://89810954110481",
-		["name_t"] = "MAKANAN KUIH",
+		["iconImageId"] = "rbxassetid://105432052190208",
+		["name_t"] = "Statutino Libertino",
 		["quality"] = 3,
 	},
 	[20] = {
@@ -200,11 +200,11 @@ return {
 		["quality"] = 3,
 	},
 	[26] = {
-		["resourceName"] = "Los tung tungDouble Dicen sahurr",
+		["resourceName"] = "La_Vacca_Saturno_Saturnita",
 		["baseAbility"] = 3300,
 		["id"] = 26,
-		["iconImageId"] = "rbxassetid://93265221897631",
-		["name_t"] = "Los tung tungDouble Dicen sahurr",
+		["iconImageId"] = "rbxassetid://116533419226831",
+		["name_t"] = "La Vacca Saturno Saturnita",
 		["quality"] = 3,
 	},
 	[27] = {
@@ -624,11 +624,11 @@ return {
 		["quality"] = 6,
 	},
 	[79] = {
-		["resourceName"] = "Statutino Libertino",
+		["resourceName"] = "MAKANAN KUIH",
 		["baseAbility"] = 5800000000,
 		["id"] = 79,
-		["iconImageId"] = "rbxassetid://105432052190208",
-		["name_t"] = "Statutino Libertino",
+		["iconImageId"] = "rbxassetid://89810954110481",
+		["name_t"] = "MAKANAN KUIH",
 		["quality"] = 7,
 	},
 	[80] = {
@@ -744,11 +744,11 @@ return {
 		["quality"] = 7,
 	},
 	[94] = {
-		["resourceName"] = "La_Vacca_Saturno_Saturnita",
+		["resourceName"] = "Trenostruzzo_Turbo_3000",
 		["baseAbility"] = 420000000000,
 		["id"] = 94,
-		["iconImageId"] = "rbxassetid://116533419226831",
-		["name_t"] = "La Vacca Saturno Saturnita",
+		["iconImageId"] = "rbxassetid://112946358766381",
+		["name_t"] = "Trenostruzzo Turbo 3000",
 		["quality"] = 7,
 	},
 	[95] = {
@@ -1000,11 +1000,11 @@ return {
 		["quality"] = 7,
 	},
 	[126] = {
-		["resourceName"] = "Trenostruzzo_Turbo_3000",
+		["resourceName"] = "Los tung tungDouble Dicen sahurr",
 		["baseAbility"] = 2800000000000000,
 		["id"] = 126,
-		["iconImageId"] = "rbxassetid://112946358766381",
-		["name_t"] = "Trenostruzzo Turbo 3000",
+		["iconImageId"] = "rbxassetid://93265221897631",
+		["name_t"] = "Los tung tungDouble Dicen sahurr",
 		["quality"] = 7,
 	},
 	[127] = {

@@ -685,7 +685,7 @@ export type LittleElfChestConfigData = {
 	iconImageId: string,
 	name_t: string,
 	quality: number,
-	distance: number,
+	zoneName: string,
 	onlyPay: number?,
 }
 
@@ -695,12 +695,16 @@ export type LittleElfChestData = LittleElfChestConfigData
 GameConfig.LittleElfChests = LittleElfChestDataModule
 GameConfig.LittleElfChestIdMap = {} :: { [number]: LittleElfChestConfigData }
 GameConfig.LittleElfChestNameMap = {} :: { [string]: LittleElfChestConfigData }
+GameConfig.LittleElfChestZoneNameMap = {} :: { [string]: LittleElfChestConfigData }
 
 for leChestKey, leChestRow in pairs(LittleElfChestDataModule) do
 	if type(leChestKey) == "number" and leChestRow and type(leChestRow) == "table" then
 		local cfg = leChestRow :: LittleElfChestConfigData
 		GameConfig.LittleElfChestIdMap[cfg.id] = cfg
 		GameConfig.LittleElfChestNameMap[cfg.resourceName] = cfg
+		if type(cfg.zoneName) == "string" and cfg.zoneName ~= "" then
+			GameConfig.LittleElfChestZoneNameMap[cfg.zoneName] = cfg
+		end
 	end
 end
 
@@ -739,6 +743,14 @@ end
 
 function GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig: LittleElfChestConfigData?): boolean
 	return chestConfig ~= nil and chestConfig.onlyPay ~= 1
+end
+
+function GameConfig.GetLittleElfChestByZoneName(zoneName: string): LittleElfChestConfigData?
+	local chestConfig = GameConfig.LittleElfChestZoneNameMap[zoneName]
+	if GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig) then
+		return chestConfig
+	end
+	return nil
 end
 
 function GameConfig.RollVariantIdFromEntry(entry: LittleElfChestRewardPoolEntry): number
@@ -1365,6 +1377,28 @@ GameConfig.JumpRunwayDesigner = {
 	RUNWAY_CHEST_CAMERA_PITCH_DEG = 2,
 	-- 开箱时摄像机 FOV；↑ 视野更广
 	RUNWAY_CHEST_CAMERA_FOV = 50,
+	-- 小精灵宝箱开箱摆放时沿跑道前方额外拉远距离（stud）
+	RUNWAY_CHEST_OPEN_EXTRA_FORWARD_STUDS = 8,
+	-- 跟随宝箱在玩家身后的目标距离（stud）
+	RUNWAY_CHEST_FOLLOW_BEHIND_STUDS = 6,
+	-- 跟随宝箱相对玩家 HRP 的基础高度偏移（stud）
+	RUNWAY_CHEST_FOLLOW_HEIGHT_OFFSET_STUDS = 1.2,
+	-- 跟随宝箱上下漂浮幅度（stud）
+	RUNWAY_CHEST_FOLLOW_FLOAT_AMPLITUDE_STUDS = 0.45,
+	-- 跟随宝箱上下漂浮频率
+	RUNWAY_CHEST_FOLLOW_FLOAT_FREQUENCY = 3.2,
+	-- 跟随宝箱近距离平滑速度；越大贴近越快
+	RUNWAY_CHEST_FOLLOW_MIN_SMOOTH_SPEED = 4,
+	-- 跟随宝箱远距离平滑速度；越大追赶越快
+	RUNWAY_CHEST_FOLLOW_MAX_SMOOTH_SPEED = 22,
+	-- 跟随宝箱达到最快追赶速度的距离（stud）
+	RUNWAY_CHEST_FOLLOW_FAST_DISTANCE_STUDS = 22,
+	-- 跟随宝箱与玩家 HRP 的最大距离（stud）；超过时硬限制在该半径内
+	RUNWAY_CHEST_FOLLOW_MAX_DISTANCE_STUDS = 12,
+	-- 区域检测探针盒基础尺寸（stud）；X 会按高速移动路径自动扩展
+	RUNWAY_CHEST_ZONE_PROBE_SIZE = Vector3.new(4, 4, 4),
+	-- 区域检测按玩家速度向前预测的时间（秒）；减少高速跨区时的宝箱切换滞后
+	RUNWAY_CHEST_ZONE_PROBE_LOOKAHEAD_SEC = 0.016,
 
 	-- ═══════════════════════════════════════
 	-- —— ⑧ 逃生红屏 ——
@@ -1693,6 +1727,17 @@ GameConfig.JumpRunway = {
 	RUNWAY_CHEST_CAMERA_BACK_OFFSET = jumpRunwayDesigner.RUNWAY_CHEST_CAMERA_BACK_OFFSET,
 	RUNWAY_CHEST_CAMERA_PITCH_DEG = jumpRunwayDesigner.RUNWAY_CHEST_CAMERA_PITCH_DEG,
 	RUNWAY_CHEST_CAMERA_FOV = jumpRunwayDesigner.RUNWAY_CHEST_CAMERA_FOV,
+	RUNWAY_CHEST_OPEN_EXTRA_FORWARD_STUDS = jumpRunwayDesigner.RUNWAY_CHEST_OPEN_EXTRA_FORWARD_STUDS,
+	RUNWAY_CHEST_FOLLOW_BEHIND_STUDS = jumpRunwayDesigner.RUNWAY_CHEST_FOLLOW_BEHIND_STUDS,
+	RUNWAY_CHEST_FOLLOW_HEIGHT_OFFSET_STUDS = jumpRunwayDesigner.RUNWAY_CHEST_FOLLOW_HEIGHT_OFFSET_STUDS,
+	RUNWAY_CHEST_FOLLOW_FLOAT_AMPLITUDE_STUDS = jumpRunwayDesigner.RUNWAY_CHEST_FOLLOW_FLOAT_AMPLITUDE_STUDS,
+	RUNWAY_CHEST_FOLLOW_FLOAT_FREQUENCY = jumpRunwayDesigner.RUNWAY_CHEST_FOLLOW_FLOAT_FREQUENCY,
+	RUNWAY_CHEST_FOLLOW_MIN_SMOOTH_SPEED = jumpRunwayDesigner.RUNWAY_CHEST_FOLLOW_MIN_SMOOTH_SPEED,
+	RUNWAY_CHEST_FOLLOW_MAX_SMOOTH_SPEED = jumpRunwayDesigner.RUNWAY_CHEST_FOLLOW_MAX_SMOOTH_SPEED,
+	RUNWAY_CHEST_FOLLOW_FAST_DISTANCE_STUDS = jumpRunwayDesigner.RUNWAY_CHEST_FOLLOW_FAST_DISTANCE_STUDS,
+	RUNWAY_CHEST_FOLLOW_MAX_DISTANCE_STUDS = jumpRunwayDesigner.RUNWAY_CHEST_FOLLOW_MAX_DISTANCE_STUDS,
+	RUNWAY_CHEST_ZONE_PROBE_SIZE = jumpRunwayDesigner.RUNWAY_CHEST_ZONE_PROBE_SIZE,
+	RUNWAY_CHEST_ZONE_PROBE_LOOKAHEAD_SEC = jumpRunwayDesigner.RUNWAY_CHEST_ZONE_PROBE_LOOKAHEAD_SEC,
 	-- 旧字段：B 段不再追宝箱，保留字段避免配置兼容问题
 	RUNWAY_CHEST_SLIDE_MIN_CHASE_SPEED = 16,
 	-- 旧字段：B 段不再追宝箱，保留字段避免配置兼容问题
@@ -1808,30 +1853,6 @@ function GameConfig.GetJumpRunwayJumpSpeedLimitsForSegment(
 	end
 	local minSpd = math.max(0, maxSpd - delta)
 	return maxSpd, minSpd
-end
-
--- 根据玩家移动距离获取对应的小精灵宝箱配置（取 distance <= 当前距离的最大 distance 条目）
-function GameConfig.GetLittleElfChestByDistance(distance: number): LittleElfChestConfigData?
-	local chests = GameConfig.LittleElfChests
-	if typeof(chests) ~= "table" then
-		return nil
-	end
-	local best: LittleElfChestConfigData? = nil
-	for _, row in pairs(chests) do
-		if type(row) == "table" then
-			local chestConfig = row :: LittleElfChestConfigData
-			if
-				type(chestConfig.distance) == "number"
-				and chestConfig.distance <= distance
-				and GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig)
-			then
-				if best == nil or chestConfig.distance > best.distance then
-					best = chestConfig
-				end
-			end
-		end
-	end
-	return best
 end
 
 -- 根据玩家移动距离获取对应的怪物配置（取 distance <= 当前距离的最大 distance 条目）
@@ -1995,7 +2016,7 @@ for _, configRow in pairs(ShopBundleConfigurationDataModule) do
 		continue
 	end
 	local bundleConfig = configRow :: ShopBundleConfigurationData
-	local bgIconId = GameConfig.ShopBundleBgIconIdById[bundleConfig.id]
+	local bgIconId = GameConfig.ShopBundleBgIconIdById[tonumber(bundleConfig.bgIconId) or 1]
 	if bgIconId ~= nil then
 		bundleConfig.bgIconId = bgIconId
 	end
