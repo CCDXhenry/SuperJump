@@ -22,8 +22,8 @@ local ShopBundleConfigurationDataModule = require(script:WaitForChild("ShopBundl
 local ShopBundleDataModule = require(script:WaitForChild("ShopBundleData"))
 local OnlineRewardDataModule = require(script:WaitForChild("OnlineRewardData"))
 
-GameConfig.GameVersion = "1.0.0"
-GameConfig.ABTestVersion = "1.0.0"
+GameConfig.GameVersion = "1.0.1"
+GameConfig.ABTestVersion = "1.0.1"
 GameConfig.PlayerSaveInfoDataVersion = 2
 GameConfig.GameId = 10269142148
 
@@ -1414,13 +1414,13 @@ function GameConfig.GetExerciseBikeAnimationSpeed(buffInfo: BuffInfo?): number
 end
 GameConfig.ExerciseClickReward = {
 	-- 点击奖励按钮每次出现的最短等待时间（秒）
-	DelayMin = 5,
+	DelayMin = 3,
 	-- 点击奖励按钮每次出现的最长等待时间（秒）
-	DelayMax = 10,
+	DelayMax = 8,
 	-- 点击奖励获得的锻炼值倍率，按当前器材 ability 乘以此倍率发放
 	RewardMultiplier = 2,
 	-- 服务端允许两次点击奖励领取之间的最小间隔（秒），用于防止客户端频繁请求
-	ServerMinInterval = 5,
+	ServerMinInterval = 2,
 	-- 按钮左右摇摆动画的最大旋转角度
 	SwingRotation = 12,
 	-- 按钮单次摇摆 tween 时长（秒）
