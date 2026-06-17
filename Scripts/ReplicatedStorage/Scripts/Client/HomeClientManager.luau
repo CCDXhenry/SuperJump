@@ -1,6 +1,5 @@
 --!strict
 local players = game:GetService("Players")
-local marketplaceService: MarketplaceService = game:GetService("MarketplaceService")
 local replicatedStorage: ReplicatedStorage = game:GetService("ReplicatedStorage")
 local proximityPromptService = game:GetService("ProximityPromptService")
 local runService = game:GetService("RunService")
@@ -162,10 +161,6 @@ local lastFocusWinnerPointIndex: number? = nil
 local lastAppliedFocusPointIndex: number? = nil
 local lastAppliedShowPlace: boolean? = nil
 local lastAppliedShowSell: boolean? = nil
-
--- Brainrot 付费升级防抖
-local lastBrainrotPaidPromptAt = 0
-local BRAINROT_PAID_PROMPT_COOLDOWN = 2
 
 local INTERACTION_FOCUS_REFRESH_INTERVAL = 0.1
 -- 略大于激活距离仍保留上一展台焦点，避免在 MaxActivationDistance 边界抖动时关掉 Prompt 打断按住
@@ -1588,20 +1583,11 @@ local function UpdatePlot(folder: Instance, placedData: any?, isLocalPlayer: boo
 												local playerInfo = ClientGameInfo.GetLocalPlayerInfo()
 												local currentGold = playerInfo and playerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
 												if currentGold < upCost then
-														-- 金币不足：走付费升 3 级路径（防抖避免重复弹出）
-														local now = os.clock()
-														if now - lastBrainrotPaidPromptAt < BRAINROT_PAID_PROMPT_COOLDOWN then
-															return
-														end
-														lastBrainrotPaidPromptAt = now
-
-														NetMsg.FireRequestUpgradeModel(pIdx, 3, true)
-														if players.LocalPlayer then
-															marketplaceService:PromptProductPurchase(
-																players.LocalPlayer,
-																GameConfig.ShopPaid.BrainrotUpgrade3ProductId
-															)
-														end
+													ClientMsg.FireShowGameTip(
+														GameTexts.InsufficientCoin.source,
+														GameConfig.GameTipTweenType.FlyUp,
+														GameTexts.InsufficientCoin.key
+													)
 													return
 												end
 												GameSoundManager.PlayUpgradeAbilitySound()
@@ -2479,17 +2465,11 @@ local function OnPromptTriggered(prompt: ProximityPrompt, player: Player)
 			local cost = GameConfig.GetBrainrotUpgradeCost(brainrotData.baseAbility, modelData.level)
 			local currentGold = playerInfo.currencies[tostring(GameConfig.CurrencyType.Coin)] or 0
 			if currentGold < cost then
-				-- 金币不足：走付费升 3 级路径（防抖避免重复弹出）
-				local now = os.clock()
-				if now - lastBrainrotPaidPromptAt < BRAINROT_PAID_PROMPT_COOLDOWN then
-					return
-				end
-				lastBrainrotPaidPromptAt = now
-
-				NetMsg.FireRequestUpgradeModel(pointIndex, 3, true)
-				if players.LocalPlayer then
-					marketplaceService:PromptProductPurchase(players.LocalPlayer, GameConfig.ShopPaid.BrainrotUpgrade3ProductId)
-				end
+				ClientMsg.FireShowGameTip(
+					GameTexts.InsufficientCoin.source,
+					GameConfig.GameTipTweenType.FlyUp,
+					GameTexts.InsufficientCoin.key
+				)
 				return
 			end
 
