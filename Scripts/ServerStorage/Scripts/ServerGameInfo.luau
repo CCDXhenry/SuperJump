@@ -229,10 +229,6 @@ function ServerGameInfo.InitPlayerInfo(
 	if ClampShopAndHomeLevelsFromConfig(playerInfo.shopInfo, playerInfo.homeInfo) then
 		playerInfo.playerInfoChanged = true
 	end
-	if playerInfo.guideProgressInfo.exEquipBuyGuideCompletedCount == nil then
-		playerInfo.guideProgressInfo.exEquipBuyGuideCompletedCount = 0
-		playerInfo.playerInfoChanged = true
-	end
 	local previousActivePlayer = currentActivePlayer
 	if previousActivePlayer ~= nil and previousActivePlayer ~= player then
 		warn("[ServerGameInfo] InitPlayerInfo replacing active session for", player.Name, "userId", player.UserId)
