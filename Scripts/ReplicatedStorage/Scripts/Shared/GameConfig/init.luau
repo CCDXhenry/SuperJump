@@ -1980,6 +1980,7 @@ GameConfig.ShopBundleBgIconIdById = {
 	[3] = "rbxassetid://140006926894911",
 	[4] = "rbxassetid://131609692287978",
 	[5] = "rbxassetid://123495708111145",
+	[6] = "rbxassetid://139341691152966",
 } :: { [number]: string }
 
 export type ShopBundleConfigurationData = {

@@ -962,6 +962,10 @@ function RunwaySession.OpenLittleElfChestAtPosition(chestConfigId: number, spawn
 	if chestConfig == nil or not GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig) then
 		return
 	end
+	-- 开箱时若仍在切箱特效阶段，立即清理特效，避免特效模型掉落残留。
+	RunwaySession.DestroyLittleElfChestChangeEffect()
+	Refs.chestSwitchTargetConfigId = nil
+	Refs.chestSwitchStartClock = nil
 	local probeModel = Refs.chestFollowModel
 	local openForward = Vector3.new(faceFwdH.X, 0, faceFwdH.Z)
 	if openForward.Magnitude < 1e-4 then
