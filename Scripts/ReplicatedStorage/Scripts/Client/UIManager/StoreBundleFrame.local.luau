@@ -284,13 +284,6 @@ local function formatProbabilityPercent(weight: number, totalWeight: number): st
 	return text .. "%"
 end
 
-type ChestBundleAbilitySlot = {
-	abilityLabel: TextLabel,
-	poolEntry: GameConfig.LittleElfChestRewardPoolEntry,
-	chestLevel: number,
-}
-
-local chestBundleAbilitySlots: { ChestBundleAbilitySlot } = {}
 local warnedChestBundleRewardConfigIds: { [number]: boolean } = {}
 
 local function getChestPoolDisplayEntries(chestId: number): { GameConfig.LittleElfChestRewardPoolEntry }
@@ -378,8 +371,7 @@ end
 
 local function getPoolBrainrotAbilityDisplay(
 	poolEntry: GameConfig.LittleElfChestRewardPoolEntry,
-	chestLevel: number,
-	playerInfo: GameConfig.ClientLocalPlayerInfo?
+	chestLevel: number
 ): number?
 	if poolEntry.itemType ~= GameConfig.ItemType.Brainrot then
 		return nil
@@ -389,11 +381,7 @@ local function getPoolBrainrotAbilityDisplay(
 		return nil
 	end
 	local ability = GameConfig.GetBrainrotAbility(brainrotData.baseAbility, chestLevel)
-	local coinMultiplier = 1
-	if playerInfo and playerInfo.buffInfo then
-		coinMultiplier = GameConfig.GetBuffMultiplier(playerInfo.buffInfo, GameConfig.BuffType.CoinEfficiency)
-	end
-	return math.ceil(ability * coinMultiplier * getMaxVariantCoinMultiplier(poolEntry))
+	return math.ceil(ability * getMaxVariantCoinMultiplier(poolEntry))
 end
 
 local function setPoolBrainrotAbilityLabel(
@@ -401,8 +389,7 @@ local function setPoolBrainrotAbilityLabel(
 	poolEntry: GameConfig.LittleElfChestRewardPoolEntry,
 	chestLevel: number
 )
-	local playerInfo = ClientGameInfo.GetLocalPlayerInfo()
-	local ability = getPoolBrainrotAbilityDisplay(poolEntry, chestLevel, playerInfo)
+	local ability = getPoolBrainrotAbilityDisplay(poolEntry, chestLevel)
 	if ability == nil then
 		abilityLabel.Visible = false
 		return
@@ -414,14 +401,6 @@ local function setPoolBrainrotAbilityLabel(
 		GameTexts.YieldPerSecond.key,
 		{ NumberExtension.FormatBigNumberAA(ability) }
 	)
-end
-
-local function refreshChestBundleAbilityLabels()
-	for _, slot in ipairs(chestBundleAbilitySlots) do
-		if slot.abilityLabel.Parent ~= nil then
-			setPoolBrainrotAbilityLabel(slot.abilityLabel, slot.poolEntry, slot.chestLevel)
-		end
-	end
 end
 
 local function getPoolItemIcon(itemType: number, itemId: number): string
@@ -706,11 +685,6 @@ local function createChestBundleFrame(bundleData: GameConfig.ShopBundleData, ind
 				local abilityLabel = packFrame:FindFirstChild("AbilityLabel") :: TextLabel?
 				if abilityLabel then
 					setPoolBrainrotAbilityLabel(abilityLabel, poolEntry, chestLevel)
-					table.insert(chestBundleAbilitySlots, {
-						abilityLabel = abilityLabel,
-						poolEntry = poolEntry,
-						chestLevel = chestLevel,
-					})
 				end
 			end
 		end
@@ -818,7 +792,6 @@ local function detachTemplatesFromLayout()
 end
 
 local function clearShopBundleFrames()
-	table.clear(chestBundleAbilitySlots)
 	table.clear(warnedChestBundleRewardConfigIds)
 	for bundleId, frame in pairs(bundleFramesById) do
 		if frame.Parent ~= nil then
@@ -912,7 +885,6 @@ ClientMsg.ConnectLocalPlayerBuffInfoUpdate(function(_buffInfo: GameConfig.BuffIn
 	if isWindowClosed then
 		return
 	end
-	refreshChestBundleAbilityLabels()
 	updateRepurchaseMask()
 end)
 
