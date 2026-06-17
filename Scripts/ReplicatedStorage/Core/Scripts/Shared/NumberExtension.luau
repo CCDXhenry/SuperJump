@@ -56,6 +56,24 @@ local function getAASuffix(index: number): string
 	return string.char(97 + math.floor(index / 26)) .. string.char(97 + (index % 26))
 end
 
+local SIG_DIGITS_AA = 3
+
+-- 截断至指定位有效数字（不四舍五入），tostring 自然去掉尾随零
+local function formatTruncatedSigDigits(value: number): string
+	if value <= 0 then
+		return "0"
+	end
+	local log10v = math.log10(value)
+	if log10v ~= log10v then
+		return "0"
+	end
+	local magnitude = math.floor(log10v)
+	local decimalPlaces = math.max(0, SIG_DIGITS_AA - 1 - magnitude)
+	local multiplier = 10 ^ decimalPlaces
+	local truncated = math.floor(value * multiplier + 1e-9) / multiplier
+	return tostring(truncated)
+end
+
 --格式化大数字（aa格式）
 function NumberExtension.FormatBigNumberAA(num: unknown): string
 	local n = asFinitePositiveNumber(num)
@@ -63,7 +81,7 @@ function NumberExtension.FormatBigNumberAA(num: unknown): string
 		return "0"
 	end
 	if n < 1e3 then
-		return tostring(math.floor(n * 100) / 100)
+		return formatTruncatedSigDigits(n)
 	end
 
 	local log10n = math.log10(n)
@@ -72,19 +90,20 @@ function NumberExtension.FormatBigNumberAA(num: unknown): string
 	end
 
 	local exp: number = math.floor(log10n / 3)
+	local scaled = n / (1e3 ^ exp)
+	local base = formatTruncatedSigDigits(scaled)
+
 	local suffixList: { string } = { "K", "M", "B", "T" }
 	if exp <= #suffixList then
 		local suffix = suffixList[exp]
 		if suffix == nil then
 			return NumberExtension.FormatBigNumber(n)
 		end
-		local base = math.floor(n / ((1e3 ^ exp) / 100)) / 100
 		return base .. suffix
 	end
 
 	-- aa格式从#suffixList后开始
 	local aaIndex = exp - #suffixList
-	local base = math.floor(n / ((1e3 ^ exp) / 100)) / 100
 	return base .. getAASuffix(aaIndex)
 end
 
