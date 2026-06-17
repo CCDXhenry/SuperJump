@@ -2247,6 +2247,7 @@ function UpdateHomeVisuals(slotName: string, homeInfo: any, isLocalPlayer: boole
 					if clickBtn then
 						local clvLabel = clickBtn:FindFirstChild("LvLabel") :: TextLabel?
 						local costText = clickBtn:FindFirstChild("CostText") :: TextLabel?
+						local coinImg = clickBtn:FindFirstChild("CoinImg") :: GuiObject?
 
 						local skillData = GameConfig.Shop and GameConfig.Shop.HomeLevel
 						if skillData then
@@ -2276,6 +2277,10 @@ function UpdateHomeVisuals(slotName: string, homeInfo: any, isLocalPlayer: boole
 								else
 									costText.Visible = false
 								end
+							end
+
+							if coinImg then
+								coinImg.Visible = canUp
 							end
 
 							if not clickBtn:GetAttribute("ClickBound") then
