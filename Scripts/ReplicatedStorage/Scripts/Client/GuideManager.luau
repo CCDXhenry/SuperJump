@@ -116,6 +116,40 @@ local function HasEquippedBrainrotTool(): boolean
 	return false
 end
 
+local function HasAnyEquippedTool(): boolean
+	if localPlayer == nil then
+		return false
+	end
+	local character = localPlayer.Character
+	if character == nil then
+		return false
+	end
+	for _, child in ipairs(character:GetChildren()) do
+		if child:IsA("Tool") then
+			return true
+		end
+	end
+	return false
+end
+
+local function IsBrainrotPlacementGuideType(guideType: number): boolean
+	return guideType == GameConfig.GuideType.TutorialBrainrotPlace
+		or guideType == GameConfig.GuideType.TutorialBrainrotPlaceSlot
+end
+
+local function FilterGuideTypeForEquippedTool(guideType: number): number
+	if guideType == GameConfig.GuideType.None then
+		return guideType
+	end
+	if IsBrainrotPlacementGuideType(guideType) then
+		return guideType
+	end
+	if HasAnyEquippedTool() then
+		return GameConfig.GuideType.None
+	end
+	return guideType
+end
+
 local function IsBrainrotPlaceFinished(info: GameConfig.ClientLocalPlayerInfo): boolean
 	return info.guideProgressInfo.guideStepDoneMap[GameConfig.GuideStepKey.BrainrotPlaceFinished] == true
 end
@@ -952,7 +986,9 @@ local function ResolveGuideType(): number
 	-- JumpRunway 主跑道阶段：仅保留跑道内引导
 	if ClientGameInfo.IsInJumpRunway() and not ClientGameInfo.IsInJumpRunwayEscapePhase() then
 		local currentGuideType = ClientGameInfo.GetCurrentGuideType()
-		return if IsRunwayGuideType(currentGuideType) then currentGuideType else GameConfig.GuideType.None
+		return FilterGuideTypeForEquippedTool(
+			if IsRunwayGuideType(currentGuideType) then currentGuideType else GameConfig.GuideType.None
+		)
 	end
 	-- 锻炼模式隐藏非锻炼引导
 	if ClientGameInfo.IsExercising() then
@@ -967,21 +1003,21 @@ local function ResolveGuideType(): number
 	if not HasBrainrotPlacedOnHome(info) and not IsBrainrotPlaceFinished(info) then
 		if CountCarryingBrainrotsInQueue(info) > 0 then
 			if IsLocalPlayerCarryingBrainrot() then
-				return GameConfig.GuideType.TutorialBrainrotPlace
+				return FilterGuideTypeForEquippedTool(GameConfig.GuideType.TutorialBrainrotPlace)
 			end
 			if not HasEquippedBrainrotTool() then
-				return GameConfig.GuideType.TutorialBrainrotPlaceSlot
+				return FilterGuideTypeForEquippedTool(GameConfig.GuideType.TutorialBrainrotPlaceSlot)
 			end
-			return GameConfig.GuideType.TutorialBrainrotPlace
+			return FilterGuideTypeForEquippedTool(GameConfig.GuideType.TutorialBrainrotPlace)
 		end
 		if IsLocalPlayerCarryingBrainrot() then
-			return GameConfig.GuideType.TutorialBrainrotPlace
+			return FilterGuideTypeForEquippedTool(GameConfig.GuideType.TutorialBrainrotPlace)
 		end
 	end
 
 	if not IsGuideStepDone(info, GameConfig.GuideStepKey.BrainrotCollectFinished) and HasCollectableBrainrotYield(info) then
-		return FilterOutsideRunwaySessionGuide(
-			MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotCollect)
+		return FilterGuideTypeForEquippedTool(
+			FilterOutsideRunwaySessionGuide(MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotCollect))
 		)
 	end
 
@@ -993,13 +1029,13 @@ local function ResolveGuideType(): number
 		if IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished)
 			and not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackRunwayRetryFinished)
 		then
-			return GameConfig.GuideType.TutorialJetpackRunwayRetry
+			return FilterGuideTypeForEquippedTool(GameConfig.GuideType.TutorialJetpackRunwayRetry)
 		end
 	elseif not IsGuideStepDone(info, GameConfig.GuideStepKey.JetpackBuyFinished)
 		and not HasAnyOwnedJetpack(info)
 		and IsTargetJetpackAffordable(info)
 	then
-		return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialJetpackBuy)
+		return FilterGuideTypeForEquippedTool(FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialJetpackBuy))
 	end
 
 	if IsExEquipGuideUnlocked(info) then
@@ -1008,8 +1044,8 @@ local function ResolveGuideType(): number
 			if HasUpgradedBrainrot(info) then
 				CompleteGuideStep(GameConfig.GuideStepKey.BrainrotUpgradeFinished)
 			elseif HasAffordableUpgradeableBrainrot(info) then
-				return FilterOutsideRunwaySessionGuide(
-					MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotUpgrade)
+				return FilterGuideTypeForEquippedTool(
+					FilterOutsideRunwaySessionGuide(MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotUpgrade))
 				)
 			end
 		end
@@ -1017,7 +1053,9 @@ local function ResolveGuideType(): number
 		-- 优先级第二档：首次购买后先走锻炼+升级+跑道，后两次仅购买
 		if not IsExEquipBuyGuidePhaseComplete(info) then
 			if HasCompletedFirstExEquipGuideCycle() and not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipUseFinished) then
-				return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipUse)
+				return FilterGuideTypeForEquippedTool(
+					FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipUse)
+				)
 			end
 			if
 				HasCompletedFirstExEquipGuideCycle()
@@ -1025,30 +1063,34 @@ local function ResolveGuideType(): number
 				and HasJumpPowerUpgraded(info)
 				and not IsGuideStepDone(info, GameConfig.GuideStepKey.JumpPowerRunwayRetryFinished)
 			then
-				return GameConfig.GuideType.TutorialJumpPowerRunwayRetry
+				return FilterGuideTypeForEquippedTool(GameConfig.GuideType.TutorialJumpPowerRunwayRetry)
 			end
 			local targetEquipId = GetCurrentExEquipBuyGuideTargetId(info)
 			if targetEquipId ~= nil then
 				local guideIndex = GetCurrentExEquipBuyGuideIndex(info)
 				local affordable = IsExEquipAffordable(info, targetEquipId)
 				if guideIndex == 1 and not affordable and HasCollectableBrainrotYield(info) then
-					return FilterOutsideRunwaySessionGuide(
-						MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotCollect)
+					return FilterGuideTypeForEquippedTool(
+						FilterOutsideRunwaySessionGuide(MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotCollect))
 					)
 				elseif affordable then
-					return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipBuy)
+					return FilterGuideTypeForEquippedTool(
+						FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipBuy)
+					)
 				end
 			end
 		else
 			if not IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipUseFinished) then
-				return FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipUse)
+				return FilterGuideTypeForEquippedTool(
+					FilterOutsideRunwaySessionGuide(GameConfig.GuideType.TutorialExEquipUse)
+				)
 			end
 			if
 				IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipUseFinished)
 				and HasJumpPowerUpgraded(info)
 				and not IsGuideStepDone(info, GameConfig.GuideStepKey.JumpPowerRunwayRetryFinished)
 			then
-				return GameConfig.GuideType.TutorialJumpPowerRunwayRetry
+				return FilterGuideTypeForEquippedTool(GameConfig.GuideType.TutorialJumpPowerRunwayRetry)
 			end
 		end
 	end
@@ -1058,13 +1100,13 @@ local function ResolveGuideType(): number
 		and (
 			IsGuideStepDone(info, GameConfig.GuideStepKey.ExEquipBuyFinished)
 			or (HasCompletedFirstExEquipGuideCycle() and HasFinishedFirstExEquipActionChain(info))
-		)
+	)
 	then
 		if HasUpgradedBrainrot(info) then
 			CompleteGuideStep(GameConfig.GuideStepKey.BrainrotUpgradeFinished)
 		elseif HasAffordableUpgradeableBrainrot(info) then
-			return FilterOutsideRunwaySessionGuide(
-				MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotUpgrade)
+			return FilterGuideTypeForEquippedTool(
+				FilterOutsideRunwaySessionGuide(MaybeIslandTeleportOr(GameConfig.GuideType.TutorialBrainrotUpgrade))
 			)
 		end
 	end
@@ -1078,7 +1120,7 @@ local function ResolveGuideType(): number
 	end
 
 	if not IsGuideStepDone(info, GameConfig.GuideStepKey.StartTriggerFinished) then
-		return GameConfig.GuideType.TutorialStartTrigger
+		return FilterGuideTypeForEquippedTool(GameConfig.GuideType.TutorialStartTrigger)
 	end
 
 	return GameConfig.GuideType.None
@@ -1189,6 +1231,21 @@ function GuideManager.Init()
 
 	TryCreateArrowModel()
 	InitPickupCandidates()
+
+	local function BindCharacter(character: Model)
+		ForceRefreshGuideType()
+		character.ChildAdded:Connect(function(_child: Instance)
+			ForceRefreshGuideType()
+		end)
+		character.ChildRemoved:Connect(function(_child: Instance)
+			ForceRefreshGuideType()
+		end)
+	end
+
+	localPlayer.CharacterAdded:Connect(BindCharacter)
+	if localPlayer.Character then
+		task.defer(BindCharacter, localPlayer.Character)
+	end
 
 	ClientMsg.ConnectLocalPlayerInfoInit(function()
 		ForceRefreshGuideType()
