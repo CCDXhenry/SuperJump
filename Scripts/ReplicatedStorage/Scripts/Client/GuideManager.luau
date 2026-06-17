@@ -31,10 +31,13 @@ local pickupCandidatePartMap: { [BasePart]: boolean } = {}
 local pendingCompleteGuideStepMap: { [string]: boolean } = {}
 local observedPlacedModelClockMap: { [string]: number } = {}
 local exEquipGuideCompletedCycleCount = 0
+local lastObservedJumpRunwaySessionActive = false
+local lastJumpRunwayExitAt = -math.huge
 
 local GUIDE_TYPE_REFRESH_INTERVAL = 0.2
 local GUIDE_TARGET_REFRESH_INTERVAL = 0.2
 local GUIDE_COLLECT_MIN_ELAPSED_SEC = 1
+local JUMP_RUNWAY_EXIT_GUIDE_SUPPRESS_SEC = 0.35
 local InitPickupCandidates: () -> ()
 
 -- 与 ServerGameInfo.IsPlayerOnWorkspaceGround / PavingClientManager 安全区射线对齐
@@ -144,10 +147,24 @@ local function FilterGuideTypeForEquippedTool(guideType: number): number
 	if IsBrainrotPlacementGuideType(guideType) then
 		return guideType
 	end
+	if not ClientGameInfo.IsInJumpRunway() and not ClientGameInfo.IsInJumpRunwayEscapePhase() then
+		local now = os.clock()
+		if now - lastJumpRunwayExitAt < JUMP_RUNWAY_EXIT_GUIDE_SUPPRESS_SEC then
+			return GameConfig.GuideType.None
+		end
+	end
 	if HasAnyEquippedTool() then
 		return GameConfig.GuideType.None
 	end
 	return guideType
+end
+
+local function UpdateJumpRunwayExitGraceState()
+	local inJumpRunwaySession = ClientGameInfo.IsInJumpRunway() or ClientGameInfo.IsInJumpRunwayEscapePhase()
+	if lastObservedJumpRunwaySessionActive and not inJumpRunwaySession then
+		lastJumpRunwayExitAt = os.clock()
+	end
+	lastObservedJumpRunwaySessionActive = inJumpRunwaySession
 end
 
 local function IsBrainrotPlaceFinished(info: GameConfig.ClientLocalPlayerInfo): boolean
@@ -983,6 +1000,7 @@ local function UpdateGuideArrow()
 end
 
 local function ResolveGuideType(): number
+	UpdateJumpRunwayExitGraceState()
 	-- JumpRunway 主跑道阶段：仅保留跑道内引导
 	if ClientGameInfo.IsInJumpRunway() and not ClientGameInfo.IsInJumpRunwayEscapePhase() then
 		local currentGuideType = ClientGameInfo.GetCurrentGuideType()
