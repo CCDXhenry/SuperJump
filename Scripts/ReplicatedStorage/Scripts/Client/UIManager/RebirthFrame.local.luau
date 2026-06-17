@@ -15,6 +15,7 @@ local GameTexts = require(sharedScripts:WaitForChild("GameTexts"))
 local NetMsg = require(sharedScripts:WaitForChild("NetMsg"))
 local ClientMsg = require(clientScripts:WaitForChild("ClientMsg"))
 local ClientGameInfo = require(clientScripts:WaitForChild("ClientGameInfo"))
+local GameSoundManager = require(clientScripts:WaitForChild("GameSoundManager"))
 local UIManager = require(clientScripts:WaitForChild("UIManager"))
 local UIAdapter = require(coreClientScripts:WaitForChild("UIAdapter"))
 local TranslationTool = require(coreScripts:WaitForChild("Client"):WaitForChild("TranslationTool"))
@@ -40,6 +41,7 @@ local jumppowerImage = infoFrame:WaitForChild("JumppowerImage") :: ImageLabel
 local jumppowerTextLabel = jumppowerImage:WaitForChild("TextLabel") :: TextLabel
 local jumppowerScaleBar = jumppowerImage:WaitForChild("ScaleBar") :: ImageLabel
 local jumppowerScale = jumppowerScaleBar:WaitForChild("Scale") :: ImageLabel
+local lastKnownRebirthLevel: number? = nil
 
 local function refreshScaleX(scaleImage: ImageLabel?, percent: number)
 	if not scaleImage then
@@ -102,6 +104,8 @@ local function refreshView()
 
 	local currentJumpPowerLevel = localPlayerInfo.jumpPower.lv
 	local currentRebirthLevel = localPlayerInfo.shopInfo.rebirthLevel or 0
+	local shouldPlayRebirthSound = lastKnownRebirthLevel ~= nil and currentRebirthLevel > (lastKnownRebirthLevel :: number)
+	lastKnownRebirthLevel = currentRebirthLevel
 
 	local nextRebirthData = GameConfig.RebirthMap[currentRebirthLevel + 1]
 	local nextRebirthLevel = currentRebirthLevel + 1
@@ -146,6 +150,9 @@ local function refreshView()
 	)
 
 	refreshScaleX(jumppowerScale, jumpPowerProgress)
+	if shouldPlayRebirthSound then
+		GameSoundManager.PlayRebirthSound()
+	end
 end
 
 closeButton.Activated:Connect(function()
