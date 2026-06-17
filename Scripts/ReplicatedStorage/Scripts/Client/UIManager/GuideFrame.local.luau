@@ -23,6 +23,7 @@ local fingerImageScale: UIScale = fingerImage:WaitForChild("UIScale") :: UIScale
 local operationTypeValue: IntValue = guideFrame:WaitForChild("OperationType") :: IntValue
 
 local FINGER_PULSE_MIN_SCALE = 0.78
+local FINGER_SHOP_SCROLL_ITEM_SCALE = 0.5
 local FINGER_PULSE_TWEEN_INFO: TweenInfo =
 	TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
 local FINGER_CLONE_NAME = "GuideFingerClone"
@@ -56,18 +57,31 @@ local function StopGuideAni()
 	fingerImageScale.Scale = 1
 end
 
-local function StartPulseOnScale(scaleObj: UIScale)
+local function StartPulseOnScale(scaleObj: UIScale, baseScale: number?)
+	local scale = baseScale or 1
 	if fingerPulseTween ~= nil then
 		fingerPulseTween:Cancel()
 		fingerPulseTween = nil
 	end
-	scaleObj.Scale = 1
-	fingerPulseTween = tweenService:Create(scaleObj, FINGER_PULSE_TWEEN_INFO, { Scale = FINGER_PULSE_MIN_SCALE })
+	scaleObj.Scale = scale
+	fingerPulseTween = tweenService:Create(
+		scaleObj,
+		FINGER_PULSE_TWEEN_INFO,
+		{ Scale = scale * FINGER_PULSE_MIN_SCALE }
+	)
 	fingerPulseTween:Play()
 end
 
+local function GetShopScrollingFrameFingerScale(btn: GuiButton): number
+	local parent = btn.Parent
+	if parent ~= nil and parent:IsA("ScrollingFrame") then
+		return FINGER_SHOP_SCROLL_ITEM_SCALE
+	end
+	return 1
+end
+
 -- 将 FingerImage 克隆到 target 子级，在目标局部中心做缩放动画
-local function MountFingerCloneUnder(target: GuiObject)
+local function MountFingerCloneUnder(target: GuiObject, fingerBaseScale: number?)
 	StopGuideAni()
 	fingerZIndexTarget = target
 	fingerZIndexOriginal = target.ZIndex
@@ -80,7 +94,7 @@ local function MountFingerCloneUnder(target: GuiObject)
 	fingerImage.Visible = false
 	fingerClone = clone
 	local scale = clone:WaitForChild("UIScale") :: UIScale
-	StartPulseOnScale(scale)
+	StartPulseOnScale(scale, fingerBaseScale)
 end
 
 local function IsGuiVisibleChain(gui: GuiObject): boolean
@@ -550,7 +564,7 @@ local function RefreshGuideFrame()
 			StopGuideAni()
 			return
 		end
-		MountFingerCloneUnder(guideBtn)
+		MountFingerCloneUnder(guideBtn, GetShopScrollingFrameFingerScale(guideBtn))
 		guideFrame.Visible = false
 		return
 	end
@@ -619,14 +633,18 @@ ClientMsg.ConnectCurrentGuideTypeChanged(function()
 	RefreshGuideFrame()
 end)
 
-local function UpdateFingerOnTrackedButton(resolveButton: () -> GuiButton?)
+local function UpdateFingerOnTrackedButton(
+	resolveButton: () -> GuiButton?,
+	resolveFingerBaseScale: ((GuiButton) -> number)?
+)
 	local btn = resolveButton()
 	if btn == nil or not IsGuiVisibleChain(btn) then
 		StopGuideAni()
 		return
 	end
+	local fingerBaseScale = if resolveFingerBaseScale then resolveFingerBaseScale(btn) else 1
 	if fingerClone == nil or fingerClone.Parent ~= btn then
-		MountFingerCloneUnder(btn)
+		MountFingerCloneUnder(btn, fingerBaseScale)
 	end
 end
 
@@ -651,7 +669,7 @@ runService.RenderStepped:Connect(function()
 	then
 		UpdateFingerOnTrackedButton(function()
 			return ResolveShopTutorialGuideButton(t)
-		end)
+		end, GetShopScrollingFrameFingerScale)
 	elseif t == GameConfig.GuideType.TutorialExEquipUse then
 		UpdateFingerOnTrackedButton(FindExEquipBackpackSlotButton)
 	elseif t == GameConfig.GuideType.TutorialBrainrotUpgrade then
