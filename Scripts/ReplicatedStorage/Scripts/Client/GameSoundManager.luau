@@ -94,6 +94,10 @@ function GameSoundManager.PlayImpactSound()
 	playGlobalFromName("ImpactSound")
 end
 
+function GameSoundManager.PlayLittleElfChestChangeSound()
+	playGlobalFromName("ChestChangeSound")
+end
+
 function GameSoundManager.PlayJettingSound()
 	if jettingSound ~= nil and jettingSound.Parent ~= nil then
 		return

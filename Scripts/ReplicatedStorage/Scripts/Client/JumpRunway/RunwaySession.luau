@@ -9,6 +9,7 @@ local contextActionService = game:GetService("ContextActionService")
 local userInputService = game:GetService("UserInputService")
 local runService = game:GetService("RunService")
 local debris = game:GetService("Debris")
+local tweenService = game:GetService("TweenService")
 local workspace = game:GetService("Workspace")
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local scripts = replicatedStorage:WaitForChild("Scripts")
@@ -120,6 +121,10 @@ local RunwayJumpSmokeTemplateName = RunwayConstants.RunwayJumpSmokeTemplateName
 
 local modelsFolder = replicatedStorage:WaitForChild("Models")
 local actualChests = modelsFolder:FindFirstChild("LittleElfChests")
+local littleElfChestsEffectFolder = modelsFolder:FindFirstChild("LittleElfChestsEffect")
+local littleElfChestChangeEffect = if littleElfChestsEffectFolder ~= nil
+	then littleElfChestsEffectFolder:FindFirstChild("Effect")
+	else nil
 local CHEST_GROUND_RAISE_STUDS = 0.2
 local ChestHitHorizontalMaxDistStudsDefault = 14
 local CHEST_FALL_MAX_HEIGHT_STUDS = 8
@@ -134,6 +139,10 @@ local RunwayChestFollowMinSmoothSpeedDefault = 4
 local RunwayChestFollowMaxSmoothSpeedDefault = 22
 local RunwayChestFollowFastDistanceStudsDefault = 22
 local RunwayChestFollowMaxDistanceStudsDefault = 12
+local RunwayChestFollowScaleDefault = 0.75
+local LittleElfChestSwitchSpinDurationSec = 0.28
+local LittleElfChestSwitchSpinRadians = math.pi * 2
+local LittleElfChestSwitchTimeoutSecDefault = 1.0
 local RunwayChestOpenExtraForwardStudsDefault = 8
 local PlayerSlideCollisionGroupName = "PlayerSlideState"
 local ChestCollisionGroupName = "Chest"
@@ -165,6 +174,7 @@ local GuideSlowMotionAnimRenderStepName = "JumpRunwayGuideSlowMotionAnim"
 local MaxRunwayVisualOrientationDt = 1 / 30
 local TreeChainLandingContactHoldSec = 0.12
 local TreeTakeoffRatingBarBlendSec = 0.12
+local littleElfChestChangeEffectWarned = false
 local GuideSlowMotionAnimPriorities: { [Enum.AnimationPriority]: boolean } = {
 	[Enum.AnimationPriority.Movement] = true,
 	[Enum.AnimationPriority.Core] = true,
@@ -192,6 +202,31 @@ end
 
 local function ResolveChestCarryPresentHoldSec(): number
 	return ResolveChestHoldDelaySec(cfg.RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC, 0.5)
+end
+
+local function ResolveLittleElfChestSwitchSpinDurationSec(): number
+	local runtimeCfg = cfg :: any
+	local value = ResolveConfigNumber(runtimeCfg.RUNWAY_CHEST_SWITCH_SPIN_DURATION_SEC, LittleElfChestSwitchSpinDurationSec)
+	if value <= 0 then
+		return LittleElfChestSwitchSpinDurationSec
+	end
+	return value
+end
+
+local function ResolveLittleElfChestSwitchSpinRadians(): number
+	local runtimeCfg = cfg :: any
+	return ResolveConfigNumber(runtimeCfg.RUNWAY_CHEST_SWITCH_SPIN_RADIANS, LittleElfChestSwitchSpinRadians)
+end
+
+local function ResolveLittleElfChestSwitchTimeoutSec(): number
+	local runtimeCfg = cfg :: any
+	local minTimeoutSec = 0.05
+	local durationSec = ResolveLittleElfChestSwitchSpinDurationSec()
+	local configuredTimeoutSec = ResolveConfigNumber(runtimeCfg.RUNWAY_CHEST_SWITCH_TIMEOUT_SEC, LittleElfChestSwitchTimeoutSecDefault)
+	if configuredTimeoutSec < minTimeoutSec then
+		configuredTimeoutSec = minTimeoutSec
+	end
+	return math.max(configuredTimeoutSec, durationSec)
 end
 
 local function ResolvePositiveConfigNumber(rawValue: any, fallbackValue: number): number
@@ -295,6 +330,10 @@ local Refs: {
 	chestFollowConfigId: number?,
 	chestFollowZoneName: string?,
 	chestFollowCFrame: CFrame?,
+	chestSwitchTargetConfigId: number?,
+	chestSwitchStartClock: number?,
+	chestChangeEffectModel: PVInstance?,
+	chestChangeEffectExpireClock: number?,
 	chestSpawnedForThisRun: boolean?,
 	chestSpawnedModel: Model?,
 	chestSpawnedConnList: { RBXScriptConnection }?,
@@ -407,6 +446,10 @@ local Refs: {
 	chestFollowConfigId = nil,
 	chestFollowZoneName = nil,
 	chestFollowCFrame = nil,
+	chestSwitchTargetConfigId = nil,
+	chestSwitchStartClock = nil,
+	chestChangeEffectModel = nil,
+	chestChangeEffectExpireClock = nil,
 	finalPitchSmoothedExtraDeg = 0,
 	chestSpawnedForThisRun = false,
 	chestSpawnedModel = nil,
@@ -627,6 +670,15 @@ function RunwaySession.ConfigureLittleElfChestVisualModel(chestModel: Model)
 	end
 end
 
+function RunwaySession.DestroyLittleElfChestChangeEffect()
+	local effectModel = Refs.chestChangeEffectModel
+	if effectModel ~= nil and effectModel.Parent ~= nil then
+		effectModel:Destroy()
+	end
+	Refs.chestChangeEffectModel = nil
+	Refs.chestChangeEffectExpireClock = nil
+end
+
 function RunwaySession.DestroyLittleElfChestFollowModel()
 	local followModel = Refs.chestFollowModel
 	if followModel ~= nil and followModel.Parent ~= nil then
@@ -635,15 +687,61 @@ function RunwaySession.DestroyLittleElfChestFollowModel()
 	Refs.chestFollowModel = nil
 	Refs.chestFollowConfigId = nil
 	Refs.chestFollowCFrame = nil
+	Refs.chestSwitchTargetConfigId = nil
+	Refs.chestSwitchStartClock = nil
+	RunwaySession.DestroyLittleElfChestChangeEffect()
 end
 
-function RunwaySession.EnsureLittleElfChestFollowModel(chestConfigId: number, initialCFrame: CFrame?): Model?
-	local followModel = Refs.chestFollowModel
-	if followModel ~= nil and followModel.Parent ~= nil and Refs.chestFollowConfigId == chestConfigId then
-		return followModel
+function RunwaySession.EmitLittleElfChestChangeEffect(effectModel: PVInstance): number
+	local lifeTime = 0
+	for _, descendant in ipairs(effectModel:GetDescendants()) do
+		if descendant:IsA("ParticleEmitter") then
+			local emitCount = descendant:GetAttribute("EmitCount") :: number?
+			descendant:Emit(emitCount or 1)
+			lifeTime = math.max(lifeTime, descendant.Lifetime.Max)
+		end
 	end
-	Refs.chestFollowCFrame = if followModel ~= nil and followModel.Parent ~= nil then followModel:GetPivot() else Refs.chestFollowCFrame
-	RunwaySession.DestroyLittleElfChestFollowModel()
+	return math.max(lifeTime, 0.1)
+end
+
+function RunwaySession.PlayLittleElfChestChangePresentation(effectCFrame: CFrame)
+	GameSoundManager.PlayLittleElfChestChangeSound()
+	if littleElfChestChangeEffect ~= nil and littleElfChestChangeEffect:IsA("PVInstance") then
+		RunwaySession.DestroyLittleElfChestChangeEffect()
+		local effectModel = (littleElfChestChangeEffect :: PVInstance):Clone()
+		effectModel.Parent = RunwaySession.GetJumpRunwayLocalFxFolder()
+		effectModel:PivotTo(effectCFrame)
+		local lifeTime = RunwaySession.EmitLittleElfChestChangeEffect(effectModel)
+		Refs.chestChangeEffectModel = effectModel
+		Refs.chestChangeEffectExpireClock = os.clock() + lifeTime
+		debris:AddItem(effectModel, lifeTime)
+		return
+	end
+	if not littleElfChestChangeEffectWarned then
+		littleElfChestChangeEffectWarned = true
+		warn("[RunwaySession] ReplicatedStorage.Models.LittleElfChestsEffect.Effect missing or not a PVInstance")
+	end
+end
+
+function RunwaySession.UpdateLittleElfChestChangeEffect(effectCFrame: CFrame)
+	local effectModel = Refs.chestChangeEffectModel
+	if effectModel == nil then
+		return
+	end
+	if effectModel.Parent == nil then
+		Refs.chestChangeEffectModel = nil
+		Refs.chestChangeEffectExpireClock = nil
+		return
+	end
+	local expireClock = Refs.chestChangeEffectExpireClock
+	if expireClock ~= nil and os.clock() >= expireClock then
+		RunwaySession.DestroyLittleElfChestChangeEffect()
+		return
+	end
+	effectModel:PivotTo(effectCFrame)
+end
+
+function RunwaySession.CreateLittleElfChestFollowModel(chestConfigId: number, initialCFrame: CFrame?): Model?
 	if actualChests == nil then
 		warn("[RunwaySession] LittleElfChests folder missing under ReplicatedStorage.Models")
 		return nil
@@ -659,12 +757,105 @@ function RunwaySession.EnsureLittleElfChestFollowModel(chestConfigId: number, in
 	local clone = GameConfig.CloneTemplateAsModel(template)
 	clone.Name = "RunwayLittleElfChestFollow"
 	RunwaySession.ConfigureLittleElfChestVisualModel(clone)
+	local runtimeCfg = cfg :: any
+	local followScale = ResolvePositiveConfigNumber(runtimeCfg.RUNWAY_CHEST_FOLLOW_SCALE, RunwayChestFollowScaleDefault)
+	pcall(function()
+		clone:ScaleTo(followScale)
+	end)
 	clone:PivotTo(initialCFrame or Refs.chestFollowCFrame or CFrame.new())
 	clone.Parent = RunwaySession.GetJumpRunwayLocalFxFolder()
 	Refs.chestFollowModel = clone
 	Refs.chestFollowConfigId = chestConfigId
 	Refs.chestFollowCFrame = clone:GetPivot()
 	return clone
+end
+
+function RunwaySession.StartLittleElfChestSwitch(chestConfigId: number, switchCFrame: CFrame)
+	Refs.chestSwitchTargetConfigId = chestConfigId
+	Refs.chestSwitchStartClock = os.clock()
+	RunwaySession.PlayLittleElfChestChangePresentation(switchCFrame)
+end
+
+function RunwaySession.GetLittleElfChestSwitchSpinAngle(): number
+	local switchStartClock = Refs.chestSwitchStartClock
+	if switchStartClock == nil then
+		return 0
+	end
+	local durationSec = ResolveLittleElfChestSwitchSpinDurationSec()
+	local alpha = math.clamp((os.clock() - switchStartClock) / durationSec, 0, 1)
+	local easedAlpha = tweenService:GetValue(alpha, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+	return ResolveLittleElfChestSwitchSpinRadians() * easedAlpha
+end
+
+function RunwaySession.IsLittleElfChestSwitchReady(): boolean
+	local switchStartClock = Refs.chestSwitchStartClock
+	if switchStartClock == nil then
+		return false
+	end
+	local elapsedSec = os.clock() - switchStartClock
+	return elapsedSec >= ResolveLittleElfChestSwitchSpinDurationSec() or elapsedSec >= ResolveLittleElfChestSwitchTimeoutSec()
+end
+
+function RunwaySession.GetLittleElfChestFollowBaseCFrameFromModel(followModel: Model): CFrame
+	local stableBaseCFrame = Refs.chestFollowCFrame
+	if stableBaseCFrame ~= nil then
+		return stableBaseCFrame
+	end
+	local pivot = followModel:GetPivot()
+	local spinAngle = RunwaySession.GetLittleElfChestSwitchSpinAngle()
+	if math.abs(spinAngle) <= 1e-6 then
+		return pivot
+	end
+	return pivot * CFrame.Angles(0, -spinAngle, 0)
+end
+
+function RunwaySession.EnsureLittleElfChestFollowModel(chestConfigId: number, initialCFrame: CFrame?): Model?
+	local followModel = Refs.chestFollowModel
+	if followModel ~= nil and followModel.Parent ~= nil and Refs.chestSwitchTargetConfigId ~= nil then
+		Refs.chestSwitchTargetConfigId = chestConfigId
+		if not RunwaySession.IsLittleElfChestSwitchReady() then
+			return followModel
+		end
+		chestConfigId = Refs.chestSwitchTargetConfigId or chestConfigId
+		if Refs.chestFollowConfigId == chestConfigId then
+			Refs.chestSwitchTargetConfigId = nil
+			Refs.chestSwitchStartClock = nil
+			return followModel
+		end
+		followModel:Destroy()
+		Refs.chestFollowModel = nil
+		Refs.chestFollowConfigId = nil
+		Refs.chestSwitchTargetConfigId = nil
+		Refs.chestSwitchStartClock = nil
+	end
+	if followModel ~= nil and followModel.Parent ~= nil and Refs.chestFollowConfigId == chestConfigId and Refs.chestSwitchTargetConfigId == nil then
+		return followModel
+	end
+	if followModel ~= nil and followModel.Parent ~= nil and Refs.chestFollowConfigId ~= nil and Refs.chestFollowConfigId ~= chestConfigId then
+		if Refs.chestSwitchTargetConfigId == nil then
+			RunwaySession.StartLittleElfChestSwitch(
+				chestConfigId,
+				Refs.chestFollowCFrame or RunwaySession.GetLittleElfChestFollowBaseCFrameFromModel(followModel)
+			)
+		else
+			Refs.chestSwitchTargetConfigId = chestConfigId
+		end
+		if not RunwaySession.IsLittleElfChestSwitchReady() then
+			return followModel
+		end
+		chestConfigId = Refs.chestSwitchTargetConfigId or chestConfigId
+		followModel:Destroy()
+		Refs.chestFollowModel = nil
+		Refs.chestFollowConfigId = nil
+		Refs.chestSwitchTargetConfigId = nil
+		Refs.chestSwitchStartClock = nil
+	elseif followModel ~= nil and followModel.Parent ~= nil then
+		Refs.chestFollowCFrame = RunwaySession.GetLittleElfChestFollowBaseCFrameFromModel(followModel)
+		followModel:Destroy()
+		Refs.chestFollowModel = nil
+		Refs.chestFollowConfigId = nil
+	end
+	return RunwaySession.CreateLittleElfChestFollowModel(chestConfigId, initialCFrame or Refs.chestFollowCFrame)
 end
 
 function RunwaySession.ClampLittleElfChestFollowCFrameToMaxDistance(hrp: BasePart, sourceCFrame: CFrame): CFrame
@@ -714,7 +905,7 @@ function RunwaySession.UpdateLittleElfChestFollow(dt: number, hrp: BasePart)
 		return
 	end
 	local targetCFrame = RunwaySession.BuildLittleElfChestFollowTargetCFrame(hrp, followModel)
-	local currentCFrame = Refs.chestFollowCFrame or followModel:GetPivot()
+	local currentCFrame = Refs.chestFollowCFrame or RunwaySession.GetLittleElfChestFollowBaseCFrameFromModel(followModel)
 	local distance = (targetCFrame.Position - currentCFrame.Position).Magnitude
 	local fastDistance = ResolvePositiveConfigNumber(cfg.RUNWAY_CHEST_FOLLOW_FAST_DISTANCE_STUDS, RunwayChestFollowFastDistanceStudsDefault)
 	local minSmoothSpeed = ResolvePositiveConfigNumber(cfg.RUNWAY_CHEST_FOLLOW_MIN_SMOOTH_SPEED, RunwayChestFollowMinSmoothSpeedDefault)
@@ -724,8 +915,11 @@ function RunwaySession.UpdateLittleElfChestFollow(dt: number, hrp: BasePart)
 	local alpha = 1 - math.exp(-smoothSpeed * math.max(dt, 0))
 	local nextCFrame = currentCFrame:Lerp(targetCFrame, alpha)
 	nextCFrame = RunwaySession.ClampLittleElfChestFollowCFrameToMaxDistance(hrp, nextCFrame)
-	followModel:PivotTo(nextCFrame)
+	local spinAngle = RunwaySession.GetLittleElfChestSwitchSpinAngle()
+	local displayCFrame = nextCFrame * CFrame.Angles(0, spinAngle, 0)
+	followModel:PivotTo(displayCFrame)
 	Refs.chestFollowCFrame = nextCFrame
+	RunwaySession.UpdateLittleElfChestChangeEffect(nextCFrame)
 end
 
 function RunwaySession.StartLittleElfChestFollowForRun(hrp: BasePart)
@@ -747,6 +941,9 @@ function RunwaySession.PlaceLittleElfChestFollowAtOpenPosition(openCFrame: CFram
 	if followModel == nil then
 		return nil
 	end
+	pcall(function()
+		followModel:ScaleTo(1)
+	end)
 	followModel.Name = "RunwayLittleElfChest"
 	RunwaySession.ConfigureLittleElfChestVisualModel(followModel)
 	followModel:PivotTo(openCFrame)
@@ -7878,7 +8075,9 @@ end
 function RunwaySession.BuildLittleElfChestOpenCFrame(pos: Vector3, _slideFwdH: Vector3, chestModel: Model?): CFrame
 	-- 保留模型模板默认朝向（与随机开箱 GetPivot 一致）；lookAt 会与资源轴向差 90°
 	if chestModel then
-		local pivot = chestModel:GetPivot()
+		local pivot = if chestModel == Refs.chestFollowModel and Refs.chestFollowCFrame ~= nil
+			then (Refs.chestFollowCFrame :: CFrame)
+			else chestModel:GetPivot()
 		return CFrame.new(pos) * (pivot - pivot.Position)
 	end
 	return CFrame.new(pos)
