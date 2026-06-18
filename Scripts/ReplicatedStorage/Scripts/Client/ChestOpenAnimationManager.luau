@@ -27,6 +27,8 @@ local GameSoundManager = require(clientScripts:WaitForChild("GameSoundManager"))
 
 local actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
 local modelsFolderForChests = replicatedStorage:WaitForChild("Models")
+local brainrotEffectFolder = modelsFolderForChests:FindFirstChild("BrainrotEffect")
+local finalRewardEffectTemplate = if brainrotEffectFolder ~= nil then brainrotEffectFolder:FindFirstChild("Effect") :: BasePart? else nil
 local factoryChestsFolder = modelsFolderForChests:FindFirstChild("LittleElfChests")
 	or modelsFolderForChests:WaitForChild("LittleElfChests")
 local littleElfChestsFolder = factoryChestsFolder
@@ -54,12 +56,12 @@ local RunwayMaxOpenAnimationSec = 5
 local ChestShakeDurationMultiplier = 1 / 2
 -- Brainrot 缩放参数：时长乘数，1 / 1.5 表示缩放速度为原来的 1.5 倍。
 local BrainrotOpenScaleDurationMultiplier = 1 / 1.5
--- Brainrot 缩放参数：随机轮播奖励弹出的峰值比例。
-local BrainrotRandomRevealScale = 2.5
--- Brainrot 缩放参数：最终奖励弹出的峰值比例。
-local BrainrotFinalRevealScale = 3.1
--- Brainrot 缩放参数：最终奖励从峰值回落后的停留比例。
-local BrainrotFinalSettleScale = 2.5
+-- Brainrot 缩放参数：随机轮播奖励弹出的峰值比例默认值。
+local BrainrotRandomRevealScaleDefault = 2.5
+-- Brainrot 缩放参数：最终奖励停留展示比例默认值。
+local BrainrotFinalDisplayScaleDefault = 2.5
+-- Brainrot 缩放参数：最终奖励弹出峰值相对停留展示比例的过冲倍率。
+local BrainrotFinalRevealOvershootMultiplier = 3.1 / 2.5
 -- 跑道开箱参数：宝箱从玩家撞击点向前抛出的距离。
 local ChestThrowForwardDistance = 1.0
 -- 跑道开箱参数：锁定朝向时 Brainrot 面向镜头的修正角度。
@@ -84,6 +86,7 @@ local function ResolveBrainrotRevealCFrame(throwCFrame: CFrame, lockFacing: bool
 	return baseCFrame
 end
 
+local warnedMissingFinalRewardEffect = false
 local playingUidMap: { [string]: boolean } = {}
 
 local function WaitDurationRespectingFocus(duration: number)
@@ -167,6 +170,27 @@ end
 
 local function GetChestShakeDuration(duration: number): number
 	return duration * ChestShakeDurationMultiplier
+end
+
+local function ResolvePositiveConfigNumber(value: any, fallback: number): number
+	if typeof(value) == "number" and value == value and value > 0 then
+		return value
+	end
+	return fallback
+end
+
+local function GetBrainrotRandomRevealScale(): number
+	return ResolvePositiveConfigNumber(
+		GameConfig.JumpRunway.RUNWAY_CHEST_RANDOM_BRAINROT_REVEAL_SCALE,
+		BrainrotRandomRevealScaleDefault
+	)
+end
+
+local function GetBrainrotFinalDisplayScale(): number
+	return ResolvePositiveConfigNumber(
+		GameConfig.JumpRunway.RUNWAY_CHEST_FINAL_BRAINROT_DISPLAY_SCALE,
+		BrainrotFinalDisplayScaleDefault
+	)
 end
 
 local function ResolveBrainrotTemplateBaseScale(brainrotId: number): number
@@ -329,17 +353,40 @@ local function CreateDisplayModel(tool: Tool, brainrotId: number): (Model?, Base
 	return visualModel, root
 end
 
-local function PickRandomEntry(pool: { any }, lastId: number?): any?
+local function AttachFinalRewardEffect(model: Model, root: BasePart)
+	if finalRewardEffectTemplate == nil or not finalRewardEffectTemplate:IsA("BasePart") then
+		if not warnedMissingFinalRewardEffect then
+			warn(LogPrefix, "Final reward effect template not found: ReplicatedStorage.Models.BrainrotEffect.Effect")
+			warnedMissingFinalRewardEffect = true
+		end
+		return
+	end
+
+	local effect = finalRewardEffectTemplate:Clone()
+	effect.Name = "FinalRewardEffect"
+	effect.CFrame = root.CFrame
+	effect.CanCollide = false
+	effect.CanQuery = false
+	effect.CanTouch = false
+	effect.Massless = true
+	effect.Anchored = root.Anchored
+	effect.Parent = model
+
+	if not root.Anchored then
+		local weld = Instance.new("WeldConstraint")
+		weld.Name = "FinalRewardEffectWeld"
+		weld.Part0 = root
+		weld.Part1 = effect
+		weld.Parent = effect
+	end
+end
+
+local function GetSequentialRewardEntry(pool: { any }, startIndex: number, sequenceIndex: number): any?
 	if #pool <= 0 then
 		return nil
 	end
-	local randomEntry = pool[math.random(1, #pool)]
-	if #pool > 1 and lastId then
-		while randomEntry.itemId == lastId do
-			randomEntry = pool[math.random(1, #pool)]
-		end
-	end
-	return randomEntry
+	local index = ((startIndex + sequenceIndex - 2) % #pool) + 1
+	return pool[index]
 end
 
 local function GetSmallestRewardBrainrotId(rewardPool: { any }): number?
@@ -565,7 +612,6 @@ local function PlayInWorld(
 
 	local displayModel: Model? = nil
 	local displayRoot: BasePart? = nil
-	local lastId: number? = nil
 	local function ShowOne(brainrotId: number, variantId: number, stayAsFinal: boolean)
 		local brainrotData = GameConfig.BrainrotIdMap[brainrotId]
 		if not brainrotData then
@@ -587,12 +633,18 @@ local function PlayInWorld(
 			return
 		end
 		BrainrotVariantVisualTool.AttachVariantEffect(displayModel, variantId)
+		if stayAsFinal then
+			AttachFinalRewardEffect(displayModel, displayRoot)
+		end
 		local resolvedVariantId = if variantId > 0 then variantId else nil
 		CreateOrUpdateInfoUI(displayModel, displayRoot, brainrotId, chestLevel, displayModel, true, resolvedVariantId)
 		local templateBaseScale = ResolveBrainrotTemplateBaseScale(brainrotId)
-		local revealScale = GetBrainrotRevealAnimScale(chestLevel, BrainrotRandomRevealScale, templateBaseScale)
-		local finalRevealScale = GetBrainrotRevealAnimScale(chestLevel, BrainrotFinalRevealScale, templateBaseScale)
-		local finalSettleScale = GetBrainrotRevealAnimScale(chestLevel, BrainrotFinalSettleScale, templateBaseScale)
+		local randomRevealAnimScale = GetBrainrotRandomRevealScale()
+		local finalDisplayAnimScale = GetBrainrotFinalDisplayScale()
+		local finalRevealAnimScale = finalDisplayAnimScale * BrainrotFinalRevealOvershootMultiplier
+		local revealScale = GetBrainrotRevealAnimScale(chestLevel, randomRevealAnimScale, templateBaseScale)
+		local finalRevealScale = GetBrainrotRevealAnimScale(chestLevel, finalRevealAnimScale, templateBaseScale)
+		local finalSettleScale = GetBrainrotRevealAnimScale(chestLevel, finalDisplayAnimScale, templateBaseScale)
 		local tinyScale = GetBrainrotRevealAnimScale(chestLevel, TinyScale, templateBaseScale)
 		TweenModelScale(
 			displayModel,
@@ -648,13 +700,13 @@ local function PlayInWorld(
 		end
 	end
 
-	for _ = 1, RandomCount do
-		local randomEntry = PickRandomEntry(rewardPool, lastId)
+	local randomStartIndex = math.random(1, #rewardPool)
+	for sequenceIndex = 1, RandomCount do
+		local randomEntry = GetSequentialRewardEntry(rewardPool, randomStartIndex, sequenceIndex)
 		if not randomEntry then
 			break
 		end
 		local randomId = randomEntry.itemId
-		lastId = randomId
 		local randomVariantId = GameConfig.RollVariantIdFromEntry(randomEntry)
 		ShowOne(randomId, randomVariantId, false)
 	end
@@ -772,17 +824,16 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 
 		TweenModelScale(chestModel, 1, TinyScale, GetChestShakeDuration(0.18), Enum.EasingStyle.Back, Enum.EasingDirection.In)
 
-		local lastId: number? = nil
-		for _ = 1, RandomCount do
+		local randomStartIndex = math.random(1, #rewardPool)
+		for sequenceIndex = 1, RandomCount do
 			if not tool.Parent then
 				return
 			end
-			local randomEntry = PickRandomEntry(rewardPool, lastId)
+			local randomEntry = GetSequentialRewardEntry(rewardPool, randomStartIndex, sequenceIndex)
 			if not randomEntry then
 				return
 			end
 			local randomId = randomEntry.itemId
-			lastId = randomId
 			local randomVariantId = GameConfig.RollVariantIdFromEntry(randomEntry)
 
 			local showModel, root = CreateDisplayModel(tool, randomId)
@@ -794,7 +845,7 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 			local resolvedRandomVariantId = if randomVariantId > 0 then randomVariantId else nil
 			CreateOrUpdateInfoUI(tool, root, randomId, chestLevel, showModel, true, resolvedRandomVariantId)
 			local templateBaseScale = ResolveBrainrotTemplateBaseScale(randomId)
-			local revealScale = GetBrainrotRevealAnimScale(chestLevel, BrainrotRandomRevealScale, templateBaseScale)
+			local revealScale = GetBrainrotRevealAnimScale(chestLevel, GetBrainrotRandomRevealScale(), templateBaseScale)
 			local tinyScale = GetBrainrotRevealAnimScale(chestLevel, TinyScale, templateBaseScale)
 			TweenModelScale(
 				showModel,
@@ -822,12 +873,15 @@ function ChestOpenAnimationManager.Play(tool: Tool?, uid: string, chestConfigId:
 			local finalEntry = GameConfig.FindLittleElfChestRewardEntry(chestConfigId, finalBrainrotId)
 			local finalVariantId = if finalEntry then GameConfig.RollVariantIdFromEntry(finalEntry) else 0
 			BrainrotVariantVisualTool.AttachVariantEffect(finalModel, finalVariantId)
+			AttachFinalRewardEffect(finalModel, finalRoot)
 			local resolvedFinalVariantId = if finalVariantId > 0 then finalVariantId else nil
 			CreateOrUpdateInfoUI(tool, finalRoot, finalBrainrotId, chestLevel, finalModel, true, resolvedFinalVariantId)
 			local templateBaseScale = ResolveBrainrotTemplateBaseScale(finalBrainrotId)
+			local finalDisplayAnimScale = GetBrainrotFinalDisplayScale()
+			local finalRevealAnimScale = finalDisplayAnimScale * BrainrotFinalRevealOvershootMultiplier
 			local tinyScale = GetBrainrotRevealAnimScale(chestLevel, TinyScale, templateBaseScale)
-			local finalRevealScale = GetBrainrotRevealAnimScale(chestLevel, BrainrotFinalRevealScale, templateBaseScale)
-			local finalSettleScale = GetBrainrotRevealAnimScale(chestLevel, BrainrotFinalSettleScale, templateBaseScale)
+			local finalRevealScale = GetBrainrotRevealAnimScale(chestLevel, finalRevealAnimScale, templateBaseScale)
+			local finalSettleScale = GetBrainrotRevealAnimScale(chestLevel, finalDisplayAnimScale, templateBaseScale)
 			TweenModelScale(
 				finalModel,
 				tinyScale,

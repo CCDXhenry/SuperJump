@@ -1368,9 +1368,13 @@ GameConfig.JumpRunwayDesigner = {
 	-- 小精灵宝箱撞击速度（studs/s）；滑到宝箱时保留该末速度，撞击后也用该速度反弹并按统一趴滑减速度减速
 	RUNWAY_CHEST_HIT_SPEED = 15,
 	-- 开箱最终 brainrot 弹出后的展示停留时长（秒）
-	RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC = 0.5,
+	RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC = 0.8,
+	-- 开箱随机轮播 brainrot 弹出大小倍率；↑ 展示更大
+	RUNWAY_CHEST_RANDOM_BRAINROT_REVEAL_SCALE = 1.8,
+	-- 开箱最终奖励 brainrot 停留展示大小倍率；↑ 最终显示更大
+	RUNWAY_CHEST_FINAL_BRAINROT_DISPLAY_SCALE = 2.4,
 	-- 玩家举起最终 brainrot 后的展示停留时长（秒）；结束后才创建追击者
-	RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC = 0.8,
+	RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC = 0,
 	-- 开箱时摄像机向后拉远距离（stud）；↑ 镜头更远
 	RUNWAY_CHEST_CAMERA_BACK_OFFSET = 50,
 	-- 开箱时摄像机俯仰角度（度）；正数俯视、负数仰视；绝对值 ↑ 俯仰越明显
@@ -1731,6 +1735,8 @@ GameConfig.JumpRunway = {
 	RUNWAY_CHEST_HIT_HORIZONTAL_MAX_DIST_STUDS = jumpRunwayDesigner.RUNWAY_CHEST_HIT_HORIZONTAL_MAX_DIST_STUDS,
 	RUNWAY_CHEST_HIT_SPEED = jumpRunwayDesigner.RUNWAY_CHEST_HIT_SPEED,
 	RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC = jumpRunwayDesigner.RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC,
+	RUNWAY_CHEST_RANDOM_BRAINROT_REVEAL_SCALE = jumpRunwayDesigner.RUNWAY_CHEST_RANDOM_BRAINROT_REVEAL_SCALE,
+	RUNWAY_CHEST_FINAL_BRAINROT_DISPLAY_SCALE = jumpRunwayDesigner.RUNWAY_CHEST_FINAL_BRAINROT_DISPLAY_SCALE,
 	RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC = jumpRunwayDesigner.RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC,
 	RUNWAY_CHEST_CAMERA_BACK_OFFSET = jumpRunwayDesigner.RUNWAY_CHEST_CAMERA_BACK_OFFSET,
 	RUNWAY_CHEST_CAMERA_PITCH_DEG = jumpRunwayDesigner.RUNWAY_CHEST_CAMERA_PITCH_DEG,
@@ -1801,7 +1807,7 @@ GameConfig.JumpRunway = {
 	-- 摄像机从追击者镜头插值回玩家 home 视角的时长（秒）
 	CHASER_CAMERA_RETURN_HOME_TRANSITION_SEC = 1,
 	-- 追击者镜头距离追击者 HumanoidRootPart 的水平距离（stud）
-	CHASER_CAMERA_FOCUS_DISTANCE_STUDS = 50,
+	CHASER_CAMERA_FOCUS_DISTANCE_STUDS = 150,
 	-- 追击者镜头相对追击者 HumanoidRootPart 的右侧偏移（stud）
 	CHASER_CAMERA_FOCUS_RIGHT_OFFSET_STUDS = 0,
 	-- 追击者镜头相对追击者 HumanoidRootPart 的高度偏移（stud）

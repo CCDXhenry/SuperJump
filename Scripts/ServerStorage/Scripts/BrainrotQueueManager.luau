@@ -17,7 +17,7 @@ local AnalyticsTool = require(serverScripts:FindFirstChild("AnalyticsTool"))
 local actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
 local modelsFolder = replicatedStorage:WaitForChild("Models")
 local actualChests = modelsFolder:FindFirstChild("LittleElfChests")
-	or modelsFolder:FindFirstChild("LittleElfChests")
+
 if not actualChests then
 	warn(
 		"[BrainrotQueueManager] Missing Models.LittleElfChests folder"
