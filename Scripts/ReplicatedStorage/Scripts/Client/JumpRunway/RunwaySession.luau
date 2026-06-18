@@ -1526,6 +1526,44 @@ function RunwaySession.BuildLittleElfChestGroundPosition(targetPos: Vector3, gro
 	)
 end
 
+function RunwaySession.GetLittleElfChestVisualBottomOffsetY(chestModel: Model): number?
+	local visualPart = chestModel:FindFirstChild("VfxInstance")
+	if visualPart ~= nil and visualPart:IsA("BasePart") then
+		local part = visualPart :: BasePart
+		local halfSize = part.Size * 0.5
+		local minY = math.huge
+		for _, x in ipairs({ -halfSize.X, halfSize.X }) do
+			for _, y in ipairs({ -halfSize.Y, halfSize.Y }) do
+				for _, z in ipairs({ -halfSize.Z, halfSize.Z }) do
+					local corner = part.CFrame:PointToWorldSpace(Vector3.new(x, y, z))
+					minY = math.min(minY, corner.Y)
+				end
+			end
+		end
+		return minY - chestModel:GetPivot().Position.Y
+	end
+	local boundingCFrame, boundingSize = chestModel:GetBoundingBox()
+	return boundingCFrame.Position.Y - boundingSize.Y * 0.5 - chestModel:GetPivot().Position.Y
+end
+
+function RunwaySession.BuildLittleElfChestGroundPositionForModel(
+	targetPos: Vector3,
+	groundY: number,
+	chestModel: Model?
+): Vector3
+	if chestModel ~= nil then
+		local bottomOffsetY = RunwaySession.GetLittleElfChestVisualBottomOffsetY(chestModel)
+		if bottomOffsetY ~= nil then
+			return Vector3.new(
+				targetPos.X,
+				groundY + CHEST_GROUND_RAISE_STUDS - bottomOffsetY,
+				targetPos.Z
+			)
+		end
+	end
+	return RunwaySession.BuildLittleElfChestGroundPosition(targetPos, groundY)
+end
+
 function RunwaySession.ComputeLittleElfChestFallbackSpawnPosition(
 	originPos: Vector3,
 	hrpForHeight: BasePart,
@@ -9276,7 +9314,7 @@ function RunwaySession.ResolveLittleElfChestGroundPosition(targetPos: Vector3, c
 	local character = localPlayer.Character
 	local groundY = RunwaySession.RaycastRunwayGroundYAtPosition(targetPos, character, extraExcludeList)
 	if groundY ~= nil then
-		return RunwaySession.BuildLittleElfChestGroundPosition(targetPos, groundY)
+		return RunwaySession.BuildLittleElfChestGroundPositionForModel(targetPos, groundY, chestModel)
 	end
 	return targetPos
 end
