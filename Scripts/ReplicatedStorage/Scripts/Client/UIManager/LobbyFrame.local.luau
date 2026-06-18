@@ -344,7 +344,7 @@ function RefreshUpgradeValues()
 		walkSpeedText.Text = NumberExtension.FormatBigNumberAA(baseSpeed)
 		walkSpeedText.TextColor3 = defaultWalkSpeedColor
 	end
-	RefreshDecelerationButtonVisible(levelSpeed)
+	--RefreshDecelerationButtonVisible(levelSpeed)
 
 	-- MaxFuel: 从火箭背包库存读取（跑道模式中显示实时燃料）
 	local jetpackCurrentId = localPlayerInfo.jetpackInventory.currentId or "1"
