@@ -7,21 +7,30 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local ClientScripts = ReplicatedStorage:WaitForChild("Scripts"):WaitForChild("Client")
 local SharedScripts = ReplicatedStorage:WaitForChild("Scripts"):WaitForChild("Shared")
 
+local Core = ReplicatedStorage:WaitForChild("Core")
+local CoreScripts = Core:WaitForChild("Scripts")
+local CoreClientScripts = CoreScripts:WaitForChild("Client")
+local CoreSharedScripts = CoreScripts:WaitForChild("Shared")
+
 local ClientGameInfo = require(ClientScripts:WaitForChild("ClientGameInfo"))
 local ClientMsg = require(ClientScripts:WaitForChild("ClientMsg"))
 local UIManager = require(ClientScripts:WaitForChild("UIManager"))
 local BillboardManager = require(ClientScripts:WaitForChild("BillboardManager"))
+local TranslationTool = require(CoreClientScripts:WaitForChild("TranslationTool"))
+local NumberExtension = require(CoreSharedScripts:WaitForChild("NumberExtension"))
 local GameConfig = require(SharedScripts:WaitForChild("GameConfig"))
 local GameTexts = require(SharedScripts:WaitForChild("GameTexts"))
+local NetMsg = require(SharedScripts:WaitForChild("NetMsg"))
 
 local ShopClientManager = {}
 local SHOP_MODEL_FOLDER_NAME = "ShopModel"
-local SHOP_MODEL_NAMES = {"SellShop", "JetpackShop" , "ExEquipShop", "NewPack", "ProPack"}
+local SHOP_MODEL_NAMES = {"SellShop", "JetpackShop", "ExEquipShop", "NewPack", "ProPack", "Jetpack299R"}
 local SHOP_WAIT_TIMEOUT = 10
 local PROMPT_BOUND_ATTR = "ShopPromptWindowBound"
 local BILLBOARD_TRACKED_ATTR = "BillboardTracked"
 local ShopBundleIdAttribute = "id"
 local ShopBundleProductIndexAttribute = "productIndex"
+local ShopJetpackIdAttribute = "JetpackId"
 local MinShopBundleProductIndex = 1
 local MaxShopBundleProductIndex = 3
 
@@ -41,6 +50,73 @@ local function EnsureBillboardTracked(gui: BillboardGui)
 		gui:SetAttribute(BILLBOARD_TRACKED_ATTR, true)
 	end
 	BillboardManager.Track(gui)
+end
+
+local function parsePositiveInt(attrValue: unknown): number?
+	if type(attrValue) == "number" then
+		local n = attrValue :: number
+		if n > 0 and n == math.floor(n) then
+			return n
+		end
+	elseif type(attrValue) == "string" then
+		local n = tonumber(attrValue)
+		if n and n > 0 and n == math.floor(n) then
+			return n
+		end
+	end
+	return nil
+end
+
+local function SetupJetpackAbilityBillboard(shopModel: Model, controllerFrame: Frame)
+	local jetpackId = parsePositiveInt(shopModel:GetAttribute(ShopJetpackIdAttribute))
+	if jetpackId == nil then
+		return
+	end
+
+	local jetpackData = GameConfig.JetpackDataMap[jetpackId]
+	if jetpackData == nil then
+		warn(`[ShopClientManager] Jetpack id {jetpackId} not found (Workspace.{shopModel.Name})`)
+		return
+	end
+
+	local textLable = controllerFrame:FindFirstChild("TextLable") :: TextLabel?
+	if textLable then
+		TranslationTool.CustomAutoLocalizeTextLabel(textLable, jetpackData.name_t, "")
+	end
+
+	-- local priceText = controllerFrame:FindFirstChild("PriceText") :: TextLabel?
+	-- if priceText then
+	-- 	if jetpackData.costType == GameConfig.CostType.Rb and jetpackData.costRb > 0 then
+	-- 		priceText.Text = NumberExtension.FormatBigNumberAA(jetpackData.costRb)
+	-- 	elseif jetpackData.costType == GameConfig.CostType.Coin and jetpackData.costCoin > 0 then
+	-- 		priceText.Text = NumberExtension.FormatBigNumberAA(jetpackData.costCoin)
+	-- 	else
+	-- 		priceText.Text = ""
+	-- 	end
+	-- end
+
+	local jackAbilityFrame = controllerFrame:FindFirstChild("JackAbilityFrame") :: Frame?
+	if jackAbilityFrame == nil then
+		return
+	end
+
+	local fuelValue = jackAbilityFrame:FindFirstChild("FuelValue") :: TextLabel?
+	if fuelValue then
+		TranslationTool.CustomAutoLocalizeTextLabel(
+			fuelValue,
+			GameTexts.FuelWithNumber.source,
+			GameTexts.FuelWithNumber.key,
+			{ tostring(jetpackData.fuel) }
+		)
+	end
+
+	local thrustValue = jackAbilityFrame:FindFirstChild("ThrustValue") :: TextLabel?
+	if thrustValue then
+		thrustValue.Text = string.format(
+			"+%s%%",
+			NumberExtension.FormatBigNumberAA(GameConfig.GetJetpackThrustPercent(jetpackData))
+		)
+	end
 end
 
 local function SetupEquipBoxGuiAdaptation(shopModel: Model)
@@ -77,21 +153,7 @@ local function SetupEquipBoxGuiAdaptation(shopModel: Model)
 	end
 
 	EnsureBillboardTracked(equipBoxGui)
-end
-
-local function parsePositiveInt(attrValue: unknown): number?
-	if type(attrValue) == "number" then
-		local n = attrValue :: number
-		if n > 0 and n == math.floor(n) then
-			return n
-		end
-	elseif type(attrValue) == "string" then
-		local n = tonumber(attrValue)
-		if n and n > 0 and n == math.floor(n) then
-			return n
-		end
-	end
-	return nil
+	SetupJetpackAbilityBillboard(shopModel, controllerFrame)
 end
 
 local function getBundleProductId(bundleConfig: GameConfig.ShopBundleConfigurationData, productIndex: number): number
@@ -169,6 +231,66 @@ local function tryPromptShopBundleDirectPurchase(shopModel: Model): boolean
 	return true
 end
 
+-- Direct purchase when Model attribute JetpackId is set; true = handled, skip OpenWindow.
+local function tryPromptJetpackDirectPurchase(shopModel: Model): boolean
+	local jetpackId = parsePositiveInt(shopModel:GetAttribute(ShopJetpackIdAttribute))
+	if jetpackId == nil then
+		return false
+	end
+
+	local jetpackData = GameConfig.JetpackDataMap[jetpackId]
+	if jetpackData == nil then
+		warn(`[ShopClientManager] Jetpack id {jetpackId} not found (Workspace.{shopModel.Name})`)
+		return true
+	end
+	if jetpackData.productId <= 0 or jetpackData.costType ~= GameConfig.CostType.Rb then
+		warn(`[ShopClientManager] Jetpack {jetpackId} is not a paid Robux product (Workspace.{shopModel.Name})`)
+		return true
+	end
+
+	local playerInfo = ClientGameInfo.GetLocalPlayerInfo()
+	if playerInfo == nil then
+		return true
+	end
+	if playerInfo.jetpackInventory.ownedList[tostring(jetpackId)] then
+		local tip = GameTexts.JetpackAlreadyPurchased
+		ClientMsg.FireShowGameTip(tip.source, GameConfig.GameTipTweenType.FlyUp, tip.key)
+		return true
+	end
+
+	NetMsg.FireRequestBuyJetpackPaid(jetpackId)
+	return true
+end
+
+local function findShopProximityPrompt(shopModel: Model, rootPart: Instance): ProximityPrompt?
+	local openShopAttachment = rootPart:FindFirstChild("OpenShopAttachment")
+	if openShopAttachment then
+		local promptObj = openShopAttachment:FindFirstChild("ProximityPrompt")
+		if promptObj and promptObj:IsA("ProximityPrompt") then
+			return promptObj
+		end
+	end
+
+	local rootPrompt = rootPart:FindFirstChild("ProximityPrompt")
+	if rootPrompt and rootPrompt:IsA("ProximityPrompt") then
+		return rootPrompt
+	end
+
+	for _, descendant in rootPart:GetDescendants() do
+		if descendant:IsA("ProximityPrompt") then
+			return descendant
+		end
+	end
+
+	for _, descendant in shopModel:GetDescendants() do
+		if descendant:IsA("ProximityPrompt") then
+			return descendant
+		end
+	end
+
+	return nil
+end
+
 local function BindPromptByWindowId(shopModel: Model)
 	local rootPart = shopModel:WaitForChild("RootPart", SHOP_WAIT_TIMEOUT)
 	if not rootPart then
@@ -176,18 +298,20 @@ local function BindPromptByWindowId(shopModel: Model)
 		return
 	end
 
-	local openShopAttachment = rootPart:WaitForChild("OpenShopAttachment", SHOP_WAIT_TIMEOUT)
-	if not openShopAttachment then
-		warn(`[ShopClientManager] OpenShopAttachment not found in Workspace.{shopModel.Name}.RootPart`)
+	local prompt: ProximityPrompt? = nil
+	local deadline = os.clock() + SHOP_WAIT_TIMEOUT
+	while os.clock() < deadline and prompt == nil do
+		prompt = findShopProximityPrompt(shopModel, rootPart)
+		if prompt == nil then
+			task.wait(0.1)
+		end
+	end
+	if prompt == nil then
+		warn(
+			`[ShopClientManager] ProximityPrompt not found under Workspace.{shopModel.Name} (expected RootPart.OpenShopAttachment.ProximityPrompt or RootPart.ProximityPrompt)`
+		)
 		return
 	end
-
-	local promptObj = openShopAttachment:WaitForChild("ProximityPrompt", SHOP_WAIT_TIMEOUT)
-	if not promptObj or not promptObj:IsA("ProximityPrompt") then
-		warn(`[ShopClientManager] ProximityPrompt missing in Workspace.{shopModel.Name}.RootPart.OpenShopAttachment`)
-		return
-	end
-	local prompt = promptObj :: ProximityPrompt
 	if prompt:GetAttribute(PROMPT_BOUND_ATTR) == true then
 		return
 	end
@@ -195,6 +319,9 @@ local function BindPromptByWindowId(shopModel: Model)
 
 	prompt.Triggered:Connect(function()
 		if tryPromptShopBundleDirectPurchase(shopModel) then
+			return
+		end
+		if tryPromptJetpackDirectPurchase(shopModel) then
 			return
 		end
 		local windowIdAttr = shopModel:GetAttribute("WindowId")

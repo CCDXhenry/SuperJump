@@ -108,6 +108,7 @@ local GameTexts = {
 	JetpackShopStorePurchaseHint = { key = "", source = "Go to the store to purchase" },
 	JetpackShopRewardReceive = { key = "", source = "Receive" },
 	JetpackShopRewardShop = { key = "", source = "Shop" },
+	JetpackAlreadyPurchased = { key = "", source = "This jetpack has already been purchased." },
 	JetpackGroupRewardJoinHint = { key = "", source = "Join the group to get the exclusive jetpack for free!" },
 	ExEquipGroupRewardJoinHint = { key = "", source = "Join the group to get the exclusive equipment for free!" },
 	RewardFallbackCoil = { key = "", source = "Coil" },
