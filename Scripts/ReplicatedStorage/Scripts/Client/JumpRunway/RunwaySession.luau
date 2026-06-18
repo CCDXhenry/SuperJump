@@ -1656,6 +1656,13 @@ function RunwaySession.ProcessRunwayForwardBlocked(character: Model, humanoid: H
 	RunwaySession.CancelJumpWindowTimeoutUntilGroundedAgain()
 	RunwaySession.SnapCharacterHrpToGround(humanoid, hrp, forward)
 	ClientMsg.FireJumpRunWayShowMiss()
+	RunwaySession.PrintFinalLandAInterceptLog(
+		"forward_blocked_enter_miss_slide",
+		humanoid,
+		hrp,
+		nowClock,
+		string.format("takeoffCount=%d alongSpeed=%.2f", localState.takeoffCount, alongSpeed)
+	)
 	RunwaySession.EnterSlidePhase(nowClock, SlideKindMiss, humanoid)
 end
 
@@ -2781,6 +2788,18 @@ function RunwaySession.PrintRunwayLandingPhysicsDebug(sourceName: string, humano
 	)
 end
 
+function RunwaySession.PrintFinalLandAInterceptLog(_reason: string, _humanoid: Humanoid?, _hrp: BasePart?, _nowClock: number, _detail: string?)
+end
+
+function RunwaySession.ResolveFinalLandPhaseAVyScriptMax(): number
+	local vyScriptMaxRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_TOUCHDOWN_SCRIPT_MAX_VY
+	local vyScriptMax = -3
+	if typeof(vyScriptMaxRaw) == "number" and vyScriptMaxRaw == vyScriptMaxRaw and vyScriptMaxRaw < -0.05 then
+		vyScriptMax = vyScriptMaxRaw
+	end
+	return vyScriptMax
+end
+
 function RunwaySession.ComputeRemainingFallTimeFromHeight(heightStuds: number, initialVy: number, gravity: number): number
 	local h = math.max(0, heightStuds)
 	local vy = math.max(0, initialVy)
@@ -3705,6 +3724,29 @@ function RunwaySession.CacheFinalLandLandingAlongValue(alongSpeed: number)
 	)
 end
 
+-- 最后一跳空中每帧更新，保留落地前沿轴速度（取历史较大值，避免触地瞬间被摩擦刹低后丢失）。
+function RunwaySession.UpdateFinalLandApproachAlongCache(hrp: BasePart)
+	local forward = NormalizeRunwayForward(localState.runwayForward)
+	local curAlong = math.max(0, ComputeRunwayHorizontalAlongSpeed(hrp.AssemblyLinearVelocity, forward))
+	local prev = localState.finalLandCachedLandingAlong
+	if typeof(prev) == "number" and prev == prev then
+		RunwaySession.CacheFinalLandLandingAlongValue(math.max(prev, curAlong))
+	else
+		RunwaySession.CacheFinalLandLandingAlongValue(curAlong)
+	end
+end
+
+-- 终局 A 首次触地/弹跳：沿轴速度取触地瞬间与落地前缓存的较大值（竖直仍走 cachedVy 逻辑）。
+function RunwaySession.ResolveFinalLandLandingAlongForTouchdown(hrp: BasePart, fwdH: Vector3): (number, number)
+	local sampledAlong, landingVy = RunwaySession.SampleFinalLandLandingAlongAndVy(hrp, fwdH)
+	local cachedLandingAlong = localState.finalLandCachedLandingAlong
+	local landingAlong = sampledAlong
+	if typeof(cachedLandingAlong) == "number" and cachedLandingAlong == cachedLandingAlong then
+		landingAlong = math.max(sampledAlong, cachedLandingAlong)
+	end
+	return landingAlong, landingVy
+end
+
 function RunwaySession.ResolveCachedFinalLandLandingAlong(): number
 	local cachedLandingAlong = localState.finalLandCachedLandingAlong
 	if typeof(cachedLandingAlong) == "number" and cachedLandingAlong == cachedLandingAlong then
@@ -4192,15 +4234,14 @@ end
 
 function RunwaySession.ApplyFinalLandPhaseAPop(hrp: BasePart, fwdH: Vector3, nowClock: number)
 	local v = hrp.AssemblyLinearVelocity
-	local landingAlong, landingVy = RunwaySession.SampleFinalLandLandingAlongAndVy(hrp, fwdH)
+	local landingAlong: number
+	local landingVy: number
 	local vySource = "current"
-	if landingAlong < 1 then
-		if not localState.finalLandTumbleImpulseApplied then
-			local cachedLandingAlong = localState.finalLandCachedLandingAlong
-			if typeof(cachedLandingAlong) == "number" and cachedLandingAlong == cachedLandingAlong then
-				landingAlong = math.max(landingAlong, cachedLandingAlong)
-			end
-		elseif localState.finalLandLockedTumbleAlong > 0 then
+	if not localState.finalLandTumbleImpulseApplied then
+		landingAlong, landingVy = RunwaySession.ResolveFinalLandLandingAlongForTouchdown(hrp, fwdH)
+	else
+		landingAlong, landingVy = RunwaySession.SampleFinalLandLandingAlongAndVy(hrp, fwdH)
+		if landingAlong < 1 and localState.finalLandLockedTumbleAlong > 0 then
 			landingAlong = localState.finalLandLockedTumbleAlong
 		end
 	end
@@ -4331,6 +4372,18 @@ function RunwaySession.StartFinalLandPronePhase(nowClock: number, hrp: BasePart?
 		return
 	end
 	local _, humanoidDbg, _ = RunwaySession.GetCharacterParts()
+	RunwaySession.PrintFinalLandAInterceptLog(
+		"phase_a_to_b_transition",
+		humanoidDbg,
+		hrp,
+		nowClock,
+		string.format(
+			"popCount=%d impulseApplied=%s lockedAlong=%.2f",
+			localState.finalLandPhaseAPopCount,
+			tostring(localState.finalLandTumbleImpulseApplied),
+			localState.finalLandLockedTumbleAlong
+		)
+	)
 	RunwaySession.DebugFinalLandPhaseA("enter_phase_b", humanoidDbg, hrp, nowClock)
 	GameSoundManager.PlayImpactSound()
 	localState.finalLandSubPhase = 2
@@ -4481,11 +4534,8 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 		end
 	end
 	if not localState.finalLandTumbleImpulseApplied then
-		local landingAlong, landingVy = RunwaySession.SampleFinalLandLandingAlongAndVy(hrp, fwdH)
-		local cachedLandingAlong = localState.finalLandCachedLandingAlong
-		if landingAlong < 1 and typeof(cachedLandingAlong) == "number" and cachedLandingAlong == cachedLandingAlong then
-			landingAlong = math.max(landingAlong, cachedLandingAlong)
-		end
+		local landingAlong, landingVy = RunwaySession.ResolveFinalLandLandingAlongForTouchdown(hrp, fwdH)
+		local sampledAlong = select(1, RunwaySession.SampleFinalLandLandingAlongAndVy(hrp, fwdH))
 		local vySource = "current"
 		if localState.finalLandCachedLandingVy ~= nil then
 			landingVy = localState.finalLandCachedLandingVy :: number
@@ -4493,12 +4543,21 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 		end
 		local minAlongRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_MIN_ALONG_SPEED
 		local minAlong = (typeof(minAlongRaw) == "number" and minAlongRaw == minAlongRaw and minAlongRaw >= 0) and minAlongRaw or 12
-		local vyScriptMaxRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_TOUCHDOWN_SCRIPT_MAX_VY
-		local vyScriptMax = -3
-		if typeof(vyScriptMaxRaw) == "number" and vyScriptMaxRaw == vyScriptMaxRaw and vyScriptMaxRaw < -0.05 then
-			vyScriptMax = vyScriptMaxRaw
-		end
+		local vyScriptMax = RunwaySession.ResolveFinalLandPhaseAVyScriptMax()
 		if landingAlong < minAlong then
+			RunwaySession.PrintFinalLandAInterceptLog(
+				"phase_a_skip_initial_pop_along_below_min",
+				humanoid,
+				hrp,
+				nowClock,
+				string.format(
+					"landingAlong=%.2f sampledAlong=%.2f cachedAlong=%.2f minAlong=%.2f",
+					landingAlong,
+					sampledAlong,
+					RunwaySession.ResolveCachedFinalLandLandingAlong(),
+					minAlong
+				)
+			)
 			RunwaySession.DebugFinalLandPhaseAPop(
 				"skip_initial_pop_along_below_min",
 				0,
@@ -4513,6 +4572,13 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 			return
 		end
 		if landingVy > vyScriptMax then
+			RunwaySession.PrintFinalLandAInterceptLog(
+				"phase_a_skip_initial_pop_vy_not_falling",
+				humanoid,
+				hrp,
+				nowClock,
+				string.format("landingVy=%.2f vyScriptMax=%.2f", landingVy, vyScriptMax)
+			)
 			RunwaySession.DebugFinalLandPhaseAPop(
 				"skip_initial_pop_vy_not_falling",
 				0,
@@ -4526,6 +4592,22 @@ function RunwaySession.ApplyFinalLandingSlidePhysics(hrp: BasePart, forward: Vec
 			RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forward)
 			return
 		end
+		RunwaySession.PrintFinalLandAInterceptLog(
+			"phase_a_apply_first_pop",
+			humanoid,
+			hrp,
+			nowClock,
+			string.format(
+				"landingAlong=%.2f sampledAlong=%.2f cachedAlong=%.2f landingVy=%.2f vySource=%s minAlong=%.2f vyScriptMax=%.2f",
+				landingAlong,
+				sampledAlong,
+				RunwaySession.ResolveCachedFinalLandLandingAlong(),
+				landingVy,
+				vySource,
+				minAlong,
+				vyScriptMax
+			)
+		)
 		RunwaySession.ApplyFinalLandPhaseAPop(hrp, fwdH, nowClock)
 		RunwaySession.DebugFinalLandPhaseA("apply_first_pop", humanoid, hrp, nowClock)
 		-- Physics 状态下 Humanoid 引擎会抵抗竖直速度；小幅抬升 HRP 确保离开地面碰撞
@@ -4675,6 +4757,20 @@ end
 
 function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, humanoidOpt: Humanoid?)
 	if localState.phase == Ph.Slide then
+		local _skipCh, skipHum, skipHrp = RunwaySession.GetCharacterParts()
+		RunwaySession.PrintFinalLandAInterceptLog(
+			"enter_slide_skipped_already_in_slide",
+			if humanoidOpt ~= nil then humanoidOpt else skipHum,
+			skipHrp,
+			nowClock,
+			string.format(
+				"requestedKind=%s currentKind=%s sub=%d takeoffCount=%d",
+				slideKind,
+				tostring(localState.runwaySlideKind),
+				localState.finalLandSubPhase,
+				localState.takeoffCount
+			)
+		)
 		return
 	end
 	if slideKind == SlideKindStandard then
@@ -4703,6 +4799,26 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 		RunwaySession.TransitionDistanceLogStage("FinalLandA_Tumble", "enter_final_landing_slide", nil, "phaseBefore=" .. tostring(phaseBefore))
 	elseif slideKind == SlideKindMiss then
 		RunwaySession.TransitionDistanceLogStage("MissProneSlide", "enter_miss_slide", nil, "phaseBefore=" .. tostring(phaseBefore))
+		local _tmpCh, tmpHum, tmpHrp = RunwaySession.GetCharacterParts()
+		local missAlong = 0
+		local missVy = 0
+		if tmpHrp ~= nil then
+			local fwdHMiss = NormalizeRunwayForward(localState.runwayForward)
+			missAlong, missVy = RunwaySession.SampleFinalLandLandingAlongAndVy(tmpHrp, fwdHMiss)
+		end
+		RunwaySession.PrintFinalLandAInterceptLog(
+			if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then "enter_miss_slide_direct_phase_b_on_final_jump" else "enter_miss_slide_direct_phase_b",
+			if humanoidOpt ~= nil then humanoidOpt else tmpHum,
+			tmpHrp,
+			nowClock,
+			string.format(
+				"phaseBefore=%s along=%.2f vy=%.2f N_TOTAL_JUMPS=%d",
+				tostring(phaseBefore),
+				missAlong,
+				missVy,
+				cfg.N_TOTAL_JUMPS
+			)
+		)
 	else
 		RunwaySession.TransitionDistanceLogStage("StandardSlide", "enter_standard_slide", nil, "phaseBefore=" .. tostring(phaseBefore))
 	end
@@ -4738,6 +4854,28 @@ function RunwaySession.EnterSlidePhase(nowClock: number, slideKind: string, huma
 		RunwaySession.EnsurePlatformStandForFinalLandSlide(humanoidOpt)
 		if humanoidOpt ~= nil then
 			RunwaySession.EnsureHumanoidFinalSlidePhysicsState(humanoidOpt)
+		end
+		local _enterCh, enterHum, enterHrp = RunwaySession.GetCharacterParts()
+		if enterHrp ~= nil then
+			local fwdHEnter = NormalizeRunwayForward(localState.runwayForward)
+			local enterAlong, enterVy = RunwaySession.SampleFinalLandLandingAlongAndVy(enterHrp, fwdHEnter)
+			local cachedEnterVy = localState.finalLandCachedLandingVy
+			local cachedEnterVyText = if typeof(cachedEnterVy) == "number" and cachedEnterVy == cachedEnterVy
+				then string.format("%.2f", cachedEnterVy)
+				else "nil"
+			RunwaySession.PrintFinalLandAInterceptLog(
+				"phase_a_enter_final_slide",
+				enterHum,
+				enterHrp,
+				nowClock,
+				string.format(
+					"enterAlong=%.2f enterVy=%.2f cachedEnterVy=%s cachedAlong=%.2f",
+					enterAlong,
+					enterVy,
+					cachedEnterVyText,
+					RunwaySession.ResolveCachedFinalLandLandingAlong()
+				)
+			)
 		end
 	elseif slideKind == SlideKindMiss then
 		GameSoundManager.PlayImpactSound()
@@ -7454,6 +7592,13 @@ function RunwaySession.ProcessJumpWindowTimeout(nowClock: number)
 		end
 		ClientMsg.FireJumpRunWayShowMiss()
 		localState.lineWindowConsumed = true
+		RunwaySession.PrintFinalLandAInterceptLog(
+			"jump_window_timeout_enter_miss_slide",
+			humanoidTimeout,
+			nil,
+			nowClock,
+			string.format("takeoffCount=%d N_TOTAL_JUMPS=%d", localState.takeoffCount, cfg.N_TOTAL_JUMPS)
+		)
 		RunwaySession.EnterSlidePhase(nowClock, SlideKindMiss, humanoidTimeout)
 	end
 end
@@ -7469,6 +7614,7 @@ function RunwaySession.ProcessAirborneLandingHeartbeat(humanoid: Humanoid)
 	if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
 		local _chkChar, _chkHum, chkHrp = RunwaySession.GetCharacterParts()
 		if chkHrp ~= nil then
+			RunwaySession.UpdateFinalLandApproachAlongCache(chkHrp)
 			local curVy = chkHrp.AssemblyLinearVelocity.Y
 			local prevVy = localState.finalLandCachedLandingVy
 			local vyScriptMaxRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_TOUCHDOWN_SCRIPT_MAX_VY
@@ -7509,10 +7655,35 @@ function RunwaySession.ProcessAirborneLandingHeartbeat(humanoid: Humanoid)
 		if ok and dist <= humanoid.HipHeight * 1.5 + cfg.RUNWAY_GROUND_RAY_ORIGIN_Y then
 			local landingClock = os.clock()
 			RunwaySession.PrintRunwayLandingPhysicsDebug("final_raycast", humanoid, landingClock)
+			RunwaySession.PrintFinalLandAInterceptLog(
+				"final_raycast_touchdown_enter_final_slide",
+				humanoid,
+				humanoid.RootPart,
+				landingClock,
+				string.format("raycastDist=%.2f", dist)
+			)
 			RunwaySession.EnterSlidePhase(landingClock, SlideKindFinalLanding, humanoid)
 			Refs.prevGroundedHeartbeat = true
 			return
 		end
+		local hrpRay = humanoid.RootPart
+		RunwaySession.PrintFinalLandAInterceptLog(
+			"final_raycast_not_touchdown",
+			humanoid,
+			hrpRay,
+			os.clock(),
+			string.format("ok=%s dist=%.2f threshold=%.2f", tostring(ok), dist, humanoid.HipHeight * 1.5 + cfg.RUNWAY_GROUND_RAY_ORIGIN_Y)
+		)
+	elseif localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
+		local remain = Refs.finalTakeoffForceFreefallUntilClock - os.clock()
+		local hrpWait = humanoid.RootPart
+		RunwaySession.PrintFinalLandAInterceptLog(
+			"final_touchdown_wait_force_freefall_guard",
+			humanoid,
+			hrpWait,
+			os.clock(),
+			string.format("remain=%.3f", remain)
+		)
 	end
 	Refs.prevGroundedHeartbeat = g
 end
@@ -7583,11 +7754,7 @@ function RunwaySession.ProcessFinalLandingSubPhaseTransition(humanoid: Humanoid,
 	local maxPhaseASec = (typeof(maxPhaseASecRaw) == "number" and maxPhaseASecRaw == maxPhaseASecRaw and maxPhaseASecRaw > 0)
 		and maxPhaseASecRaw
 		or 6
-	local vyScriptMaxRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_TOUCHDOWN_SCRIPT_MAX_VY
-	local vyScriptMax = -3
-	if typeof(vyScriptMaxRaw) == "number" and vyScriptMaxRaw == vyScriptMaxRaw and vyScriptMaxRaw < -0.05 then
-		vyScriptMax = vyScriptMaxRaw
-	end
+	local vyScriptMax = RunwaySession.ResolveFinalLandPhaseAVyScriptMax()
 
 	local vyFbAbsMaxRaw = cfg.RUNWAY_FINAL_LAND_PHASE_A_TOUCHDOWN_FULLBODY_MAX_ABS_VY
 	local vyFbAbsMax = 85
@@ -7599,6 +7766,13 @@ function RunwaySession.ProcessFinalLandingSubPhaseTransition(humanoid: Humanoid,
 	local geomTouch = RunwaySession.IsRunwayFinalLandPhaseAGroundedLoose(humanoid, hrp)
 	if nowClock - localState.slideStartClock >= maxPhaseASec then
 		if geomTouch then
+			RunwaySession.PrintFinalLandAInterceptLog(
+				"phase_a_exit_max_sec",
+				humanoid,
+				hrp,
+				nowClock,
+				string.format("maxPhaseASec=%.2f", maxPhaseASec)
+			)
 			RunwaySession.DebugFinalLandPhaseA("exit_max_phase_a_sec", humanoid, hrp, nowClock)
 			RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forwardCheck)
 		else
@@ -7628,33 +7802,75 @@ function RunwaySession.ProcessFinalLandingSubPhaseTransition(humanoid: Humanoid,
 			and stuckSecRaw
 			or 0.35
 		if nowClock - (localState.finalLandPhaseAGroundedStartClock :: number) >= stuckSec then
+			RunwaySession.PrintFinalLandAInterceptLog(
+				"phase_a_exit_grounded_stuck",
+				humanoid,
+				hrp,
+				nowClock,
+				string.format("stuckSec=%.2f", stuckSec)
+			)
 			RunwaySession.DebugFinalLandPhaseA("exit_grounded_stuck_sec", humanoid, hrp, nowClock)
 			RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forwardCheck)
 			return
 		end
-		if localState.finalLandLockedTumbleAlong <= minAlong then
-			RunwaySession.DebugFinalLandPhaseA("exit_locked_along_below_min_in_grounded_branch", humanoid, hrp, nowClock)
-			RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forwardCheck)
-			return
-		end
+		-- 首次弹起尚未离地时不判沿轴下限，避免折减后 lockedAlong 在同一帧误触进 B。
 	else
 		localState.finalLandPhaseAGroundedStartClock = nil
 	end
 	if geomTouch and localState.finalLandPhaseAPopCount >= maxPop then
+		RunwaySession.PrintFinalLandAInterceptLog(
+			"phase_a_exit_max_pop",
+			humanoid,
+			hrp,
+			nowClock,
+			string.format("popCount=%d maxPop=%d", localState.finalLandPhaseAPopCount, maxPop)
+		)
 		RunwaySession.DebugFinalLandPhaseA("exit_max_pop", humanoid, hrp, nowClock)
 		RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forwardCheck)
 		return
 	end
 	if not geomTouch or vy > vyScriptMax or math.abs(vy) > vyFbAbsMax then
-		if geomTouch and localState.finalLandLockedTumbleAlong <= minAlong then
+		if
+			geomTouch
+			and localState.finalLandTumbleLeftGround
+			and localState.finalLandLockedTumbleAlong <= minAlong
+		then
+			RunwaySession.PrintFinalLandAInterceptLog(
+				"phase_a_exit_locked_along_below_min_before_vy_return",
+				humanoid,
+				hrp,
+				nowClock,
+				string.format("lockedAlong=%.2f minAlong=%.2f", localState.finalLandLockedTumbleAlong, minAlong)
+			)
 			RunwaySession.DebugFinalLandPhaseA("exit_locked_along_below_min_before_vy_return", humanoid, hrp, nowClock)
 			RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forwardCheck)
 			return
 		end
-		local reason = if not geomTouch then "return_not_geom_touch"
-			elseif vy > vyScriptMax then "return_vy_not_falling"
-			else "return_vy_abs_too_large"
+		local reason = if not geomTouch then "phase_a_return_not_geom_touch"
+			elseif vy > vyScriptMax then "phase_a_return_vy_not_falling"
+			else "phase_a_return_vy_abs_too_large"
+		RunwaySession.PrintFinalLandAInterceptLog(
+			reason,
+			humanoid,
+			hrp,
+			nowClock,
+			string.format("geomTouch=%s vy=%.2f vyScriptMax=%.2f vyFbAbsMax=%.2f", tostring(geomTouch), vy, vyScriptMax, vyFbAbsMax)
+		)
 		RunwaySession.DebugFinalLandPhaseA(reason, humanoid, hrp, nowClock)
+		return
+	end
+
+	-- 再次触地且沿轴速度过低：进 B（须已离地过，首次弹起帧不判）。
+	if localState.finalLandTumbleLeftGround and localState.finalLandLockedTumbleAlong <= minAlong then
+		RunwaySession.PrintFinalLandAInterceptLog(
+			"phase_a_exit_locked_along_below_min_on_retouchdown",
+			humanoid,
+			hrp,
+			nowClock,
+			string.format("lockedAlong=%.2f minAlong=%.2f", localState.finalLandLockedTumbleAlong, minAlong)
+		)
+		RunwaySession.DebugFinalLandPhaseA("exit_locked_along_below_min_on_retouchdown", humanoid, hrp, nowClock)
+		RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forwardCheck)
 		return
 	end
 
@@ -7662,16 +7878,37 @@ function RunwaySession.ProcessFinalLandingSubPhaseTransition(humanoid: Humanoid,
 	-- 如果前一次弹跳速度已经接近最低阈值（minPopVy），本次触地后不再弹跳直接进 B
 	local shouldEnterB = localState.finalLandTumblePrevPopVy <= minBounceVy * 1.1
 	if shouldEnterB then
+		RunwaySession.PrintFinalLandAInterceptLog(
+			"phase_a_exit_prev_pop_vy_below_min",
+			humanoid,
+			hrp,
+			nowClock,
+			string.format("prevPopVy=%.2f threshold=%.2f", localState.finalLandTumblePrevPopVy, minBounceVy * 1.1)
+		)
 		RunwaySession.DebugFinalLandPhaseA("exit_prev_pop_vy_below_min", humanoid, hrp, nowClock)
 		RunwaySession.StartFinalLandPronePhase(nowClock, hrp, forwardCheck)
 		return
 	end
 
 	if localState.finalLandTumbleUseAirClock and not localState.finalLandTumbleLeftGround then
+		RunwaySession.PrintFinalLandAInterceptLog(
+			"phase_a_return_wait_left_ground",
+			humanoid,
+			hrp,
+			nowClock,
+			string.format("vy=%.2f leftGroundMinVy=%.2f", vy, FinalLandPhaseALeftGroundMinVy)
+		)
 		RunwaySession.DebugFinalLandPhaseA("return_wait_left_ground", humanoid, hrp, nowClock)
 		return
 	end
 
+	RunwaySession.PrintFinalLandAInterceptLog(
+		"phase_a_apply_next_pop",
+		humanoid,
+		hrp,
+		nowClock,
+		string.format("geomTouch=%s vy=%.2f popCount=%d", tostring(geomTouch), vy, localState.finalLandPhaseAPopCount)
+	)
 	RunwaySession.DebugFinalLandPhaseA("apply_next_pop", humanoid, hrp, nowClock)
 	RunwaySession.ApplyFinalLandPhaseAPop(hrp, fwdHCheck, nowClock)
 end
