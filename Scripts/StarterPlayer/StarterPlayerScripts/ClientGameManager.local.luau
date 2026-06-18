@@ -32,6 +32,7 @@ local FriendRewardClientManager = require(clientScripts:WaitForChild("FriendRewa
 local PlayerInfoClientManager = require(clientScripts:WaitForChild("PlayerInfoClientManager"))
 local LeaderboardClient = require(clientScripts:WaitForChild("LeaderboardClient"))
 local IdleInputClientManager = require(clientScripts:FindFirstChild("IdleInputClientManager"))
+local RenderWarmupManager = require(clientScripts:WaitForChild("RenderWarmupManager"))
 -- JumpRunway：尽早绑定 NotifyJumpRunwayState，避免服务端开局 FireClient 时客户端尚未 OnClientEvent 导致队列耗尽
 
 local starterGui: StarterGui = game:GetService("StarterGui")
@@ -84,6 +85,33 @@ for chestId = 1, 5 do
 	end
 end
 local preloadP0Complete = false
+
+local function RegisterDefaultRenderWarmupRequests()
+	if modelOriginsFolder == nil then
+		return
+	end
+
+	local littleElfChestsFolder = modelOriginsFolder:FindFirstChild("LittleElfChests")
+	if littleElfChestsFolder == nil then
+		return
+	end
+
+	for chestId, chestConfig in pairs(GameConfig.LittleElfChestIdMap) do
+		local priority = if chestId <= 5
+			then RenderWarmupManager.Priority.P1
+			else RenderWarmupManager.Priority.P2
+		RenderWarmupManager.RegisterResourceTemplate(
+			littleElfChestsFolder,
+			chestConfig.resourceName,
+			string.format("LittleElfChest:%s", chestConfig.resourceName),
+			{
+				priority = priority,
+			}
+		)
+	end
+end
+
+RegisterDefaultRenderWarmupRequests()
 
 type PreloadAssetBucketMap = { [number]: { Instance } }
 type PreloadAssetEntry = {
@@ -588,8 +616,11 @@ PreloadAssets = function()
 
 	PreloadBucket(PreloadPriority.P0)
 	preloadP0Complete = true
+	RenderWarmupManager.RunBucket(RenderWarmupManager.Priority.P0)
 	PreloadBucket(PreloadPriority.P1)
+	RenderWarmupManager.RunBucket(RenderWarmupManager.Priority.P1)
 	PreloadBucket(PreloadPriority.P2)
+	RenderWarmupManager.RunBucket(RenderWarmupManager.Priority.P2)
 
 	local allAssetList: { Instance } = {}
 	for _, priority in ipairs({ PreloadPriority.P0, PreloadPriority.P1, PreloadPriority.P2 }) do
