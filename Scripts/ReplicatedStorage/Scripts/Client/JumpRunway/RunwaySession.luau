@@ -670,6 +670,33 @@ function RunwaySession.ConfigureLittleElfChestVisualModel(chestModel: Model)
 	end
 end
 
+function RunwaySession.GetLittleElfChestTemplateScale(template: Instance?): number
+	if template ~= nil and template:IsA("Model") then
+		return template:GetScale()
+	end
+	return 1
+end
+
+function RunwaySession.GetLittleElfChestOriginalScale(chestConfigId: number, fallbackScale: number): number
+	if actualChests == nil then
+		return fallbackScale
+	end
+	local chestConfig = GameConfig.LittleElfChestIdMap[chestConfigId]
+	if chestConfig == nil then
+		return fallbackScale
+	end
+	local template = GameConfig.FindResourceTemplateByResourceName(actualChests, chestConfig.resourceName)
+	local templateScale = RunwaySession.GetLittleElfChestTemplateScale(template)
+	if templateScale <= 0 then
+		return fallbackScale
+	end
+	return templateScale
+end
+
+function RunwaySession.BuildCFrameKeepingRotation(pos: Vector3, rotationSourceCFrame: CFrame): CFrame
+	return CFrame.new(pos) * (rotationSourceCFrame - rotationSourceCFrame.Position)
+end
+
 function RunwaySession.DestroyLittleElfChestChangeEffect()
 	local effectModel = Refs.chestChangeEffectModel
 	if effectModel ~= nil and effectModel.Parent ~= nil then
@@ -759,10 +786,17 @@ function RunwaySession.CreateLittleElfChestFollowModel(chestConfigId: number, in
 	RunwaySession.ConfigureLittleElfChestVisualModel(clone)
 	local runtimeCfg = cfg :: any
 	local followScale = ResolvePositiveConfigNumber(runtimeCfg.RUNWAY_CHEST_FOLLOW_SCALE, RunwayChestFollowScaleDefault)
+	local templateScale = RunwaySession.GetLittleElfChestTemplateScale(template)
 	pcall(function()
-		clone:ScaleTo(followScale)
+		clone:ScaleTo(templateScale * followScale)
 	end)
-	clone:PivotTo(initialCFrame or Refs.chestFollowCFrame or CFrame.new())
+	local templatePivot = clone:GetPivot()
+	local targetCFrame = initialCFrame or Refs.chestFollowCFrame
+	if targetCFrame ~= nil then
+		clone:PivotTo(RunwaySession.BuildCFrameKeepingRotation(targetCFrame.Position, templatePivot))
+	else
+		clone:PivotTo(RunwaySession.BuildCFrameKeepingRotation(Vector3.zero, templatePivot))
+	end
 	clone.Parent = RunwaySession.GetJumpRunwayLocalFxFolder()
 	Refs.chestFollowModel = clone
 	Refs.chestFollowConfigId = chestConfigId
@@ -931,8 +965,9 @@ function RunwaySession.StartLittleElfChestFollowForRun(hrp: BasePart)
 	Refs.chestFollowCFrame = targetCFrame
 	local followModel = RunwaySession.EnsureLittleElfChestFollowModel(chestConfigId, targetCFrame)
 	if followModel ~= nil then
-		followModel:PivotTo(targetCFrame)
-		Refs.chestFollowCFrame = targetCFrame
+		local initialCFrame = RunwaySession.BuildCFrameKeepingRotation(targetCFrame.Position, followModel:GetPivot())
+		followModel:PivotTo(initialCFrame)
+		Refs.chestFollowCFrame = initialCFrame
 	end
 end
 
@@ -941,8 +976,12 @@ function RunwaySession.PlaceLittleElfChestFollowAtOpenPosition(openCFrame: CFram
 	if followModel == nil then
 		return nil
 	end
+	local runtimeCfg = cfg :: any
+	local followScale = ResolvePositiveConfigNumber(runtimeCfg.RUNWAY_CHEST_FOLLOW_SCALE, RunwayChestFollowScaleDefault)
+	local fallbackOriginalScale = followModel:GetScale() / followScale
+	local originalScale = RunwaySession.GetLittleElfChestOriginalScale(chestConfigId, fallbackOriginalScale)
 	pcall(function()
-		followModel:ScaleTo(1)
+		followModel:ScaleTo(originalScale)
 	end)
 	followModel.Name = "RunwayLittleElfChest"
 	RunwaySession.ConfigureLittleElfChestVisualModel(followModel)
@@ -9149,7 +9188,7 @@ function RunwaySession.SpawnLittleElfChestAtPosition(fwdH: Vector3, spawnPos: Ve
 	local landPos = RunwaySession.ResolveLittleElfChestGroundPosition(spawnPos, chestModel)
 	local landCf = RunwaySession.BuildLittleElfChestOpenCFrame(landPos, fwdH, chestModel)
 	local airPos = landPos + Vector3.new(0, CHEST_FALL_MAX_HEIGHT_STUDS, 0)
-	chestModel:PivotTo(CFrame.new(airPos))
+	chestModel:PivotTo(RunwaySession.BuildCFrameKeepingRotation(airPos, landCf))
 
 	Refs.chestGroundOpenCFrame = landCf
 
@@ -9205,7 +9244,7 @@ function RunwaySession.SpawnLittleElfChestAtPosition(fwdH: Vector3, spawnPos: Ve
 			end
 			if chestModel and chestModel.Parent then
 				local currentPos = landPos + Vector3.new(0, driver.Value, 0)
-				chestModel:PivotTo(CFrame.new(currentPos))
+				chestModel:PivotTo(RunwaySession.BuildCFrameKeepingRotation(currentPos, landCf))
 			end
 		end)
 		local tween = tweenService:Create(
