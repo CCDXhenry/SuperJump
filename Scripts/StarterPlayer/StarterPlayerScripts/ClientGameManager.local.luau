@@ -76,6 +76,13 @@ local PreloadP1UiFrameNameMap: { [string]: boolean } = {
 	OnlineRewardFrame = true,
 	[UIManager.WindowId.JumpRunWayFrame] = true,
 }
+local PreloadP1LittleElfChestResourceNameMap: { [string]: boolean } = {}
+for chestId = 1, 5 do
+	local chestConfig = GameConfig.LittleElfChestIdMap[chestId]
+	if chestConfig ~= nil then
+		PreloadP1LittleElfChestResourceNameMap[chestConfig.resourceName] = true
+	end
+end
 local preloadP0Complete = false
 
 type PreloadAssetBucketMap = { [number]: { Instance } }
@@ -121,6 +128,27 @@ local function GetTopLevelChildName(root: Instance?, instance: Instance): string
 	return nil
 end
 
+local function GetLittleElfChestResourceName(instance: Instance): string?
+	if modelOriginsFolder == nil or not instance:IsDescendantOf(modelOriginsFolder) then
+		return nil
+	end
+
+	local littleElfChestsFolder = modelOriginsFolder:FindFirstChild("LittleElfChests")
+	if littleElfChestsFolder == nil or not instance:IsDescendantOf(littleElfChestsFolder) then
+		return nil
+	end
+
+	local current = instance
+	while current.Parent ~= nil and current.Parent ~= littleElfChestsFolder do
+		current = current.Parent
+	end
+
+	if current.Parent == littleElfChestsFolder then
+		return current.Name
+	end
+	return nil
+end
+
 local function GetDefaultPreloadPriority(instance: Instance): number
 	local uiRootName = GetTopLevelChildName(uiOriginsFolder, instance)
 	if uiRootName ~= nil then
@@ -136,6 +164,12 @@ local function GetDefaultPreloadPriority(instance: Instance): number
 	if modelRootName ~= nil then
 		if modelRootName == GameConfig.GuideAssetName.ModelArrow then
 			return PreloadPriority.P0
+		end
+		if modelRootName == "LittleElfChests" then
+			local chestResourceName = GetLittleElfChestResourceName(instance)
+			if chestResourceName ~= nil and PreloadP1LittleElfChestResourceNameMap[chestResourceName] then
+				return PreloadPriority.P1
+			end
 		end
 		return PreloadPriority.P2
 	end
