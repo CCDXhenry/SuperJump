@@ -1368,9 +1368,9 @@ GameConfig.JumpRunwayDesigner = {
 	-- 小精灵宝箱撞击速度（studs/s）；滑到宝箱时保留该末速度，撞击后也用该速度反弹并按统一趴滑减速度减速
 	RUNWAY_CHEST_HIT_SPEED = 15,
 	-- 开箱最终 brainrot 弹出后的展示停留时长（秒）
-	RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC = 0.3,
+	RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC = 0.5,
 	-- 玩家举起最终 brainrot 后的展示停留时长（秒）；结束后才创建追击者
-	RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC = 0.5,
+	RUNWAY_CHEST_CARRY_PRESENT_HOLD_SEC = 0.8,
 	-- 开箱时摄像机向后拉远距离（stud）；↑ 镜头更远
 	RUNWAY_CHEST_CAMERA_BACK_OFFSET = 50,
 	-- 开箱时摄像机俯仰角度（度）；正数俯视、负数仰视；绝对值 ↑ 俯仰越明显
