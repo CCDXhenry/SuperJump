@@ -384,6 +384,53 @@ local function getPoolBrainrotAbilityDisplay(
 	return math.ceil(ability * getMaxVariantCoinMultiplier(poolEntry))
 end
 
+local function setRewardBrainrotAbilityLabel(abilityLabel: TextLabel, reward: GameConfig.RewardInfo)
+	if reward.rewardType ~= GameConfig.RewardType.Brainrot then
+		abilityLabel.Visible = false
+		return
+	end
+	local brainrotData = GameConfig.BrainrotIdMap[reward.rewardId]
+	if brainrotData == nil then
+		abilityLabel.Visible = false
+		return
+	end
+	local level = reward.rewardLv or 1
+	local ability = GameConfig.GetBrainrotAbility(brainrotData.baseAbility, level)
+	abilityLabel.Visible = true
+	TranslationTool.CustomAutoLocalizeTextLabel(
+		abilityLabel,
+		GameTexts.YieldPerSecond.source,
+		GameTexts.YieldPerSecond.key,
+		{ NumberExtension.FormatBigNumberAA(ability) }
+	)
+end
+
+local function setRewardJetpackAbilityFrame(jackAbilityFrame: Frame, reward: GameConfig.RewardInfo)
+	if reward.rewardType ~= GameConfig.RewardType.Jetpack then
+		jackAbilityFrame.Visible = false
+		return
+	end
+	local jetpackData = GameConfig.JetpackDataMap[reward.rewardId]
+	if jetpackData == nil then
+		jackAbilityFrame.Visible = false
+		return
+	end
+	jackAbilityFrame.Visible = true
+	local fuelValue = jackAbilityFrame:FindFirstChild("FuelValue") :: TextLabel?
+	if fuelValue then
+		TranslationTool.CustomAutoLocalizeTextLabel(
+			fuelValue,
+			GameTexts.FuelWithNumber.source,
+			GameTexts.FuelWithNumber.key,
+			{ tostring(jetpackData.fuel) }
+		)
+	end
+	local thrustValue = jackAbilityFrame:FindFirstChild("ThrustValue") :: TextLabel?
+	if thrustValue then
+		thrustValue.Text = string.format("+%s%%", NumberExtension.FormatBigNumberAA(GameConfig.GetJetpackThrustPercent(jetpackData)))
+	end
+end
+
 local function setPoolBrainrotAbilityLabel(
 	abilityLabel: TextLabel,
 	poolEntry: GameConfig.LittleElfChestRewardPoolEntry,
@@ -489,6 +536,16 @@ local function createMixBundleFrame(bundleData: GameConfig.ShopBundleData, index
 
 		local rewardIcon = rewardFrame:WaitForChild("ImageLabel") :: ImageLabel
 		setRewardIcon(rewardIcon, reward)
+
+		local abilityLabel = rewardFrame:FindFirstChild("AbilityLabel") :: TextLabel?
+		if abilityLabel then
+			setRewardBrainrotAbilityLabel(abilityLabel, reward)
+		end
+
+		local jackAbilityFrame = rewardFrame:FindFirstChild("JackAbilityFrame") :: Frame?
+		if jackAbilityFrame then
+			setRewardJetpackAbilityFrame(jackAbilityFrame, reward)
+		end
 	end
 end
 
