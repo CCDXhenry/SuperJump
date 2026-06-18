@@ -79,7 +79,7 @@ local function ResolveBrainrotRevealCFrame(throwCFrame: CFrame, lockFacing: bool
 		end
 	end
 	if lockFacing then
-		return baseCFrame * CFrame.Angles(0, RunwayChestBrainrotLeftYawRad, 0)
+		return CFrame.new(baseCFrame.Position) * CFrame.Angles(0, RunwayChestBrainrotLeftYawRad, 0)
 	end
 	return baseCFrame
 end
