@@ -53,7 +53,7 @@ local PreloadPriority = {
 }
 local PreloadBatchSize: number = 50
 local PreloadBatchYieldSeconds: number = 0.05
-local PreloadSlowBatchWarnSeconds: number = 10
+local PreloadSlowBatchWarnSeconds: number = 30
 local PreloadMeshAssetsEnabled: boolean = true
 local PreloadOverrideDebugEnabled: boolean = false
 local PreloadFailureSampleCount: number = 5
