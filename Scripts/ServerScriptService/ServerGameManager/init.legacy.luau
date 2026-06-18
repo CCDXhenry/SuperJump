@@ -159,14 +159,14 @@ local function OnPlayerAdded(player: Player)
 		return
 	end
 	local countryRegion: string = success and result or "unknown"
-	--远程配置
-	local _config: ConfigSnapshot
-	if IsVersionAfter(playerSaveInfo.firstEnterVersion, GameConfig.ABTestVersion) then
-		_config = configService:GetConfigForPlayerAsync(player)
-	else
-		--老玩家不参与AB测试
-		_config = configService:GetConfigAsync()
-	end
+	----远程配置
+	--local _config: ConfigSnapshot
+	--if IsVersionAfter(playerSaveInfo.firstEnterVersion, GameConfig.ABTestVersion) then
+	--	_config = configService:GetConfigForPlayerAsync(player)
+	--else
+	--	--老玩家不参与AB测试
+	--	_config = configService:GetConfigAsync()
+	--end
 	if not IsPlayerConnected(player) then
 		return
 	end
