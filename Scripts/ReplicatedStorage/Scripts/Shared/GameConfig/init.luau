@@ -1382,7 +1382,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- 跟随宝箱在玩家身后的目标距离（stud）
 	RUNWAY_CHEST_FOLLOW_BEHIND_STUDS = 3,
 	-- 跟随宝箱整体缩放（1 为模板原始尺寸）
-	RUNWAY_CHEST_FOLLOW_SCALE = 0.5,
+	RUNWAY_CHEST_FOLLOW_SCALE = 0.8,
 	-- 跟随宝箱相对玩家 HRP 的基础高度偏移（stud）
 	RUNWAY_CHEST_FOLLOW_HEIGHT_OFFSET_STUDS = 1.2,
 	-- 跟随宝箱上下漂浮幅度（stud）
