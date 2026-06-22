@@ -42,6 +42,10 @@ local localPlayer = players.LocalPlayer
 
 local SCROLL_AT_RATIO = 0.75
 local ZoneSegmentNamePrefix = "ZoneSegment_"
+local MovementBarLegacyEndFadeImageName = "EndFadeImage"
+local MovementBarEndFadeFrameName = "EndFadeFrame"
+local MovementBarFadeGroupName = "MovementFadeGroup"
+local MovementBarEndFadeStartRatio = 0.78
 local MissingRunZoneWarnedMap = {} :: { [string]: boolean }
 
 local thisFrame = script.Parent :: Frame
@@ -181,33 +185,40 @@ end
 local function ApplyZoneSegmentStyle(segment: ImageLabel, resourceName: string, fallbackColor: Color3)
 	ClearZoneSegment(segment)
 	local style = ResolveZoneStyle(resourceName)
-	local color = fallbackColor
-	if style ~= nil and typeof(style.color) == "Color3" then
-		color = style.color
-	end
-	segment.ImageColor3 = color
-
-	if style == nil or type(style.gradient) ~= "table" or #style.gradient < 2 then
+	if style == nil then
+		segment.ImageColor3 = fallbackColor
 		return
 	end
 
-	local keypoints = {}
-	local lastIndex = #style.gradient
-	for i, gradientColor in ipairs(style.gradient) do
-		if typeof(gradientColor) == "Color3" then
-			table.insert(keypoints, ColorSequenceKeypoint.new((i - 1) / math.max(lastIndex - 1, 1), gradientColor))
+	-- 已配置样式时保持 ImageColor3 为白色，颜色由 UIGradient 呈现
+	segment.ImageColor3 = Color3.new(1, 1, 1)
+
+	if type(style.gradient) == "table" and #style.gradient >= 2 then
+		local keypoints = {}
+		local lastIndex = #style.gradient
+		for i, gradientColor in ipairs(style.gradient) do
+			if typeof(gradientColor) == "Color3" then
+				table.insert(keypoints, ColorSequenceKeypoint.new((i - 1) / math.max(lastIndex - 1, 1), gradientColor))
+			end
 		end
-	end
-	if #keypoints < 2 then
+		if #keypoints < 2 then
+			return
+		end
+
+		local gradient = Instance.new("UIGradient")
+		gradient.Color = ColorSequence.new(keypoints)
+		if type(style.rotation) == "number" then
+			gradient.Rotation = style.rotation
+		end
+		gradient.Parent = segment
 		return
 	end
 
-	local gradient = Instance.new("UIGradient")
-	gradient.Color = ColorSequence.new(keypoints)
-	if type(style.rotation) == "number" then
-		gradient.Rotation = style.rotation
+	if typeof(style.color) == "Color3" then
+		local gradient = Instance.new("UIGradient")
+		gradient.Color = ColorSequence.new(style.color)
+		gradient.Parent = segment
 	end
-	gradient.Parent = segment
 end
 
 local function ApplyMyselfMarkerOffset(markerOffsetX: number): number?
@@ -363,7 +374,7 @@ local function UpdateMovementBar(distanceStuds: number)
 	ApplyMovementBarFromDistance(distanceStuds)
 end
 
-local function ConfigureZoneSegmentsScroll(scroll: ScrollingFrame, bar: ImageLabel)
+local function ConfigureZoneSegmentsScroll(scroll: ScrollingFrame, parent: GuiObject)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 0
@@ -372,26 +383,65 @@ local function ConfigureZoneSegmentsScroll(scroll: ScrollingFrame, bar: ImageLab
 	scroll.AnchorPoint = Vector2.new(0, 0)
 	scroll.Position = UDim2.fromScale(0, 0)
 	scroll.Size = UDim2.fromScale(1, 1)
-	scroll.ZIndex = bar.ZIndex + 1
+	scroll.ZIndex = parent.ZIndex + 1
 end
 
-local function EnsureZoneSegmentsScroll(bar: ImageLabel): ScrollingFrame
-	local existing = bar:FindFirstChild("ZoneSegmentsScroll")
+local function ResolveZoneSegmentsScroll(parent: GuiObject): ScrollingFrame?
+	local existing = parent:FindFirstChild("ZoneSegmentsScroll")
 	if existing and existing:IsA("ScrollingFrame") then
-		ConfigureZoneSegmentsScroll(existing, bar)
+		ConfigureZoneSegmentsScroll(existing, parent)
 		return existing
 	end
-	local scroll = Instance.new("ScrollingFrame")
-	scroll.Name = "ZoneSegmentsScroll"
-	scroll.Parent = bar
-	ConfigureZoneSegmentsScroll(scroll, bar)
-	return scroll
+
+	warn("[JumpRunWayFrame] MovementBarBg.MovementFadeGroup.ZoneSegmentsScroll missing or not ScrollingFrame")
+	return nil
+end
+
+local function ResolveMovementBarFadeGroup(bar: ImageLabel): CanvasGroup?
+	local legacy = bar:FindFirstChild(MovementBarLegacyEndFadeImageName)
+	if legacy ~= nil then
+		legacy:Destroy()
+	end
+
+	local legacyFadeFrame = bar:FindFirstChild(MovementBarEndFadeFrameName)
+	if legacyFadeFrame ~= nil then
+		legacyFadeFrame:Destroy()
+	end
+
+	local existing = bar:FindFirstChild(MovementBarFadeGroupName)
+	if existing == nil or not existing:IsA("CanvasGroup") then
+		warn("[JumpRunWayFrame] MovementBarBg.MovementFadeGroup missing or not CanvasGroup")
+		return nil
+	end
+	local fadeGroup = existing
+
+	fadeGroup.BackgroundTransparency = 1
+	fadeGroup.BorderSizePixel = 0
+	fadeGroup.AnchorPoint = Vector2.new(0, 0)
+	fadeGroup.Position = UDim2.fromScale(0, 0)
+	fadeGroup.Size = UDim2.fromScale(1, 1)
+	fadeGroup.ZIndex = bar.ZIndex + 1
+	fadeGroup.Visible = true
+
+	local gradient = fadeGroup:FindFirstChildOfClass("UIGradient")
+	if gradient == nil then
+		warn("[JumpRunWayFrame] MovementBarBg.MovementFadeGroup.UIGradient missing")
+		return nil
+	end
+	gradient.Rotation = 0
+	gradient.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(MovementBarEndFadeStartRatio, 0),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+
+	return fadeGroup
 end
 
 local function ResolveZoneSegmentTemplate(scroll: ScrollingFrame): ImageLabel?
 	local template = scroll:FindFirstChild("ZoneSegment")
 	if template == nil or not template:IsA("ImageLabel") then
-		warn("[JumpRunWayFrame] MovementBarBg.ZoneSegmentsScroll.ZoneSegment missing or not ImageLabel")
+		warn("[JumpRunWayFrame] MovementBarBg.MovementFadeGroup.ZoneSegmentsScroll.ZoneSegment missing or not ImageLabel")
 		return nil
 	end
 	template.Visible = false
@@ -537,7 +587,14 @@ local function ResolveMovementBar()
 		legacy.Visible = false
 	end
 
-	zoneSegmentsScroll = EnsureZoneSegmentsScroll(movementBarBg)
+	local movementFadeGroup = ResolveMovementBarFadeGroup(movementBarBg)
+	if movementFadeGroup == nil then
+		return
+	end
+	zoneSegmentsScroll = ResolveZoneSegmentsScroll(movementFadeGroup)
+	if zoneSegmentsScroll == nil then
+		return
+	end
 	zoneSegmentTemplate = ResolveZoneSegmentTemplate(zoneSegmentsScroll :: ScrollingFrame)
 	RebuildZoneSegments()
 	DisconnectMovementBarSizeConn()

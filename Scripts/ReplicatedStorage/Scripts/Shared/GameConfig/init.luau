@@ -58,31 +58,130 @@ export type JumpRunwayMovementBarZoneStyleMap = {
 
 GameConfig.JumpRunwayMovementBarZoneStyleMap = {
 	-- 未配置的 Zone 默认使用 Workspace.Ground.Zone 下对应 Part.Color
+
+	-- 对应 [1] Common (纯白到银灰，基础水平渐变)
 	Zone0 = {
-		color = Color3.fromRGB(196, 40, 28),
-	},
-	Zone3 = {
 		gradient = {
-			Color3.fromRGB(0, 255, 126),
-			Color3.fromRGB(0, 170, 255),
+			Color3.fromRGB(255, 255, 255),
+			Color3.fromRGB(200, 200, 210),
 		},
 		rotation = 0,
 	},
-	Zone8 = {
+	-- 对应 [2] Uncommon (亮绿到深绿，向右上)
+	Zone1 = {
 		gradient = {
-			Color3.fromRGB(0, 255, 187),
-			Color3.fromRGB(0, 65, 255),
-		},
-		rotation = 35,
-	},
-	Zone15 = {
-		gradient = {
-			Color3.fromRGB(252, 0, 255),
-			Color3.fromRGB(255, 220, 80),
-			Color3.fromRGB(60, 255, 120),
+			Color3.fromRGB(150, 255, 100),
+			Color3.fromRGB(73, 230, 0),
 		},
 		rotation = 20,
 	},
+	-- 对应 [3] Rare (青色渐变，向右下交错)
+	Zone2 = {
+		gradient = {
+			Color3.fromRGB(100, 255, 240),
+			Color3.fromRGB(0, 255, 217),
+		},
+		rotation = -20,
+	},
+	-- 对应 [4] Epic (天蓝到海蓝，向右上)
+	Zone3 = {
+		gradient = {
+			Color3.fromRGB(120, 200, 255),
+			Color3.fromRGB(30, 144, 255),
+		},
+		rotation = 30,
+	},
+	-- 对应 [5] Legendary (粉紫渐变，向右下)
+	Zone4 = {
+		gradient = {
+			Color3.fromRGB(255, 120, 255),
+			Color3.fromRGB(255, 0, 255),
+		},
+		rotation = -30,
+	},
+	-- 对应 [6] Mythical (亮紫到深紫，大角度右上)
+	Zone5 = {
+		gradient = {
+			Color3.fromRGB(190, 100, 255),
+			Color3.fromRGB(136, 0, 255),
+		},
+		rotation = 45,
+	},
+	-- 对应 [7] Cosmic (玫红到暗红，大角度右下)
+	Zone6 = {
+		gradient = {
+			Color3.fromRGB(255, 100, 140),
+			Color3.fromRGB(255, 0, 68),
+		},
+		rotation = -45,
+	},
+	-- 对应 [8] Secret (淡紫到蓝紫，水平渐变回归平稳)
+	Zone7 = {
+		gradient = {
+			Color3.fromRGB(200, 160, 255),
+			Color3.fromRGB(156, 106, 255),
+		},
+		rotation = 0,
+	},
+	-- 对应 [9] Divine (亮粉色渐变，向右上)
+	Zone8 = {
+		gradient = {
+			Color3.fromRGB(255, 150, 230),
+			Color3.fromRGB(255, 56, 209),
+		},
+		rotation = 35,
+	},
+	-- 对应 [10] Hacked (三段颜色，向右下，制造代码下坠感)
+	Zone9 = {
+		gradient = {
+			Color3.fromRGB(150, 255, 160),
+			Color3.fromRGB(67, 255, 83),
+			Color3.fromRGB(20, 150, 40),
+		},
+		rotation = -35,
+	},
+	-- 对应 [11] OG (亮红到深红，向右上)
+	Zone10 = {
+		gradient = {
+			Color3.fromRGB(255, 100, 100),
+			Color3.fromRGB(255, 25, 29),
+		},
+		rotation = 25,
+	},
+	-- 对应 [12] Celestial (星光黄到金黄，向右下)
+	Zone11 = {
+		gradient = {
+			Color3.fromRGB(255, 255, 150),
+			Color3.fromRGB(255, 234, 1),
+		},
+		rotation = -25,
+	},
+	-- 对应 [13] Transcendent (空灵极光蓝，大角度右上)
+	Zone12 = {
+		gradient = {
+			Color3.fromRGB(220, 240, 255),
+			Color3.fromRGB(167, 224, 255),
+		},
+		rotation = 40,
+	},
+	-- 对应 [14] Glitched (乱码绿三段渐变，极度向右下倾斜)
+	Zone13 = {
+		gradient = {
+			Color3.fromRGB(100, 180, 120),
+			Color3.fromRGB(24, 125, 53),
+			Color3.fromRGB(10, 50, 20),
+		},
+		rotation = -40,
+	},
+	-- 对应 [15] Void (深灰到纯黑，回归最基础的水平，体现深邃感)
+	Zone14 = {
+		gradient = {
+			Color3.fromRGB(60, 60, 65),
+			Color3.fromRGB(0, 0, 0),
+		},
+		rotation = 0,
+	},
+	
 } :: JumpRunwayMovementBarZoneStyleMap
 GameConfig.DecelerationButtonShowSpeed = 40
 GameConfig.DefaultWalkSpeed = 16
@@ -1145,6 +1244,42 @@ GameConfig.BrainrotQualityConfig = {
 	[13] = { rarity = "Transcendent", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(167, 224, 255) },
 	[14] = { rarity = "Glitched", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(24, 125, 53) },
 	[15] = { rarity = "Void", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(0, 0, 0) },
+	-- 以下为拓展的 16 ~ 40 级品质
+	[16] = { rarity = "Abyssal", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(20, 40, 120) }, -- 深海蓝
+	[17] = { rarity = "Phantom", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(180, 255, 230) }, -- 幽灵青
+	[18] = { rarity = "Ethereal", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(200, 160, 255) }, -- 空灵紫
+	[19] = { rarity = "Astral", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 255, 100) }, -- 星光黄
+	[20] = { rarity = "Sovereign", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 140, 0) }, -- 至尊橙
+	[21] = { rarity = "Paradox", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 50, 150) }, -- 悖论粉
+	[22] = { rarity = "Radioactive", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(50, 255, 50) }, -- 辐射绿
+	[23] = { rarity = "Quantum", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(0, 150, 180) }, -- 量子青蓝
+	[24] = { rarity = "Galactic", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(80, 0, 150) }, -- 银河暗紫
+	[25] = { rarity = "Universal", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(200, 230, 255) }, -- 宇宙冰蓝
+	[26] = { rarity = "Multiversal", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(220, 20, 60) }, -- 多元猩红
+	[27] = { rarity = "Omniversal", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 200, 0) }, -- 全能真金
+	[28] = { rarity = "Infinite", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(60, 0, 130) }, -- 无限靛蓝
+	[29] = { rarity = "Immortal", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(180, 10, 20) }, -- 不朽暗红
+	[30] = { rarity = "Eternal", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(0, 200, 255) }, -- 永恒亮蓝
+	[31] = { rarity = "Primordial", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(180, 100, 30) }, -- 远古青铜
+	[32] = { rarity = "Supreme", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(220, 0, 220) }, -- 无上亮紫
+	[33] = { rarity = "Absolute", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(230, 235, 240) }, -- 绝对白银
+	[34] = { rarity = "Omnipotent", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(30, 80, 255) }, -- 全知电蓝
+	[35] = { rarity = "Nightmare", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(80, 0, 0) }, -- 梦魇黑红
+	[36] = { rarity = "Corrupted", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(170, 255, 0) }, -- 侵蚀酸绿
+	[37] = { rarity = "Abstract", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 130, 90) }, -- 抽象珊瑚
+	[38] = { rarity = "Cursed", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(100, 40, 150) }, -- 诅咒深紫
+	[39] = { rarity = "Brainrot", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 120, 200) }, -- 纯正魔怔粉
+	[40] = { rarity = "Unfathomable", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(30, 0, 20) },-- 不可名状之暗
+	-- 以下为全新拓展的 41 ~ 47 级终极品质
+	[41] = { rarity = "Singularity", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 0, 128) }, -- 奇点玫红
+	[42] = { rarity = "Oblivion", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(112, 128, 144) }, -- 遗忘石板灰
+	[43] = { rarity = "Genesis", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(0, 255, 127) }, -- 创世春绿
+	[44] = { rarity = "Omega", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 69, 0) }, -- 终焉橙红
+	[45] = { rarity = "Anomaly", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(192, 255, 0) }, -- 异常酸黄绿
+	[46] = { rarity = "[REDACTED]", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(45, 45, 45) }, -- [数据删除]深炭黑
+	[47] = { rarity = "Zenith", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(240, 245, 255) }, -- 天顶极光白
+	[48] = { rarity = "Apotheosis", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 245, 220) }, -- 登神炽白金	
+	
 }
 
 GameConfig.RobuxIconText = "\u{E002}"
