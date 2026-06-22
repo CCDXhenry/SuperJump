@@ -38,6 +38,11 @@ function ClientGameTool.SetRewardIconImage(rewardIconImage: ImageLabel, rewardTy
 		rewardIconImage.Image = if jetpackData then jetpackData.iconImageId else ""
 		return
 	end
+	if rewardType == GameConfig.RewardType.ExEquip then
+		local equipData = GameConfig.ExEquipDataMap[rewardId]
+		rewardIconImage.Image = if equipData then equipData.iconImageId else ""
+		return
+	end
 	rewardIconImage.Image = ""
 end
 

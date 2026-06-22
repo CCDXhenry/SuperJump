@@ -1573,6 +1573,7 @@ function ExEquipManager.Init()
 			ShowExerciseJumpPowerPopup(addExp)
 		end
 		if jumpPowerInfo.lv > previousLv then
+			GameSoundManager.PlayUpgradeAbilitySound()
 			NetMsg.FireRequestCompleteGuideStep(GameConfig.GuideStepKey.ExEquipUseFinished)
 		end
 	end)

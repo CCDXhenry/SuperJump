@@ -220,6 +220,7 @@ GameConfig.RewardType = {
 	LittleElfChest = 4,
 	Buff = 5,
 	Jetpack = 6,
+	ExEquip = 7,
 }
 
 GameConfig.RewardState = {

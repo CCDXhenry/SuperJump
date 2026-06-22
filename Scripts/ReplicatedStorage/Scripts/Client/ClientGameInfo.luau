@@ -429,8 +429,28 @@ end
 -- 锻炼器材库存更新
 function ClientGameInfo.UpdateExEquipInventory(exEquipInventory: GameConfig.ExEquipInventory)
 	if localPlayerInfo then
+		local newlyOwnedExEquipIds: { number } = {}
+		for equipId, isOwned in pairs(exEquipInventory.ownedList) do
+			if isOwned and not localPlayerInfo.exEquipInventory.ownedList[equipId] then
+				local equipIdNumber = tonumber(equipId)
+				if equipIdNumber ~= nil then
+					table.insert(newlyOwnedExEquipIds, equipIdNumber)
+				end
+			end
+		end
+
 		localPlayerInfo.exEquipInventory = exEquipInventory
 		ClientMsg.FireLocalPlayerExEquipInventoryUpdate(exEquipInventory)
+
+		for _, equipId in ipairs(newlyOwnedExEquipIds) do
+			ClientMsg.FireShowAddRewardsTip({
+				{
+					rewardType = GameConfig.RewardType.ExEquip,
+					rewardId = equipId,
+					rewardCount = 1,
+				},
+			})
+		end
 	end
 end
 
