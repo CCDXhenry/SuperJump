@@ -11,6 +11,10 @@ local ServerGameInfo = require(serverScripts:WaitForChild("ServerGameInfo"))
 local BrainrotQueueManager = require(serverScripts:WaitForChild("BrainrotQueueManager"))
 local AnalyticsTool = require(serverScripts:WaitForChild("AnalyticsTool"))
 
+local serverCore = serverStorage:WaitForChild("Core")
+local serverCoreScripts = serverCore:WaitForChild("Scripts")
+local TeleportTool = require(serverCoreScripts:WaitForChild("TeleportTool"))
+
 local scripts = replicatedStorage:WaitForChild("Scripts")
 local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:WaitForChild("GameConfig"))
@@ -30,6 +34,20 @@ local yieldBroadcastAccumulator = 0
 local basePlotsCount = 0
 
 local initDone = false
+
+local function teleportPlayerToAnotherServer(player: Player)
+	local teleportOptions = Instance.new("TeleportOptions")
+	teleportOptions.ShouldReserveServer = true
+
+	local teleportSuccess, teleportResult = TeleportTool.SafeTeleport(game.PlaceId, { player }, teleportOptions)
+	if teleportSuccess then
+		print(LogPrefix, "Server is full. Teleporting", player.Name, "to another server")
+		return
+	end
+
+	warn(LogPrefix, "Failed to teleport full-server player", player.Name, tostring(teleportResult))
+	player:Kick("Server is full, no home slots available.")
+end
 
 local function ensurePlayersHomeFolder(): Folder
 	local existing = workspace:FindFirstChild("PlayersHome")
@@ -125,7 +143,7 @@ local function onPlayerAdded(player: Player)
 	end
 
 	if #availableSlots == 0 then
-		player:Kick("Server is full, no home slots available.")
+		teleportPlayerToAnotherServer(player)
 		return
 	end
 
