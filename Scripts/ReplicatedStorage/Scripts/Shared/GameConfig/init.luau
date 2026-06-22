@@ -11,6 +11,7 @@ local BrainrotDataModule = require(script:WaitForChild("BrainrotData"))
 local BrainrotVariantDataModule = require(script:WaitForChild("BrainrotVariantData"))
 local LittleElfChestDataModule = require(script:WaitForChild("LittleElfChestData"))
 local LittleElfChestRewardPoolDataModule = require(script:WaitForChild("LittleElfChestRewardPoolData"))
+local RunZoneDataModule = require(script:WaitForChild("RunZoneData"))
 local UpgradeShopRawData = require(script:WaitForChild("UpgradeShopData"))
 local ExEquipDataModule = require(script:WaitForChild("ExEquipData"))
 local ExStatsDataModule = require(script:WaitForChild("ExStatsData"))
@@ -42,6 +43,47 @@ GameConfig.CoinIconImage = "rbxassetid://138756794615498"
 GameConfig.RbImage = "rbxassetid://116949418469040"
 GameConfig.DecelerationOnImage = "rbxassetid://114216336762183"
 GameConfig.DecelerationOffImage = "rbxassetid://113696020530948"
+GameConfig.JumpRunwayMovementBarBlockImage = "rbxassetid://87865941571706"
+
+-- 跳跃跑道进度条（JumpRunWayFrame MovementBar）Zone 分段样式
+export type JumpRunwayMovementBarZoneStyle = {
+	color: Color3?, -- 纯色填充色；未配置 gradient 时使用
+	gradient: { Color3 }?, -- 渐变色列表（至少 2 色），会创建 UIGradient
+	rotation: number?, -- UIGradient 渐变方向角度（度）；仅 gradient 存在时生效，0 为水平
+}
+
+export type JumpRunwayMovementBarZoneStyleMap = {
+	[string]: JumpRunwayMovementBarZoneStyle, -- key 为 RunZone resourceName，如 Zone0、Zone3
+}
+
+GameConfig.JumpRunwayMovementBarZoneStyleMap = {
+	-- 未配置的 Zone 默认使用 Workspace.Ground.Zone 下对应 Part.Color
+	Zone0 = {
+		color = Color3.fromRGB(196, 40, 28),
+	},
+	Zone3 = {
+		gradient = {
+			Color3.fromRGB(0, 255, 126),
+			Color3.fromRGB(0, 170, 255),
+		},
+		rotation = 0,
+	},
+	Zone8 = {
+		gradient = {
+			Color3.fromRGB(0, 255, 187),
+			Color3.fromRGB(0, 65, 255),
+		},
+		rotation = 35,
+	},
+	Zone15 = {
+		gradient = {
+			Color3.fromRGB(252, 0, 255),
+			Color3.fromRGB(255, 220, 80),
+			Color3.fromRGB(60, 255, 120),
+		},
+		rotation = 20,
+	},
+} :: JumpRunwayMovementBarZoneStyleMap
 GameConfig.DecelerationButtonShowSpeed = 40
 GameConfig.DefaultWalkSpeed = 16
 
@@ -680,13 +722,35 @@ GameConfig.Coils = {} :: { [number]: CoilData }
 GameConfig.CoilNameMap = {} :: { [string]: CoilData }
 GameConfig.CoilIdMap = {} :: { [number]: CoilData }
 
+export type RunZoneData = {
+	id: number,
+	name_t: string,
+	resourceName: string,
+}
+
+GameConfig.RunZones = RunZoneDataModule
+GameConfig.RunZoneIdMap = {} :: { [number]: RunZoneData }
+GameConfig.RunZoneResourceNameMap = {} :: { [string]: RunZoneData }
+
+for runZoneKey, runZoneRow in pairs(RunZoneDataModule) do
+	if type(runZoneKey) == "number" and runZoneRow and type(runZoneRow) == "table" then
+		local cfg = runZoneRow :: RunZoneData
+		GameConfig.RunZoneIdMap[cfg.id] = cfg
+		GameConfig.RunZoneResourceNameMap[cfg.resourceName] = cfg
+	end
+end
+
+function GameConfig.GetRunZoneByResourceName(resourceName: string): RunZoneData?
+	return GameConfig.RunZoneResourceNameMap[resourceName]
+end
+
 export type LittleElfChestConfigData = {
 	id: number,
 	resourceName: string,
 	iconImageId: string,
 	name_t: string,
 	quality: number,
-	zoneName: string,
+	zoneId: number,
 	onlyPay: number?,
 }
 
@@ -696,15 +760,15 @@ export type LittleElfChestData = LittleElfChestConfigData
 GameConfig.LittleElfChests = LittleElfChestDataModule
 GameConfig.LittleElfChestIdMap = {} :: { [number]: LittleElfChestConfigData }
 GameConfig.LittleElfChestNameMap = {} :: { [string]: LittleElfChestConfigData }
-GameConfig.LittleElfChestZoneNameMap = {} :: { [string]: LittleElfChestConfigData }
+GameConfig.LittleElfChestZoneIdMap = {} :: { [number]: LittleElfChestConfigData }
 
 for leChestKey, leChestRow in pairs(LittleElfChestDataModule) do
 	if type(leChestKey) == "number" and leChestRow and type(leChestRow) == "table" then
 		local cfg = leChestRow :: LittleElfChestConfigData
 		GameConfig.LittleElfChestIdMap[cfg.id] = cfg
 		GameConfig.LittleElfChestNameMap[cfg.resourceName] = cfg
-		if type(cfg.zoneName) == "string" and cfg.zoneName ~= "" then
-			GameConfig.LittleElfChestZoneNameMap[cfg.zoneName] = cfg
+		if type(cfg.zoneId) == "number" and cfg.zoneId > 0 then
+			GameConfig.LittleElfChestZoneIdMap[cfg.zoneId] = cfg
 		end
 	end
 end
@@ -746,12 +810,24 @@ function GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig: LittleEl
 	return chestConfig ~= nil and chestConfig.onlyPay ~= 1
 end
 
-function GameConfig.GetLittleElfChestByZoneName(zoneName: string): LittleElfChestConfigData?
-	local chestConfig = GameConfig.LittleElfChestZoneNameMap[zoneName]
+function GameConfig.GetLittleElfChestByRunZoneId(zoneId: number): LittleElfChestConfigData?
+	local chestConfig = GameConfig.LittleElfChestZoneIdMap[zoneId]
 	if GameConfig.IsLittleElfChestAvailableForJumpRunway(chestConfig) then
 		return chestConfig
 	end
 	return nil
+end
+
+function GameConfig.GetLittleElfChestByRunZoneResourceName(resourceName: string): LittleElfChestConfigData?
+	local runZone = GameConfig.GetRunZoneByResourceName(resourceName)
+	if runZone == nil then
+		return nil
+	end
+	return GameConfig.GetLittleElfChestByRunZoneId(runZone.id)
+end
+
+function GameConfig.GetLittleElfChestByZoneName(zoneName: string): LittleElfChestConfigData?
+	return GameConfig.GetLittleElfChestByRunZoneResourceName(zoneName)
 end
 
 function GameConfig.RollVariantIdFromEntry(entry: LittleElfChestRewardPoolEntry): number
@@ -860,10 +936,7 @@ function GameConfig.GetFriendCoinGainIncreaseRate(friendsPlayingSameGameCount: n
 	if paramConfig == nil then
 		return 0
 	end
-	return math.min(
-		paramConfig.coinGainIncreaseRatePerFriend * friendsPlayingSameGameCount,
-		paramConfig.maxCoinGainIncreaseRateFromFriends
-	)
+	return math.min(paramConfig.coinGainIncreaseRatePerFriend * friendsPlayingSameGameCount, paramConfig.maxCoinGainIncreaseRateFromFriends)
 end
 
 function GameConfig.GetFriendRewardBuffData(): BuffData?
@@ -1064,8 +1137,14 @@ GameConfig.BrainrotQualityConfig = {
 	[5] = { rarity = "Legendary", image = "rbxassetid://16865598826", textColor = Color3.fromRGB(255, 0, 255) },
 	[6] = { rarity = "Mythical", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(136, 0, 255) },
 	[7] = { rarity = "Cosmic", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 0, 68) },
-	[8] = { rarity = "Secret", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 136, 0) },
-	[9] = { rarity = "Celestial", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 234, 1) },
+	[8] = { rarity = "Secret", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(156, 106, 255) },
+	[9] = { rarity = "Divine", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 56, 209) },
+	[10] = { rarity = "Hacked", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(67, 255, 83) },
+	[11] = { rarity = "OG", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 25, 29) },
+	[12] = { rarity = "Celestial", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(255, 234, 1) },
+	[13] = { rarity = "Transcendent", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(167, 224, 255) },
+	[14] = { rarity = "Glitched", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(24, 125, 53) },
+	[15] = { rarity = "Void", image = "rbxassetid://16865598729", textColor = Color3.fromRGB(0, 0, 0) },
 }
 
 GameConfig.RobuxIconText = "\u{E002}"
@@ -1354,7 +1433,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- —— ⑥ 玩法摄像机 ——
 	-- ═══════════════════════════════════════
 	-- 玩法摄像机跟随平滑；↑ 跟得更紧
-	RUNWAY_CAMERA_SMOOTH_SPEED = 3,
+	RUNWAY_CAMERA_SMOOTH_SPEED = 5,
 	-- 撞树/障碍反弹阶段摄像机跟随平滑；↑ 反弹时跟得更紧，避免人物出屏
 	RUNWAY_CAMERA_BOUNCE_SMOOTH_SPEED = 14,
 	-- 玩法摄像机 FOV；↑ 视野更广
@@ -1396,7 +1475,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- 跟随宝箱整体缩放（1 为模板原始尺寸）
 	RUNWAY_CHEST_FOLLOW_SCALE = 0.8,
 	-- 跟随宝箱相对玩家 HRP 的基础高度偏移（stud）
-	RUNWAY_CHEST_FOLLOW_HEIGHT_OFFSET_STUDS = 1.2,
+	RUNWAY_CHEST_FOLLOW_HEIGHT_OFFSET_STUDS = 0.3,
 	-- 跟随宝箱上下漂浮幅度（stud）
 	RUNWAY_CHEST_FOLLOW_FLOAT_AMPLITUDE_STUDS = 0.45,
 	-- 跟随宝箱上下漂浮频率
@@ -1493,6 +1572,7 @@ GameConfig.JumpRunway = {
 	-- —— 会话与诊断 ——
 	-- 开发诊断：为 true 时客户端显示调试 HUD、服务端节流打印状态；发布务必保持 false（零额外 GUI/打印开销）
 	DEBUG = false,
+	MOVEMENT_BAR_DEBUG = false,
 	-- 分阶段真实位移日志：独立于 DEBUG，用于公式校准
 	RUNWAY_DISTANCE_LOG_ENABLED = jumpRunwayDesigner.RUNWAY_DISTANCE_LOG_ENABLED,
 	JUMP_MECHANISM_MODE = jumpRunwayDesigner.JUMP_MECHANISM_MODE,
@@ -1727,8 +1807,8 @@ GameConfig.JumpRunway = {
 
 	-- —— 玩法摄像机 ——
 	-- 跑道摄像机：玩法期间客户端 Scriptable 插值跟随，仅影响本地表现
-	RUNWAY_CAMERA_BACK_OFFSET = 20,
-	RUNWAY_CAMERA_RIGHT_OFFSET = 10,
+	RUNWAY_CAMERA_BACK_OFFSET = 12,
+	RUNWAY_CAMERA_RIGHT_OFFSET = 6,
 	RUNWAY_CAMERA_HEIGHT_OFFSET = 8,
 	RUNWAY_CAMERA_LOOK_AHEAD = 10,
 	RUNWAY_CAMERA_LOOK_HEIGHT = 0,

@@ -40,12 +40,9 @@ local cfg = GameConfig.JumpRunway
 
 local localPlayer = players.LocalPlayer
 
-local TICK_INTERVAL_M = 100
-local VISIBLE_TICK_COUNT = 4
-local TICK_POOL_COUNT = VISIBLE_TICK_COUNT + 1
-local WINDOW_SPAN_M = TICK_INTERVAL_M * VISIBLE_TICK_COUNT
 local SCROLL_AT_RATIO = 0.75
-local MIN_TICK_CANVAS_SCALE_X = 2
+local ZoneSegmentNamePrefix = "ZoneSegment_"
+local MissingRunZoneWarnedMap = {} :: { [string]: boolean }
 
 local thisFrame = script.Parent :: Frame
 local windowId = thisFrame:GetAttribute("WindowId") :: string
@@ -94,14 +91,16 @@ local EscapeRedScreenParamSmoothSpeed = 6
 local movementBarBg: ImageLabel? = nil
 local myselfImage: ImageLabel? = nil
 local playerImage: ImageLabel? = nil
-local ticksScroll: ScrollingFrame? = nil
-local tickLabels: { TextLabel } = {}
-local tickLabelPosY: UDim = UDim.new(0.5, 0)
-local tickLabelBaseSize: UDim2 = UDim2.fromScale(0.12, 0.4)
+local zoneSegmentsScroll: ScrollingFrame? = nil
+local zoneSegmentTemplate: ImageLabel? = nil
 local myselfImageBaseY: UDim? = nil
-local windowStartM = 0
 local movementBarInitialized = false
 local movementBarLastDistance = 0
+local movementBarTotalDistance = 0
+local movementBarPixelsPerMeter = 1
+local movementBarSizeConn: RBXScriptConnection? = nil
+local movementBarDebugLastPrintClock = 0
+local MovementBarDebugPrintIntervalSec = 0.5
 local takeoffRatingBarBg: Frame? = nil
 local takeoffBarBgImage: ImageLabel? = nil
 local takeoffPerfectImage: ImageLabel? = nil
@@ -136,111 +135,206 @@ local function LocalizeDistanceMeters(label: TextLabel, meters: number)
 	)
 end
 
-local function GetTickSpacingPx(): number
-	if ticksScroll == nil then
-		return 1
+local function GetGroundZoneFolder(): Folder?
+	local ground = workspace:FindFirstChild("Ground")
+	if ground == nil then
+		ground = workspace:FindFirstChild("ground")
 	end
-	local w = ticksScroll.AbsoluteSize.X
-	if w < 4 then
-		return 1
+	if ground == nil then
+		return nil
 	end
-	return w / VISIBLE_TICK_COUNT
+	local zoneFolder = ground:FindFirstChild("Zone")
+	if zoneFolder and zoneFolder:IsA("Folder") then
+		return zoneFolder
+	end
+	return nil
 end
 
-local function MetersToCanvasPx(meters: number, spacing: number): number
-	return (meters / TICK_INTERVAL_M) * spacing
+local function ResolveZoneDisplayName(resourceName: string): string
+	local runZone = GameConfig.GetRunZoneByResourceName(resourceName)
+	if runZone ~= nil then
+		return runZone.name_t
+	end
+	if not MissingRunZoneWarnedMap[resourceName] then
+		MissingRunZoneWarnedMap[resourceName] = true
+		warn("[JumpRunWayFrame] RunZoneData missing for " .. resourceName)
+	end
+	return resourceName
 end
 
-local function ResolveUDimScale(value: UDim, absoluteSize: number, fallbackScale: number): number
-	if absoluteSize <= 0 then
-		if value.Scale ~= 0 then
-			return value.Scale
+local function ResolveZoneStyle(resourceName: string): any
+	local styleMap = GameConfig.JumpRunwayMovementBarZoneStyleMap
+	if styleMap == nil then
+		return nil
+	end
+	return styleMap[resourceName]
+end
+
+local function ClearZoneSegment(segment: ImageLabel)
+	for _, child in ipairs(segment:GetChildren()) do
+		if child:IsA("UIGradient") then
+			child:Destroy()
 		end
-		return fallbackScale
 	end
-	return value.Scale + value.Offset / absoluteSize
 end
 
-local function ResolveTickLabelSizeScale(canvasScaleX: number): UDim2
-	if ticksScroll == nil then
-		return tickLabelBaseSize
+local function ApplyZoneSegmentStyle(segment: ImageLabel, resourceName: string, fallbackColor: Color3)
+	ClearZoneSegment(segment)
+	local style = ResolveZoneStyle(resourceName)
+	local color = fallbackColor
+	if style ~= nil and typeof(style.color) == "Color3" then
+		color = style.color
 	end
-	local scrollSize = ticksScroll.AbsoluteSize
-	return UDim2.fromScale(
-		ResolveUDimScale(tickLabelBaseSize.X, scrollSize.X, 0.12) / math.max(canvasScaleX, 0.001),
-		ResolveUDimScale(tickLabelBaseSize.Y, scrollSize.Y, 0.4)
-	)
-end
+	segment.ImageColor3 = color
 
--- 刻度在画布上的绝对坐标；滚动使「当前距离」对齐玩家锚点
-local function ComputeMovementBarScroll(distanceStuds: number): (number, number)
-	local spacing = GetTickSpacingPx()
-	local viewportW = if ticksScroll then ticksScroll.AbsoluteSize.X else 0
-	local pinPx = SCROLL_AT_RATIO * viewportW
-	local pinDistanceM = WINDOW_SPAN_M * SCROLL_AT_RATIO
-	local distancePx = MetersToCanvasPx(distanceStuds, spacing)
-
-	if distanceStuds < pinDistanceM then
-		return 0, math.clamp((distanceStuds / pinDistanceM) * SCROLL_AT_RATIO, 0, SCROLL_AT_RATIO)
-	end
-	return distancePx - pinPx, SCROLL_AT_RATIO
-end
-
-local function ApplyMyselfMarkerScale(markerScaleX: number)
-	if myselfImage == nil then
+	if style == nil or type(style.gradient) ~= "table" or #style.gradient < 2 then
 		return
+	end
+
+	local keypoints = {}
+	local lastIndex = #style.gradient
+	for i, gradientColor in ipairs(style.gradient) do
+		if typeof(gradientColor) == "Color3" then
+			table.insert(keypoints, ColorSequenceKeypoint.new((i - 1) / math.max(lastIndex - 1, 1), gradientColor))
+		end
+	end
+	if #keypoints < 2 then
+		return
+	end
+
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = ColorSequence.new(keypoints)
+	if type(style.rotation) == "number" then
+		gradient.Rotation = style.rotation
+	end
+	gradient.Parent = segment
+end
+
+local function ApplyMyselfMarkerOffset(markerOffsetX: number): number?
+	if myselfImage == nil then
+		return nil
 	end
 	local yScale = if myselfImageBaseY then myselfImageBaseY.Scale else 0.5
 	local yOffset = if myselfImageBaseY then myselfImageBaseY.Offset else 0
-	myselfImage.Position = UDim2.new(math.clamp(markerScaleX, 0, 1), 0, yScale, yOffset)
+	local markerParentScaleX = 0
+	if movementBarBg ~= nil and zoneSegmentsScroll ~= nil then
+		local markerScreenOffsetX = markerOffsetX + zoneSegmentsScroll.AbsolutePosition.X - movementBarBg.AbsolutePosition.X
+		markerParentScaleX = markerScreenOffsetX / math.max(movementBarBg.AbsoluteSize.X, 1)
+	else
+		markerParentScaleX = markerOffsetX
+	end
+	markerParentScaleX = math.clamp(markerParentScaleX, 0, 1)
+	myselfImage.Position = UDim2.new(markerParentScaleX, 0, yScale, yOffset)
+	return markerParentScaleX
 end
 
-local function UpdateTickRuler(distanceStuds: number, canvasX: number)
-	if ticksScroll == nil then
+local function GetMovementBarCanvasScaleX(): number
+	local template = zoneSegmentTemplate
+	if template ~= nil and template.Size.X.Offset > 0 and template.AbsoluteSize.X > 0 then
+		return template.AbsoluteSize.X / template.Size.X.Offset
+	end
+	return 1
+end
+
+local function PrintMovementBarDebug(reason: string, distanceStuds: number, canvasX: number?, markerOffsetX: number?, markerParentScaleX: number?)
+	if cfg.MOVEMENT_BAR_DEBUG ~= true then
 		return
 	end
-	local spacing = GetTickSpacingPx()
-	local leftEdgeM = math.max(0, (canvasX / spacing) * TICK_INTERVAL_M)
-	local firstTickM = math.floor(leftEdgeM / TICK_INTERVAL_M) * TICK_INTERVAL_M
-	windowStartM = firstTickM
-	local canvasScaleX = math.max(
-		(distanceStuds + WINDOW_SPAN_M + TICK_INTERVAL_M * 2) / WINDOW_SPAN_M,
-		MIN_TICK_CANVAS_SCALE_X
-	)
-	local canvasSpanM = WINDOW_SPAN_M * canvasScaleX
-	local tickSize = ResolveTickLabelSizeScale(canvasScaleX)
-	local tickPosYScale = ResolveUDimScale(tickLabelPosY, ticksScroll.AbsoluteSize.Y, 0.5)
+	local nowClock = os.clock()
+	if nowClock - movementBarDebugLastPrintClock < MovementBarDebugPrintIntervalSec then
+		return
+	end
+	movementBarDebugLastPrintClock = nowClock
 
-	for i, label in tickLabels do
-		local meters = windowStartM + (i - 1) * TICK_INTERVAL_M
-		label.AnchorPoint = Vector2.new(0.5, 0.5)
-		label.Position = UDim2.fromScale(meters / canvasSpanM, tickPosYScale)
-		label.Size = tickSize
-		if meters <= 0 then
-			label.Text = ""
-		else
-			LocalizeDistanceMeters(label, meters)
-		end
-		label.Visible = true
+	local barSize = if movementBarBg ~= nil then movementBarBg.AbsoluteSize else Vector2.zero
+	local barPos = if movementBarBg ~= nil then movementBarBg.AbsolutePosition else Vector2.zero
+	local scrollSize = if zoneSegmentsScroll ~= nil then zoneSegmentsScroll.AbsoluteSize else Vector2.zero
+	local scrollPos = if zoneSegmentsScroll ~= nil then zoneSegmentsScroll.AbsolutePosition else Vector2.zero
+	local scrollCanvasSize = if zoneSegmentsScroll ~= nil then zoneSegmentsScroll.CanvasSize else UDim2.new()
+	local scrollCanvasPos = if zoneSegmentsScroll ~= nil then zoneSegmentsScroll.CanvasPosition else Vector2.zero
+	local markerPos = if myselfImage ~= nil then myselfImage.Position else UDim2.new()
+	local markerAbsPos = if myselfImage ~= nil then myselfImage.AbsolutePosition else Vector2.zero
+	local markerAbsSize = if myselfImage ~= nil then myselfImage.AbsoluteSize else Vector2.zero
+	local templateSize = if zoneSegmentTemplate ~= nil then zoneSegmentTemplate.Size else UDim2.new()
+	local templateAbsSize = if zoneSegmentTemplate ~= nil then zoneSegmentTemplate.AbsoluteSize else Vector2.zero
+	local canvasScaleX = GetMovementBarCanvasScaleX()
+
+	warn(
+		string.format(
+			"[JumpRunWayFrame][MovementBar] reason=%s dist=%.2f total=%.2f pxPerStud=%.4f canvasScaleX=%.4f canvasX=%s markerOffset=%s markerParentScale=%s "
+				.. "barPos=(%.1f,%.1f) barSize=(%.1f,%.1f) scrollPos=(%.1f,%.1f) scrollSize=(%.1f,%.1f) "
+				.. "canvasSizeX={%.4f,%d} canvasPos=(%.1f,%.1f) templateSizeX={%.4f,%d} templateAbsX=%.1f markerPosX={%.4f,%d} markerAbs=(%.1f,%.1f %.1fx%.1f)",
+			reason,
+			distanceStuds,
+			movementBarTotalDistance,
+			movementBarPixelsPerMeter,
+			canvasScaleX,
+			if canvasX ~= nil then string.format("%.1f", canvasX) else "nil",
+			if markerOffsetX ~= nil then string.format("%.1f", markerOffsetX) else "nil",
+			if markerParentScaleX ~= nil then string.format("%.4f", markerParentScaleX) else "nil",
+			barPos.X,
+			barPos.Y,
+			barSize.X,
+			barSize.Y,
+			scrollPos.X,
+			scrollPos.Y,
+			scrollSize.X,
+			scrollSize.Y,
+			scrollCanvasSize.X.Scale,
+			scrollCanvasSize.X.Offset,
+			scrollCanvasPos.X,
+			scrollCanvasPos.Y,
+			templateSize.X.Scale,
+			templateSize.X.Offset,
+			templateAbsSize.X,
+			markerPos.X.Scale,
+			markerPos.X.Offset,
+			markerAbsPos.X,
+			markerAbsPos.Y,
+			markerAbsSize.X,
+			markerAbsSize.Y
+		)
+	)
+end
+
+local function ComputeMovementBarScroll(distanceStuds: number): (number, number)
+	local scroll = zoneSegmentsScroll
+	if scroll == nil then
+		return 0, 0
+	end
+	local canvasScaleX = GetMovementBarCanvasScaleX()
+	local viewportScreenW = scroll.AbsoluteSize.X
+	local viewportCanvasW = viewportScreenW / math.max(canvasScaleX, 0.001)
+	local contentCanvasW = movementBarTotalDistance * movementBarPixelsPerMeter
+	local canvasW = math.max(contentCanvasW, viewportCanvasW)
+	local maxCanvasX = math.max(canvasW - viewportCanvasW, 0)
+	if movementBarTotalDistance <= 0 or viewportCanvasW <= 0 then
+		return 0, 0
 	end
 
-	ticksScroll.CanvasSize = UDim2.fromScale(canvasScaleX, 1)
+	local distanceRatio = math.clamp(distanceStuds / movementBarTotalDistance, 0, 1)
+	local distanceCanvasX = distanceRatio * contentCanvasW
+	local targetMarkerCanvasX = SCROLL_AT_RATIO * viewportCanvasW
+	local canvasX = math.clamp(distanceCanvasX - targetMarkerCanvasX, 0, maxCanvasX)
+	local markerCanvasOffsetX = math.clamp(distanceCanvasX - canvasX, 0, viewportCanvasW)
+	local canvasScreenX = canvasX * canvasScaleX
+	local markerScreenOffsetX = markerCanvasOffsetX * canvasScaleX
+	return canvasScreenX, markerScreenOffsetX
 end
 
 local function ApplyMovementBarFromDistance(distanceStuds: number)
-	if ticksScroll == nil then
+	if zoneSegmentsScroll == nil then
 		return
 	end
-	local canvasX, markerScaleX = ComputeMovementBarScroll(distanceStuds)
-	ticksScroll.CanvasPosition = Vector2.new(math.max(0, canvasX), 0)
-	UpdateTickRuler(distanceStuds, math.max(0, canvasX))
-	ApplyMyselfMarkerScale(markerScaleX)
+	local canvasX, markerOffsetX = ComputeMovementBarScroll(distanceStuds)
+	zoneSegmentsScroll.CanvasPosition = Vector2.new(math.max(0, canvasX), 0)
+	local markerParentScaleX = ApplyMyselfMarkerOffset(markerOffsetX)
+	PrintMovementBarDebug("apply", distanceStuds, canvasX, markerOffsetX, markerParentScaleX)
 end
 
 local function ResetMovementBarState(distanceStuds: number)
-	windowStartM = 0
-	if ticksScroll then
-		ticksScroll.CanvasPosition = Vector2.zero
+	if zoneSegmentsScroll then
+		zoneSegmentsScroll.CanvasPosition = Vector2.zero
 	end
 	ApplyMovementBarFromDistance(distanceStuds)
 end
@@ -249,8 +343,15 @@ local function OnMovementBarHidden()
 	movementBarInitialized = false
 end
 
+local function DisconnectMovementBarSizeConn()
+	if movementBarSizeConn then
+		movementBarSizeConn:Disconnect()
+		movementBarSizeConn = nil
+	end
+end
+
 local function UpdateMovementBar(distanceStuds: number)
-	if movementBarBg == nil or myselfImage == nil or ticksScroll == nil then
+	if movementBarBg == nil or myselfImage == nil or zoneSegmentsScroll == nil then
 		return
 	end
 	movementBarLastDistance = distanceStuds
@@ -262,19 +363,7 @@ local function UpdateMovementBar(distanceStuds: number)
 	ApplyMovementBarFromDistance(distanceStuds)
 end
 
-local function BuildTickLabelPool(template: TextLabel)
-	table.clear(tickLabels)
-	for i = 1, TICK_POOL_COUNT do
-		local label = template:Clone()
-		label.Name = "TickLabel" .. tostring(i)
-		label.Visible = true
-		label.Parent = ticksScroll
-		tickLabels[i] = label
-	end
-	template.Visible = false
-end
-
-local function ConfigureDistanceTicksScroll(scroll: ScrollingFrame, bar: ImageLabel)
+local function ConfigureZoneSegmentsScroll(scroll: ScrollingFrame, bar: ImageLabel)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 0
@@ -286,21 +375,126 @@ local function ConfigureDistanceTicksScroll(scroll: ScrollingFrame, bar: ImageLa
 	scroll.ZIndex = bar.ZIndex + 1
 end
 
-local function EnsureDistanceTicksScroll(bar: ImageLabel, template: TextLabel): ScrollingFrame
-	local existing = bar:FindFirstChild("DistanceTicksScroll")
+local function EnsureZoneSegmentsScroll(bar: ImageLabel): ScrollingFrame
+	local existing = bar:FindFirstChild("ZoneSegmentsScroll")
 	if existing and existing:IsA("ScrollingFrame") then
-		ConfigureDistanceTicksScroll(existing, bar)
-		if template.Parent ~= existing then
-			template.Parent = existing
-		end
+		ConfigureZoneSegmentsScroll(existing, bar)
 		return existing
 	end
 	local scroll = Instance.new("ScrollingFrame")
-	scroll.Name = "DistanceTicksScroll"
+	scroll.Name = "ZoneSegmentsScroll"
 	scroll.Parent = bar
-	ConfigureDistanceTicksScroll(scroll, bar)
-	template.Parent = scroll
+	ConfigureZoneSegmentsScroll(scroll, bar)
 	return scroll
+end
+
+local function ResolveZoneSegmentTemplate(scroll: ScrollingFrame): ImageLabel?
+	local template = scroll:FindFirstChild("ZoneSegment")
+	if template == nil or not template:IsA("ImageLabel") then
+		warn("[JumpRunWayFrame] MovementBarBg.ZoneSegmentsScroll.ZoneSegment missing or not ImageLabel")
+		return nil
+	end
+	template.Visible = false
+	return template
+end
+
+local function ClearZoneSegments(scroll: ScrollingFrame)
+	for _, child in ipairs(scroll:GetChildren()) do
+		if child.Name:sub(1, #ZoneSegmentNamePrefix) == ZoneSegmentNamePrefix then
+			child:Destroy()
+		end
+	end
+end
+
+local function ApplyZoneSegmentLabel(segment: ImageLabel, displayName: string)
+	local label = segment:FindFirstChild("ZoneNameText")
+	if label == nil or not label:IsA("TextLabel") then
+		warn("[JumpRunWayFrame] ZoneSegment.ZoneNameText missing or not TextLabel")
+		return
+	end
+	label.AutoLocalize = false
+	TranslationTool.CustomAutoLocalizeTextLabel(label, displayName, "")
+end
+
+local function CreateZoneSegment(scroll: ScrollingFrame, part: BasePart, startOffsetX: number, widthOffsetX: number)
+	local template = zoneSegmentTemplate
+	if template == nil then
+		return
+	end
+	local segment = template:Clone()
+	segment.Name = ZoneSegmentNamePrefix .. part.Name
+	segment.AnchorPoint = Vector2.new(0, 0)
+	segment.Position = UDim2.new(0, math.floor(startOffsetX + 0.5), 0, 0)
+	segment.Size = UDim2.new(0, math.max(1, math.floor(widthOffsetX + 0.5)), 1, 0)
+	segment.Visible = true
+	segment.Parent = scroll
+	ApplyZoneSegmentStyle(segment, part.Name, part.Color)
+	ApplyZoneSegmentLabel(segment, ResolveZoneDisplayName(part.Name))
+end
+
+local function ResolveZoneSegmentTemplateWidthOffset(): number
+	local template = zoneSegmentTemplate
+	if template == nil then
+		return 0
+	end
+	return template.Size.X.Offset
+end
+
+local function RebuildZoneSegments()
+	local scroll = zoneSegmentsScroll
+	if scroll == nil then
+		return
+	end
+	ClearZoneSegments(scroll)
+	movementBarTotalDistance = 0
+
+	local zoneFolder = GetGroundZoneFolder()
+	if zoneFolder == nil then
+		warn("[JumpRunWayFrame] Workspace.Ground.Zone missing")
+		return
+	end
+
+	local zoneParts = {}
+	for _, child in ipairs(zoneFolder:GetChildren()) do
+		if child:IsA("BasePart") and child.Size.X > 0 then
+			table.insert(zoneParts, child)
+		end
+	end
+	table.sort(zoneParts, function(a: BasePart, b: BasePart)
+		local ax = a.Position.X - a.Size.X * 0.5
+		local bx = b.Position.X - b.Size.X * 0.5
+		if math.abs(ax - bx) > 0.001 then
+			return ax < bx
+		end
+		return a.Name < b.Name
+	end)
+
+	for _, part in ipairs(zoneParts) do
+		movementBarTotalDistance += part.Size.X
+	end
+	if movementBarTotalDistance <= 0 then
+		warn("[JumpRunWayFrame] Workspace.Ground.Zone has no valid BasePart")
+		return
+	end
+
+	local firstZonePart = zoneParts[1]
+	local templateWidthOffset = ResolveZoneSegmentTemplateWidthOffset()
+	if firstZonePart == nil or templateWidthOffset <= 0 then
+		warn("[JumpRunWayFrame] ZoneSegment template Size.X.Offset must be greater than 0")
+		return
+	end
+
+	movementBarPixelsPerMeter = templateWidthOffset / firstZonePart.Size.X
+	local canvasWidthOffset = math.max(1, math.floor(movementBarTotalDistance * movementBarPixelsPerMeter + 0.5))
+	scroll.CanvasSize = UDim2.new(0, canvasWidthOffset, 1, 0)
+	local startDistance = 0
+	for _, part in ipairs(zoneParts) do
+		local startOffsetX = startDistance * movementBarPixelsPerMeter
+		local widthOffsetX = part.Size.X * movementBarPixelsPerMeter
+		CreateZoneSegment(scroll, part, startOffsetX, widthOffsetX)
+		startDistance += part.Size.X
+	end
+	PrintMovementBarDebug("rebuild", movementBarLastDistance, nil, nil, nil)
 end
 
 local function ResolveMovementBar()
@@ -311,6 +505,8 @@ local function ResolveMovementBar()
 	end
 	movementBarBg = bar
 	movementBarBg.Visible = false
+	movementBarBg.BackgroundTransparency = 1
+	movementBarBg.ClipsDescendants = false
 
 	local marker = movementBarBg:FindFirstChild("MyselfImage")
 	if marker == nil or not marker:IsA("ImageLabel") then
@@ -336,27 +532,23 @@ local function ResolveMovementBar()
 		playerImage.Image = headUrl
 	end
 
-	local template = movementBarBg:FindFirstChild("TickLabelTemplate")
-	if template == nil or not template:IsA("TextLabel") then
-		local legacy = movementBarBg:FindFirstChild("TextLabel")
-		if legacy and legacy:IsA("TextLabel") then
-			legacy.Name = "TickLabelTemplate"
-			template = legacy
-		end
+	local legacy = movementBarBg:FindFirstChild("TextLabel")
+	if legacy and legacy:IsA("TextLabel") then
+		legacy.Visible = false
 	end
-	if template == nil or not template:IsA("TextLabel") then
-		warn("[JumpRunWayFrame] MovementBarBg.TickLabelTemplate missing or not TextLabel")
-		return
-	end
-	tickLabelPosY = template.Position.Y
-	tickLabelBaseSize = template.Size
 
-	ticksScroll = EnsureDistanceTicksScroll(movementBarBg, template)
-	BuildTickLabelPool(template)
+	zoneSegmentsScroll = EnsureZoneSegmentsScroll(movementBarBg)
+	zoneSegmentTemplate = ResolveZoneSegmentTemplate(zoneSegmentsScroll :: ScrollingFrame)
+	RebuildZoneSegments()
+	DisconnectMovementBarSizeConn()
+	movementBarSizeConn = (zoneSegmentsScroll :: ScrollingFrame):GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		RebuildZoneSegments()
+		ApplyMovementBarFromDistance(movementBarLastDistance)
+	end)
 	task.defer(function()
-		if ticksScroll ~= nil and movementBarLastDistance > 0 then
+		if zoneSegmentsScroll ~= nil and movementBarLastDistance > 0 then
 			ApplyMovementBarFromDistance(movementBarLastDistance)
-		elseif ticksScroll ~= nil then
+		elseif zoneSegmentsScroll ~= nil then
 			ApplyMovementBarFromDistance(0)
 		end
 	end)
@@ -403,13 +595,7 @@ local function ResolveTakeoffRatingBar()
 	local perfectSplitImage = takeoffPerfectSplitImage
 	local triangleImage = takeoffTriangleImage
 	local markerImage = takeoffMarkerImage
-	if
-		takeoffBarBgImage == nil
-		or perfectImage == nil
-		or perfectSplitImage == nil
-		or triangleImage == nil
-		or markerImage == nil
-	then
+	if takeoffBarBgImage == nil or perfectImage == nil or perfectSplitImage == nil or triangleImage == nil or markerImage == nil then
 		return
 	end
 
@@ -438,14 +624,7 @@ local function ApplyTakeoffRatingBarLayout(payload: TakeoffRatingBarPayload)
 	local perfectSplitImage = takeoffPerfectSplitImage
 	local triangleImage = takeoffTriangleImage
 	local markerImage = takeoffMarkerImage
-	if
-		bar == nil
-		or takeoffBarBgImage == nil
-		or perfectImage == nil
-		or perfectSplitImage == nil
-		or triangleImage == nil
-		or markerImage == nil
-	then
+	if bar == nil or takeoffBarBgImage == nil or perfectImage == nil or perfectSplitImage == nil or triangleImage == nil or markerImage == nil then
 		return
 	end
 	local leftOkEndRatio = math.clamp(payload.leftOkEndRatio, 0, 1)
@@ -817,8 +996,7 @@ local function ResolveImpactUIScale(label: TextLabel): UIScale?
 end
 
 local function ApplyDistanceHudVisibility()
-	local shouldShowDistance = latestDistanceHudVisible
-		or (tipDistanceHoldActive and latestDistanceCanShow and latestDistanceStuds > 0)
+	local shouldShowDistance = latestDistanceHudVisible or (tipDistanceHoldActive and latestDistanceCanShow and latestDistanceStuds > 0)
 	if distanceLabel ~= nil then
 		distanceLabel.Visible = shouldShowDistance
 	end
@@ -845,12 +1023,7 @@ local function RefreshRunwayStats(
 	if fuelMask ~= nil and fuelMaskBaseSizeY ~= nil then
 		local currentSize = fuelMask.Size
 		local baseSizeY = fuelMaskBaseSizeY :: UDim
-		fuelMask.Size = UDim2.new(
-			currentSize.X.Scale,
-			currentSize.X.Offset,
-			baseSizeY.Scale * fuelRatio,
-			math.floor(baseSizeY.Offset * fuelRatio + 0.5)
-		)
+		fuelMask.Size = UDim2.new(currentSize.X.Scale, currentSize.X.Offset, baseSizeY.Scale * fuelRatio, math.floor(baseSizeY.Offset * fuelRatio + 0.5))
 	end
 
 	local isEscapePhase = ClientGameInfo.IsInJumpRunwayEscapePhase()
@@ -1089,6 +1262,7 @@ local function OnCloseWindow(closeWindowId: string)
 	end
 	StopEscapeRedScreen()
 	OnMovementBarHidden()
+	DisconnectMovementBarSizeConn()
 	HideTakeoffRatingBar()
 	CancelRatingPresentationOnly()
 	CancelTipPresentationOnly()

@@ -619,6 +619,7 @@ PreloadAssets = function()
 	table.insert(otherImageList, GameConfig.RbImage)
 	table.insert(otherImageList, GameConfig.DecelerationOnImage)
 	table.insert(otherImageList, GameConfig.DecelerationOffImage)
+	table.insert(otherImageList, GameConfig.JumpRunwayMovementBarBlockImage)
 	for buffId, buffData in pairs(GameConfig.Buffs) do
 		RegisterConfigImageForPreload(buffData.iconImageId, PreloadPriority.P1, string.format("GameConfig.Buffs[%s].iconImageId", tostring(buffId)))
 	end
