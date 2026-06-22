@@ -97,9 +97,7 @@ local function RegisterDefaultRenderWarmupRequests()
 	end
 
 	for chestId, chestConfig in pairs(GameConfig.LittleElfChestIdMap) do
-		local priority = if chestId <= 5
-			then RenderWarmupManager.Priority.P1
-			else RenderWarmupManager.Priority.P2
+		local priority = if chestId <= 5 then RenderWarmupManager.Priority.P1 else RenderWarmupManager.Priority.P2
 		RenderWarmupManager.RegisterResourceTemplate(
 			littleElfChestsFolder,
 			chestConfig.resourceName,
@@ -119,6 +117,7 @@ type PreloadAssetEntry = {
 	priority: number,
 }
 type PreloadAssetEntryMap = { [string]: PreloadAssetEntry }
+type PreloadAssetSourceMap = { [string]: string }
 
 local function GetPreloadPriorityName(priority: number): string
 	if priority == PreloadPriority.P0 then
@@ -251,8 +250,10 @@ end
 local function RegisterPreloadAssetInstance(
 	assetBucketMap: PreloadAssetBucketMap,
 	assetEntryMap: PreloadAssetEntryMap,
+	assetSourceMap: PreloadAssetSourceMap,
 	assetId: string,
 	priority: number,
+	source: string,
 	createInstance: () -> Instance
 )
 	if assetId == "" then
@@ -265,6 +266,7 @@ local function RegisterPreloadAssetInstance(
 			RemovePreloadInstanceFromBucket(assetBucketMap, existingEntry.priority, existingEntry.instance)
 			table.insert(EnsurePreloadBucket(assetBucketMap, priority), existingEntry.instance)
 			existingEntry.priority = priority
+			assetSourceMap[assetId] = source
 		end
 		return
 	end
@@ -274,6 +276,7 @@ local function RegisterPreloadAssetInstance(
 		instance = newInstance,
 		priority = priority,
 	}
+	assetSourceMap[assetId] = source
 	table.insert(EnsurePreloadBucket(assetBucketMap, priority), newInstance)
 end
 
@@ -389,6 +392,7 @@ PreloadAssets = function()
 	local imageMap: PreloadAssetEntryMap = {}
 	local soundMap: PreloadAssetEntryMap = {}
 	local animationMap: PreloadAssetEntryMap = {}
+	local assetSourceMap: PreloadAssetSourceMap = {}
 	local failedAssetList: { string } = {}
 	local failedAssetCount = 0
 	local overrideLogMap: { [string]: boolean } = {}
@@ -406,43 +410,43 @@ PreloadAssets = function()
 		table.insert(folderList, uiOriginsFolder)
 	end
 
-	local function AddMesh(meshId: string, priority: number)
+	local function AddMesh(meshId: string, priority: number, source: string)
 		if not PreloadMeshAssetsEnabled then
 			return
 		end
-		RegisterPreloadAssetInstance(assetBucketMap, meshMap, meshId, priority, function()
+		RegisterPreloadAssetInstance(assetBucketMap, meshMap, assetSourceMap, meshId, priority, source, function()
 			local specialMesh = Instance.new("SpecialMesh")
 			specialMesh.MeshId = meshId
 			return specialMesh
 		end)
 	end
 
-	local function AddDecal(textureId: string, priority: number)
-		RegisterPreloadAssetInstance(assetBucketMap, decalMap, textureId, priority, function()
+	local function AddDecal(textureId: string, priority: number, source: string)
+		RegisterPreloadAssetInstance(assetBucketMap, decalMap, assetSourceMap, textureId, priority, source, function()
 			local decal = Instance.new("Decal")
 			decal.Texture = textureId
 			return decal
 		end)
 	end
 
-	local function AddImage(imageId: string, priority: number)
-		RegisterPreloadAssetInstance(assetBucketMap, imageMap, imageId, priority, function()
+	local function AddImage(imageId: string, priority: number, source: string)
+		RegisterPreloadAssetInstance(assetBucketMap, imageMap, assetSourceMap, imageId, priority, source, function()
 			local image = Instance.new("ImageLabel")
 			image.Image = imageId
 			return image
 		end)
 	end
 
-	local function AddSound(soundId: string, priority: number)
-		RegisterPreloadAssetInstance(assetBucketMap, soundMap, soundId, priority, function()
+	local function AddSound(soundId: string, priority: number, source: string)
+		RegisterPreloadAssetInstance(assetBucketMap, soundMap, assetSourceMap, soundId, priority, source, function()
 			local sound = Instance.new("Sound")
 			sound.SoundId = soundId
 			return sound
 		end)
 	end
 
-	local function AddAnimation(animationId: string, priority: number)
-		RegisterPreloadAssetInstance(assetBucketMap, animationMap, animationId, priority, function()
+	local function AddAnimation(animationId: string, priority: number, source: string)
+		RegisterPreloadAssetInstance(assetBucketMap, animationMap, assetSourceMap, animationId, priority, source, function()
 			local animation = Instance.new("Animation")
 			animation.AnimationId = animationId
 			return animation
@@ -454,36 +458,39 @@ PreloadAssets = function()
 			return
 		end
 
+		local source = string.format("%s.%s", GetInstanceDebugPath(instance), assetType)
 		local resolvedPriority, overrideSource = ResolvePreloadPriority(instance, assetId, defaultPriority)
 		if overrideSource ~= nil and PreloadOverrideDebugEnabled then
 			local overrideKey = string.format("%s|%s|%s", overrideSource, assetType, assetId)
 			if overrideLogMap[overrideKey] == nil then
 				overrideLogMap[overrideKey] = true
-				warn(string.format(
-					"[ClientGameManager] PreloadAssets override hit %s assetType=%s assetId=%s default=%s resolved=%s",
-					overrideSource,
-					assetType,
-					assetId,
-					GetPreloadPriorityName(defaultPriority),
-					GetPreloadPriorityName(resolvedPriority)
-				))
+				warn(
+					string.format(
+						"[ClientGameManager] PreloadAssets override hit %s assetType=%s assetId=%s default=%s resolved=%s",
+						overrideSource,
+						assetType,
+						assetId,
+						GetPreloadPriorityName(defaultPriority),
+						GetPreloadPriorityName(resolvedPriority)
+					)
+				)
 			end
 		end
 
 		if assetType == "Mesh" then
-			AddMesh(assetId, resolvedPriority)
+			AddMesh(assetId, resolvedPriority, source)
 		elseif assetType == "Decal" then
-			AddDecal(assetId, resolvedPriority)
+			AddDecal(assetId, resolvedPriority, source)
 		elseif assetType == "Image" then
-			AddImage(assetId, resolvedPriority)
+			AddImage(assetId, resolvedPriority, source)
 		elseif assetType == "Sound" then
-			AddSound(assetId, resolvedPriority)
+			AddSound(assetId, resolvedPriority, source)
 		elseif assetType == "Animation" then
-			AddAnimation(assetId, resolvedPriority)
+			AddAnimation(assetId, resolvedPriority, source)
 		end
 	end
 
-	local function RegisterConfigImageForPreload(imageId: string, defaultPriority: number)
+	local function RegisterConfigImageForPreload(imageId: string, defaultPriority: number, source: string)
 		if imageId == "" then
 			return
 		end
@@ -493,17 +500,19 @@ PreloadAssets = function()
 			local overrideKey = string.format("%s|Image|%s", overrideSource, imageId)
 			if overrideLogMap[overrideKey] == nil then
 				overrideLogMap[overrideKey] = true
-				warn(string.format(
-					"[ClientGameManager] PreloadAssets override hit %s assetType=Image assetId=%s default=%s resolved=%s",
-					overrideSource,
-					imageId,
-					GetPreloadPriorityName(defaultPriority),
-					GetPreloadPriorityName(resolvedPriority)
-				))
+				warn(
+					string.format(
+						"[ClientGameManager] PreloadAssets override hit %s assetType=Image assetId=%s default=%s resolved=%s",
+						overrideSource,
+						imageId,
+						GetPreloadPriorityName(defaultPriority),
+						GetPreloadPriorityName(resolvedPriority)
+					)
+				)
 			end
 		end
 
-		AddImage(imageId, resolvedPriority)
+		AddImage(imageId, resolvedPriority, source)
 	end
 
 	local function PreloadBucket(priority: number)
@@ -533,7 +542,10 @@ PreloadAssets = function()
 						failedAssetCount += 1
 						bucketFailedAssetCount += 1
 						if failedAssetCount <= PreloadFailureSampleCount then
-							table.insert(failedAssetList, string.format("%s:%s", assetId, assetFetchStatus.Name))
+							table.insert(
+								failedAssetList,
+								string.format("%s:%s source=%s", assetId, assetFetchStatus.Name, assetSourceMap[assetId] or "Unknown")
+							)
 						end
 					end
 				end)
@@ -543,13 +555,15 @@ PreloadAssets = function()
 			if not preloadSuccess then
 				warn(string.format("[ClientGameManager] PreloadAssets %s batch failed: %d %s", priorityName, batchIndex, tostring(preloadErr)))
 			elseif batchElapsedTime >= PreloadSlowBatchWarnSeconds then
-				warn(string.format(
-					"[ClientGameManager] PreloadAssets %s slow batch=%d size=%d elapsed=%.2fs",
-					priorityName,
-					batchIndex,
-					#batchList,
-					batchElapsedTime
-				))
+				warn(
+					string.format(
+						"[ClientGameManager] PreloadAssets %s slow batch=%d size=%d elapsed=%.2fs",
+						priorityName,
+						batchIndex,
+						#batchList,
+						batchElapsedTime
+					)
+				)
 			end
 
 			table.clear(batchList)
@@ -560,13 +574,15 @@ PreloadAssets = function()
 		end
 
 		local bucketElapsedTime = os.clock() - bucketStartTime
-		print(string.format(
-			"[ClientGameManager] PreloadAssets %s complete. candidates=%d failed=%d elapsed=%.2fs",
-			priorityName,
-			#assetList,
-			bucketFailedAssetCount,
-			bucketElapsedTime
-		))
+		print(
+			string.format(
+				"[ClientGameManager] PreloadAssets %s complete. candidates=%d failed=%d elapsed=%.2fs",
+				priorityName,
+				#assetList,
+				bucketFailedAssetCount,
+				bucketElapsedTime
+			)
+		)
 	end
 
 	for _, folder: Instance in folderList do
@@ -603,15 +619,15 @@ PreloadAssets = function()
 	table.insert(otherImageList, GameConfig.RbImage)
 	table.insert(otherImageList, GameConfig.DecelerationOnImage)
 	table.insert(otherImageList, GameConfig.DecelerationOffImage)
-	for _, buffData in pairs(GameConfig.Buffs) do
-		RegisterConfigImageForPreload(buffData.iconImageId, PreloadPriority.P1)
+	for buffId, buffData in pairs(GameConfig.Buffs) do
+		RegisterConfigImageForPreload(buffData.iconImageId, PreloadPriority.P1, string.format("GameConfig.Buffs[%s].iconImageId", tostring(buffId)))
 	end
-	for _, bgIconId in pairs(GameConfig.ShopBundleBgIconIdById) do
-		RegisterConfigImageForPreload(bgIconId, PreloadPriority.P1)
+	for shopBundleId, bgIconId in pairs(GameConfig.ShopBundleBgIconIdById) do
+		RegisterConfigImageForPreload(bgIconId, PreloadPriority.P1, string.format("GameConfig.ShopBundleBgIconIdById[%s]", tostring(shopBundleId)))
 	end
 
-	for _, otherImage: string in otherImageList do
-		RegisterConfigImageForPreload(otherImage, PreloadPriority.P0)
+	for otherImageIndex, otherImage: string in otherImageList do
+		RegisterConfigImageForPreload(otherImage, PreloadPriority.P0, string.format("otherImageList[%d]", otherImageIndex))
 	end
 
 	PreloadBucket(PreloadPriority.P0)
@@ -649,12 +665,14 @@ PreloadAssets = function()
 		warn(string.format("[ClientGameManager] PreloadAssets complete. candidates=%d failed=%d elapsed=%.2fs", totalAssetCount, failedAssetCount, elapsedTime))
 	end
 	if failedAssetCount > 0 then
-		warn(string.format(
-			"[ClientGameManager] PreloadAssets failed. candidates=%d failed=%d sample=%s",
-			totalAssetCount,
-			failedAssetCount,
-			table.concat(failedAssetList, ", ")
-		))
+		warn(
+			string.format(
+				"[ClientGameManager] PreloadAssets failed. candidates=%d failed=%d sample=%s",
+				totalAssetCount,
+				failedAssetCount,
+				table.concat(failedAssetList, ", ")
+			)
+		)
 	end
 	table.clear(failedAssetList)
 end
