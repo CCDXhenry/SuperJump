@@ -7130,6 +7130,29 @@ function RunwaySession.IsRunwayChainWindowSurfaceGrounded(humanoid: Humanoid): b
 	return RunwaySession.IsRunwayTreeChainLandingActive(humanoid)
 end
 
+function RunwaySession.TryAutoChainJumpOnLanding(humanoid: Humanoid, hrp: BasePart, nowClock: number): boolean
+	if not RunwaySession.IsJumpRunwayAutoJumpMode() then
+		return false
+	end
+	if localState.phase ~= Ph.Airborne then
+		return false
+	end
+	if localState.takeoffCount < 1 or localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
+		return false
+	end
+	if RunwaySession.IsTakeoffInputCooldownActive(nowClock) then
+		return false
+	end
+	if not RunwaySession.IsRunwayChainJumpWindowLandingTimingEligible(humanoid, nowClock) then
+		return false
+	end
+	if RunwaySession.JumpApplyTakeoff(humanoid, hrp, nowClock, false, false, true) then
+		RunwaySession.NetReportJump()
+		return true
+	end
+	return false
+end
+
 -- 线窗触线后仍按稳定贴地启动；链式窗按近地区高度阈值启动，避免刚进 preland 就开始计时。
 function RunwaySession.MaybeStartJumpWindowTiming(humanoid: Humanoid, nowClock: number)
 	if localState.phase == Ph.JumpWindow and not localState.lineWindowConsumed and localState.tHudStart == nil then
@@ -7164,7 +7187,7 @@ function RunwaySession.MaybeStartJumpWindowTiming(humanoid: Humanoid, nowClock: 
 	end
 end
 
-function RunwaySession.UpdateLocalJumpWindowPrediction(humanoid: Humanoid, nowClock: number)
+function RunwaySession.UpdateLocalJumpWindowPrediction(humanoid: Humanoid, hrp: BasePart, nowClock: number)
 	local bandOk = RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid)
 	local pre = RunwaySession.IsRunwayPreLanding(humanoid)
 	local g = RunwaySession.IsRunwayScriptedGrounded(humanoid)
@@ -7196,6 +7219,9 @@ function RunwaySession.UpdateLocalJumpWindowPrediction(humanoid: Humanoid, nowCl
 		localState.prevLocalGroundedForLand = g
 		localState.prevPreLand = pre
 		localState.prevJumpWindowRayBand = bandOk
+	end
+	if RunwaySession.TryAutoChainJumpOnLanding(humanoid, hrp, nowClock) then
+		return
 	end
 	if localState.predictJumpWindowUntil ~= nil and nowClock >= (localState.predictJumpWindowUntil :: number) then
 		if
@@ -7527,7 +7553,7 @@ function RunwaySession.ApplyLocalPhysics(dt: number)
 	end
 	local forward = NormalizeRunwayForward(localState.runwayForward)
 	local nowClock = os.clock()
-	RunwaySession.UpdateLocalJumpWindowPrediction(humanoid, nowClock)
+	RunwaySession.UpdateLocalJumpWindowPrediction(humanoid, hrp, nowClock)
 	RunwaySession.UpdateFinalDashActivationApexGate(hrp)
 	RunwaySession.UpdateFinalJumpGuideSlowMotionApexGate(hrp)
 	RunwaySession.RefreshRunwayGuideSlowMotionState()
@@ -9626,6 +9652,14 @@ function RunwaySession.JumpRatingTierName(tier: number): string
 	return "Late"
 end
 
+function RunwaySession.IsJumpRunwayAutoJumpMode(): boolean
+	return cfg.JUMP_MECHANISM_MODE == GameConfig.JumpRunwayJumpMechanismMode.Auto
+end
+
+function RunwaySession.IsJumpRunwayAutoChainTakeoff(inChainWindow: boolean): boolean
+	return inChainWindow and RunwaySession.IsJumpRunwayAutoJumpMode() and localState.takeoffCount >= 1
+end
+
 function RunwaySession.ResolveJumpWindowRatingSpeedBonusRatio(jumpIndex: number, tier: number): number
 	local t = math.clamp(math.floor(tier), 1, 3)
 	local index = math.clamp(math.floor(jumpIndex), 1, math.max(1, cfg.N_TOTAL_JUMPS))
@@ -9657,6 +9691,32 @@ function RunwaySession.ResolveJumpWindowRatingSpeedBonusTriplet(jumpIndex: numbe
 	return RunwaySession.ResolveJumpWindowRatingSpeedBonusRatio(jumpIndex, 1),
 		RunwaySession.ResolveJumpWindowRatingSpeedBonusRatio(jumpIndex, 2),
 		RunwaySession.ResolveJumpWindowRatingSpeedBonusRatio(jumpIndex, 3)
+end
+
+function RunwaySession.ResolveRatingBandRatio(jumpIndex: number, tier: number, bonusRatio: number): number
+	local t = math.clamp(math.floor(tier), 1, 3)
+	if t == 3 then
+		return 0
+	end
+	local perfectRatio, okRatio, lateRatio = RunwaySession.ResolveJumpWindowRatingSpeedBonusTriplet(jumpIndex)
+	local lowerRatio = if t == 1 then okRatio else lateRatio
+	local upperRatio = if t == 1 then perfectRatio else okRatio
+	local denom = upperRatio - lowerRatio
+	if math.abs(denom) <= 1e-6 then
+		return 0
+	end
+	return math.clamp((bonusRatio - lowerRatio) / denom, 0, 1)
+end
+
+function RunwaySession.ResolveBonusRatioFromRatingBand(jumpIndex: number, tier: number, bandRatio: number): number
+	local t = math.clamp(math.floor(tier), 1, 3)
+	if t == 3 then
+		return RunwaySession.ResolveJumpWindowRatingSpeedBonusRatio(jumpIndex, 3)
+	end
+	local perfectRatio, okRatio, lateRatio = RunwaySession.ResolveJumpWindowRatingSpeedBonusTriplet(jumpIndex)
+	local lowerRatio = if t == 1 then okRatio else lateRatio
+	local upperRatio = if t == 1 then perfectRatio else okRatio
+	return RunwaySession.LerpNumber(lowerRatio, upperRatio, math.clamp(bandRatio, 0, 1))
 end
 
 function RunwaySession.JumpSpeedBonusForRatio(bonusRatio: number, currentBaseSpeed: number): number
@@ -9871,7 +9931,16 @@ function RunwaySession.JumpApplyRatingForTakeoff(
 	local tier = 2
 	local bonusRatio = RunwaySession.ResolveJumpWindowRatingSpeedBonusRatio(jumpIndex, tier)
 	local contextName = "LineWindow"
-	if inAuto then
+	local isAutoChainTakeoff = RunwaySession.IsJumpRunwayAutoChainTakeoff(inChainWindow)
+	if isAutoChainTakeoff and localState.autoChainRatingTier ~= nil and localState.autoChainRatingBandRatio ~= nil then
+		tier = localState.autoChainRatingTier :: number
+		bonusRatio = RunwaySession.ResolveBonusRatioFromRatingBand(
+			jumpIndex,
+			tier,
+			localState.autoChainRatingBandRatio :: number
+		)
+		contextName = "AutoChain"
+	elseif inAuto then
 		tier, bonusRatio, contextName = RunwaySession.ResolveAutoBeforeLineRating(jumpIndex, humanoid.RootPart)
 	elseif inLineWindow then
 		if localState.tHudStart ~= nil then
@@ -9895,7 +9964,13 @@ function RunwaySession.JumpApplyRatingForTakeoff(
 		RunwaySession.ApplyJumpSpeedRatingForBonusRatio(bonusRatio, currentBaseSpeed)
 	localState.ratingTier = tier
 	localState.lastQtePercent = math.floor(bonusRatio * 100 + 0.5)
-	ClientMsg.FireJumpRunWayShowRatingTier(tier)
+	if jumpIndex == 1 then
+		localState.autoChainRatingTier = tier
+		localState.autoChainRatingBandRatio = RunwaySession.ResolveRatingBandRatio(jumpIndex, tier, bonusRatio)
+	end
+	if not isAutoChainTakeoff then
+		ClientMsg.FireJumpRunWayShowRatingTier(tier)
+	end
 	--RunwaySession.LogJumpRunwayRating(
 	--	jumpIndex,
 	--	contextName,
@@ -10145,7 +10220,7 @@ function RunwaySession.ResolveTakeoffRatingBarAvailability(
 	local chainSeg = localState.phase == Ph.Airborne
 		and localState.takeoffCount >= 1
 		and localState.takeoffCount < cfg.N_TOTAL_JUMPS
-	if chainSeg then
+	if chainSeg and not RunwaySession.IsJumpRunwayAutoJumpMode() then
 		if localState.tHudStart ~= nil then
 			inChainWindow = true
 		elseif RunwaySession.IsRunwayTreeChainLandingActive(humanoid) then

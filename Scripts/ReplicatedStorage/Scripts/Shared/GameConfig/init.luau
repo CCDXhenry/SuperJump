@@ -1186,13 +1186,20 @@ GameConfig.Paving = {
 -- 物理与状态机由客户端权威驱动；服务端仅会话登记、沿轴样本防作弊与终局距离采纳。
 -- JumpRunway 表内按主题分组；常用项由 JumpRunwayDesigner 透传，实现细节注释仍在本表。
 
+GameConfig.JumpRunwayJumpMechanismMode = {
+	Manual = "Manual",
+	Auto = "Auto",
+}
+
 -- JumpRunway 策划调参：仅修改本表数值；经 GameConfig.JumpRunway 透传，业务勿直接读此表。
 GameConfig.JumpRunwayDesigner = {
 	-- ═══════════════════════════════════════
 	-- —— ① 会话 / 起跳窗 ——
 	-- ═══════════════════════════════════════
+	-- 跳跃机制模式：Manual=每次链式跳跃需玩家输入；Auto=首跳后落地自动起跳
+	JUMP_MECHANISM_MODE = GameConfig.JumpRunwayJumpMechanismMode.Auto,
 	-- 总局可跳次数；↑ 跑道更长、终局冲刺更晚；↓ 更短局
-	N_TOTAL_JUMPS = 1,
+	N_TOTAL_JUMPS = 3,
 	-- 单次起跳窗时长(s)；↑ 更容易踩线、节奏更松；↓ 更苛刻
 	T_WINDOW = 1.5,
 	-- 起跳输入最小间隔(s)；↑ 更防连点误触，↓ 响应更快
@@ -1487,6 +1494,7 @@ GameConfig.JumpRunway = {
 	DEBUG = false,
 	-- 分阶段真实位移日志：独立于 DEBUG，用于公式校准
 	RUNWAY_DISTANCE_LOG_ENABLED = jumpRunwayDesigner.RUNWAY_DISTANCE_LOG_ENABLED,
+	JUMP_MECHANISM_MODE = jumpRunwayDesigner.JUMP_MECHANISM_MODE,
 	N_TOTAL_JUMPS = jumpRunwayDesigner.N_TOTAL_JUMPS,
 	RUN_START_COOLDOWN = 0.45,
 
