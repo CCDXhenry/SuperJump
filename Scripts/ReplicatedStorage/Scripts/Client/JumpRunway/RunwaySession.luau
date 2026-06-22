@@ -246,6 +246,7 @@ local function ResolveNonNegativeConfigNumber(rawValue: any, fallbackValue: numb
 end
 
 local DurationPollIntervalSec = 0.03
+local FinalDashMinTakeoffElapsedSec = 1
 
 local function WaitForDurationOrWindowUnfocused(duration: number)
 	if duration <= 0 then
@@ -415,6 +416,9 @@ local Refs: {
 	finalJumpGuideSlowMotionApexReady: boolean,
 	finalJumpGuideSlowMotionAscentSeen: boolean,
 	finalJumpGuideSlowMotionPrevRawVy: number?,
+	finalDashActivationApexReady: boolean,
+	finalDashActivationAscentSeen: boolean,
+	finalDashActivationPrevRawVy: number?,
 } = {
 	finalTakeoffForceFreefallUntilClock = 0,
 	initDone = false,
@@ -532,6 +536,9 @@ local Refs: {
 	finalJumpGuideSlowMotionApexReady = false,
 	finalJumpGuideSlowMotionAscentSeen = false,
 	finalJumpGuideSlowMotionPrevRawVy = nil,
+	finalDashActivationApexReady = false,
+	finalDashActivationAscentSeen = false,
+	finalDashActivationPrevRawVy = nil,
 }
 
 local localState: RunwayLocalState = RunwayStateStore.CreateDefault(Ph, SlideKindStandard)
@@ -3516,12 +3523,23 @@ function RunwaySession.IsFinalDashTutorialGateOpen(): boolean
 		and Refs.guideSlowMotionStepKey == GameConfig.GuideStepKey.FinalDashFinished
 end
 
+function RunwaySession.IsFinalDashActivationGateOpen(): boolean
+	local takeoffClock = Refs.lastRunwayTakeoffClock
+	if typeof(takeoffClock) == "number" and takeoffClock == takeoffClock then
+		if os.clock() - takeoffClock >= FinalDashMinTakeoffElapsedSec then
+			return true
+		end
+	end
+	return Refs.finalDashActivationApexReady
+end
+
 function RunwaySession.IsFinalDashThrustActive(): boolean
 	return localState.phase == Ph.Airborne
 		and localState.takeoffCount >= cfg.N_TOTAL_JUMPS
 		and localState.dashHeld
 		and localState.fuel > 0
 		and RunwaySession.IsFinalDashTutorialGateOpen()
+		and RunwaySession.IsFinalDashActivationGateOpen()
 end
 
 function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt: number, humanoid: Humanoid)
@@ -6916,6 +6934,7 @@ function RunwaySession.ResetLocalRunToIdle()
 	ClientGameInfo.SetInJumpRunwayEscapePhase(false)
 	ClientGameInfo.SetInJumpRunway(false)
 	RunwaySession.ClearRunwayGuideSlowMotion()
+	RunwaySession.ResetFinalDashActivationApexGate()
 	RunwaySession.ResetFinalJumpGuideSlowMotionApexGate()
 	RunwaySession.PrintDistanceLogSummary("reset_to_idle", hrp)
 	-- 先同步清理资源和状态（避免异步延迟导致新一局启动后资源混乱）
@@ -7358,6 +7377,31 @@ function RunwaySession.ResetFinalJumpGuideSlowMotionApexGate()
 	Refs.finalJumpGuideSlowMotionPrevRawVy = nil
 end
 
+function RunwaySession.ResetFinalDashActivationApexGate()
+	Refs.finalDashActivationApexReady = false
+	Refs.finalDashActivationAscentSeen = false
+	Refs.finalDashActivationPrevRawVy = nil
+end
+
+function RunwaySession.UpdateFinalDashActivationApexGate(hrp: BasePart)
+	if localState.phase ~= Ph.Airborne or localState.takeoffCount < cfg.N_TOTAL_JUMPS then
+		RunwaySession.ResetFinalDashActivationApexGate()
+		return
+	end
+	if Refs.finalDashActivationApexReady then
+		return
+	end
+	local rawVy = hrp.AssemblyLinearVelocity.Y
+	if rawVy > 0 then
+		Refs.finalDashActivationAscentSeen = true
+	end
+	local prevVy = Refs.finalDashActivationPrevRawVy
+	Refs.finalDashActivationPrevRawVy = rawVy
+	if Refs.finalDashActivationAscentSeen and prevVy ~= nil and prevVy > 0 and rawVy <= 0 then
+		Refs.finalDashActivationApexReady = true
+	end
+end
+
 function RunwaySession.UpdateFinalJumpGuideSlowMotionApexGate(hrp: BasePart)
 	if localState.phase ~= Ph.Airborne or localState.takeoffCount < cfg.N_TOTAL_JUMPS then
 		RunwaySession.ResetFinalJumpGuideSlowMotionApexGate()
@@ -7484,6 +7528,7 @@ function RunwaySession.ApplyLocalPhysics(dt: number)
 	local forward = NormalizeRunwayForward(localState.runwayForward)
 	local nowClock = os.clock()
 	RunwaySession.UpdateLocalJumpWindowPrediction(humanoid, nowClock)
+	RunwaySession.UpdateFinalDashActivationApexGate(hrp)
 	RunwaySession.UpdateFinalJumpGuideSlowMotionApexGate(hrp)
 	RunwaySession.RefreshRunwayGuideSlowMotionState()
 	if Refs.guideSlowMotionActive then
@@ -10005,6 +10050,7 @@ function RunwaySession.JumpApplyTakeoff(
 	end)
 	if localState.takeoffCount >= cfg.N_TOTAL_JUMPS then
 		Refs.finalTakeoffForceFreefallUntilClock = nowClock + math.max(0.12, cfg.RUNWAY_JUMP_BOOST_HOLD_SEC)
+		RunwaySession.ResetFinalDashActivationApexGate()
 		RunwaySession.ResetFinalJumpGuideSlowMotionApexGate()
 		RunwaySession.DestroyRunwayRing()
 		RunwaySession.EnsureDistanceRecorderFromTemplate(humanoid, hrp)
@@ -10378,6 +10424,7 @@ function RunwaySession.TryStartLocalRun(startTrigger: Part): boolean
 	localState.prevPreLand = RunwaySession.IsRunwayPreLanding(humanoid)
 	localState.prevJumpWindowRayBand = RunwaySession.IsRunwayJumpWindowRayBandOk(humanoid)
 	Refs.finalTakeoffForceFreefallUntilClock = 0
+	RunwaySession.ResetFinalDashActivationApexGate()
 	RunwaySession.ResetFinalJumpGuideSlowMotionApexGate()
 	Refs.prevGroundedHeartbeat = localState.prevLocalGroundedForLand
 	RunwayCameraController.Enable(workspace, cfg, hrp, localState.runwayForward, NormalizeRunwayForward)
