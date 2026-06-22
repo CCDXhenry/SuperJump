@@ -187,21 +187,31 @@ function LeaderboardManager.SavePlayerStats(player: Player)
 		return
 	end
 
-	for category, hasChanged in pairs(playerInfo.leaderboardChanges) do
+	local leaderboardChanges = playerInfo.leaderboardChanges
+	for category, hasChanged in pairs(leaderboardChanges) do
 		if not hasChanged then
 			continue
 		end
 		local value = GetLeaderboardValue(playerInfo, category)
 		if value == nil then
-			playerInfo.leaderboardChanges[category] = nil
+			if playerInfo.leaderboardChanges == leaderboardChanges then
+				leaderboardChanges[category] = nil
+			end
 			continue
 		end
 		if UpdateToOrderedDataStore(player, category, value) then
-			playerInfo.leaderboardChanges[category] = nil
+			local latestPlayerInfo = ServerGameInfo.GetPlayerInfo(player)
+			if latestPlayerInfo == nil then
+				continue
+			end
+			local latestValue = GetLeaderboardValue(latestPlayerInfo, category)
+			if latestPlayerInfo.leaderboardChanges == leaderboardChanges and latestValue == value then
+				leaderboardChanges[category] = nil
+			end
 		end
 	end
 
-	if next(playerInfo.leaderboardChanges) == nil then
+	if playerInfo.leaderboardChanges == leaderboardChanges and next(leaderboardChanges) == nil then
 		playerInfo.leaderboardChanges = nil
 	end
 end
@@ -213,15 +223,7 @@ function UpdateToOrderedDataStore(player: Player, category: string, value: numbe
 		ods:SetAsync(tostring(player.UserId), math.floor(value))
 	end)
 	if not success then
-		warn(
-			string.format(
-				"%s Failed to update OrderedDataStore for %d in %s: %s",
-				LOG_PREFIX,
-				player.UserId,
-				category,
-				err
-			)
-		)
+		warn(string.format("%s Failed to update OrderedDataStore for %d in %s: %s", LOG_PREFIX, player.UserId, category, err))
 	end
 	WarnIfSlow("UpdateToOrderedDataStore", updateStartClock)
 	return success
@@ -292,13 +294,7 @@ function LeaderboardManager.Init()
 			local waitSeconds = math.max(1, nextPullTimestamp - now)
 			task.wait(waitSeconds)
 
-			print(
-				string.format(
-					"%s Starting periodic refresh. NextPullAt: %s",
-					LOG_PREFIX,
-					os.date("!%X", nextPullTimestamp)
-				)
-			)
+			print(string.format("%s Starting periodic refresh. NextPullAt: %s", LOG_PREFIX, os.date("!%X", nextPullTimestamp)))
 			NetMsg.FireNotifyLeaderboardResetTime(nil, GetNextWeekResetTimestampCached())
 			LeaderboardManager.RefreshLeaderboard(GameConfig.LeaderboardCategory.WeeklyDistance)
 		end
