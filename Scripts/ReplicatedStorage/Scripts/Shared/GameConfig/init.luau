@@ -1573,7 +1573,7 @@ GameConfig.JumpRunwayDesigner = {
 	-- 小精灵宝箱撞击速度（studs/s）；滑到宝箱时保留该末速度，撞击后也用该速度反弹并按统一趴滑减速度减速
 	RUNWAY_CHEST_HIT_SPEED = 15,
 	-- 开箱最终 brainrot 弹出后的展示停留时长（秒）
-	RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC = 1.5,
+	RUNWAY_CHEST_FINAL_REWARD_HOLD_SEC = 3,
 	-- 开箱随机轮播 brainrot 弹出大小倍率；↑ 展示更大
 	RUNWAY_CHEST_RANDOM_BRAINROT_REVEAL_SCALE = 1.2,
 	-- 开箱最终奖励 brainrot 停留展示大小倍率；↑ 最终显示更大
@@ -2005,9 +2005,9 @@ GameConfig.JumpRunway = {
 	-- 追击者消失淡出时长（秒）
 	CHASER_FADE_DURATION_SEC = 1.5,
 	-- 追击者开始追玩家前的总等待时长（秒，含定身阶段）
-	CHASER_START_DELAY_SEC = 3,
+	CHASER_START_DELAY_SEC = 6,
 	-- 追击者创建后保持不动的定身时长（秒，须 <= CHASER_START_DELAY_SEC）
-	CHASER_FREEZE_AFTER_SPAWN_SEC = 1.5,
+	CHASER_FREEZE_AFTER_SPAWN_SEC = 3,
 	-- 摄像机插值移动到追击者镜头的时长（秒）
 	CHASER_CAMERA_FOCUS_TRANSITION_SEC = 1,
 	-- 摄像机对准追击者后保持的时长（秒）
