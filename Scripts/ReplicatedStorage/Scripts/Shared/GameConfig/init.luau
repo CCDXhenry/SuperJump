@@ -59,128 +59,104 @@ export type JumpRunwayMovementBarZoneStyleMap = {
 GameConfig.JumpRunwayMovementBarZoneStyleMap = {
 	-- 未配置的 Zone 默认使用 Workspace.Ground.Zone 下对应 Part.Color
 
-	-- 对应 [1] Common (纯白到银灰，基础水平渐变)
-	Zone0 = {
-		gradient = {
-			Color3.fromRGB(255, 255, 255),
-			Color3.fromRGB(200, 200, 210),
-		},
-		rotation = 0,
-	},
-	-- 对应 [2] Uncommon (亮绿到深绿，向右上)
-	Zone1 = {
-		gradient = {
-			Color3.fromRGB(150, 255, 100),
-			Color3.fromRGB(73, 230, 0),
-		},
-		rotation = 20,
-	},
-	-- 对应 [3] Rare (青色渐变，向右下交错)
-	Zone2 = {
-		gradient = {
-			Color3.fromRGB(100, 255, 240),
-			Color3.fromRGB(0, 255, 217),
-		},
-		rotation = -20,
-	},
-	-- 对应 [4] Epic (天蓝到海蓝，向右上)
-	Zone3 = {
-		gradient = {
-			Color3.fromRGB(120, 200, 255),
-			Color3.fromRGB(30, 144, 255),
-		},
-		rotation = 30,
-	},
-	-- 对应 [5] Legendary (粉紫渐变，向右下)
-	Zone4 = {
-		gradient = {
-			Color3.fromRGB(255, 120, 255),
-			Color3.fromRGB(255, 0, 255),
-		},
-		rotation = -30,
-	},
-	-- 对应 [6] Mythical (亮紫到深紫，大角度右上)
-	Zone5 = {
-		gradient = {
-			Color3.fromRGB(190, 100, 255),
-			Color3.fromRGB(136, 0, 255),
-		},
-		rotation = 45,
-	},
-	-- 对应 [7] Cosmic (玫红到暗红，大角度右下)
-	Zone6 = {
-		gradient = {
-			Color3.fromRGB(255, 100, 140),
-			Color3.fromRGB(255, 0, 68),
-		},
-		rotation = -45,
-	},
-	-- 对应 [8] Secret (淡紫到蓝紫，水平渐变回归平稳)
-	Zone7 = {
-		gradient = {
-			Color3.fromRGB(200, 160, 255),
-			Color3.fromRGB(156, 106, 255),
-		},
-		rotation = 0,
-	},
-	-- 对应 [9] Divine (亮粉色渐变，向右上)
-	Zone8 = {
-		gradient = {
-			Color3.fromRGB(255, 150, 230),
-			Color3.fromRGB(255, 56, 209),
-		},
-		rotation = 35,
-	},
-	-- 对应 [10] Hacked (三段颜色，向右下，制造代码下坠感)
-	Zone9 = {
-		gradient = {
-			Color3.fromRGB(150, 255, 160),
-			Color3.fromRGB(67, 255, 83),
-			Color3.fromRGB(20, 150, 40),
-		},
-		rotation = -35,
-	},
-	-- 对应 [11] OG (亮红到深红，向右上)
-	Zone10 = {
-		gradient = {
-			Color3.fromRGB(255, 100, 100),
-			Color3.fromRGB(255, 25, 29),
-		},
-		rotation = 25,
-	},
-	-- 对应 [12] Celestial (星光黄到金黄，向右下)
-	Zone11 = {
-		gradient = {
-			Color3.fromRGB(255, 255, 150),
-			Color3.fromRGB(255, 234, 1),
-		},
-		rotation = -25,
-	},
-	-- 对应 [13] Transcendent (空灵极光蓝，大角度右上)
-	Zone12 = {
-		gradient = {
-			Color3.fromRGB(220, 240, 255),
-			Color3.fromRGB(167, 224, 255),
-		},
-		rotation = 40,
-	},
-	-- 对应 [14] Glitched (乱码绿三段渐变，极度向右下倾斜)
-	Zone13 = {
-		gradient = {
-			Color3.fromRGB(100, 180, 120),
-			Color3.fromRGB(24, 125, 53),
-			Color3.fromRGB(10, 50, 20),
-		},
-		rotation = -40,
-	},
-	-- 对应 [15] Void (深灰到纯黑，回归最基础的水平，体现深邃感)
-	Zone14 = {
-		gradient = {
-			Color3.fromRGB(60, 60, 65),
-			Color3.fromRGB(0, 0, 0),
-		},
-		rotation = 0,
-	},
+	-- [1] Common (纯白到银灰)
+	Zone0 = { gradient = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(200, 200, 210) }, rotation = 0 },
+	-- [2] Uncommon (亮绿到深绿)
+	Zone1 = { gradient = { Color3.fromRGB(150, 255, 100), Color3.fromRGB(73, 230, 0) }, rotation = 20 },
+	-- [3] Rare (青色交错)
+	Zone2 = { gradient = { Color3.fromRGB(100, 255, 240), Color3.fromRGB(0, 255, 217) }, rotation = -20 },
+	-- [4] Epic (天蓝到海蓝)
+	Zone3 = { gradient = { Color3.fromRGB(120, 200, 255), Color3.fromRGB(30, 144, 255) }, rotation = 30 },
+	-- [5] Legendary (粉紫渐变)
+	Zone4 = { gradient = { Color3.fromRGB(255, 120, 255), Color3.fromRGB(255, 0, 255) }, rotation = -30 },
+	-- [6] Mythical (亮紫到深紫)
+	Zone5 = { gradient = { Color3.fromRGB(190, 100, 255), Color3.fromRGB(136, 0, 255) }, rotation = 45 },
+	-- [7] Cosmic (玫红到暗红)
+	Zone6 = { gradient = { Color3.fromRGB(255, 100, 140), Color3.fromRGB(255, 0, 68) }, rotation = -45 },
+	-- [8] Secret (神秘淡紫，回归平稳)
+	Zone7 = { gradient = { Color3.fromRGB(200, 160, 255), Color3.fromRGB(156, 106, 255) }, rotation = 0 },
+	-- [9] Divine (神圣亮粉)
+	Zone8 = { gradient = { Color3.fromRGB(255, 150, 230), Color3.fromRGB(255, 56, 209) }, rotation = 35 },
+	-- [10] Hacked (三段矩阵代码绿)
+	Zone9 = { gradient = { Color3.fromRGB(150, 255, 160), Color3.fromRGB(67, 255, 83), Color3.fromRGB(20, 150, 40) }, rotation = -35 },
+	-- [11] OG (经典红黑渐变)
+	Zone10 = { gradient = { Color3.fromRGB(255, 100, 100), Color3.fromRGB(255, 25, 29) }, rotation = 25 },
+	-- [12] Celestial (星光金黄)
+	Zone11 = { gradient = { Color3.fromRGB(255, 255, 150), Color3.fromRGB(255, 234, 1) }, rotation = -25 },
+	-- [13] Transcendent (空灵极光蓝)
+	Zone12 = { gradient = { Color3.fromRGB(220, 240, 255), Color3.fromRGB(167, 224, 255) }, rotation = 40 },
+	-- [14] Glitched (三段乱码杂绿)
+	Zone13 = { gradient = { Color3.fromRGB(100, 180, 120), Color3.fromRGB(24, 125, 53), Color3.fromRGB(10, 50, 20) }, rotation = -40 },
+	-- [15] Void (纯黑虚空，绝对平稳)
+	Zone14 = { gradient = { Color3.fromRGB(60, 60, 65), Color3.fromRGB(0, 0, 0) }, rotation = 0 },
+
+	-- [16] Abyssal (深海幽蓝)
+	Zone15 = { gradient = { Color3.fromRGB(40, 80, 180), Color3.fromRGB(20, 40, 120) }, rotation = 30 },
+	-- [17] Phantom (幽灵荧光青)
+	Zone16 = { gradient = { Color3.fromRGB(220, 255, 245), Color3.fromRGB(180, 255, 230) }, rotation = -30 },
+	-- [18] Ethereal (空灵丁香紫)
+	Zone17 = { gradient = { Color3.fromRGB(230, 200, 255), Color3.fromRGB(200, 160, 255) }, rotation = 20 },
+	-- [19] Astral (星界亮黄)
+	Zone18 = { gradient = { Color3.fromRGB(255, 255, 180), Color3.fromRGB(255, 255, 100) }, rotation = -20 },
+	-- [20] Sovereign (至尊烈焰橙)
+	Zone19 = { gradient = { Color3.fromRGB(255, 180, 80), Color3.fromRGB(255, 140, 0) }, rotation = 45 },
+	-- [21] Paradox (悖论荧光粉)
+	Zone20 = { gradient = { Color3.fromRGB(255, 120, 200), Color3.fromRGB(255, 50, 150) }, rotation = -45 },
+	-- [22] Radioactive (三段辐射酸绿)
+	Zone21 = { gradient = { Color3.fromRGB(150, 255, 150), Color3.fromRGB(50, 255, 50), Color3.fromRGB(20, 180, 20) }, rotation = 35 },
+	-- [23] Quantum (量子青蓝交错)
+	Zone22 = { gradient = { Color3.fromRGB(0, 200, 240), Color3.fromRGB(0, 150, 180) }, rotation = -35 },
+	-- [24] Galactic (银河深邃紫)
+	Zone23 = { gradient = { Color3.fromRGB(120, 50, 200), Color3.fromRGB(80, 0, 150) }, rotation = 25 },
+	-- [25] Universal (宇宙冰蓝)
+	Zone24 = { gradient = { Color3.fromRGB(230, 245, 255), Color3.fromRGB(200, 230, 255) }, rotation = -25 },
+	-- [26] Multiversal (多元猩红)
+	Zone25 = { gradient = { Color3.fromRGB(255, 80, 100), Color3.fromRGB(220, 20, 60) }, rotation = 40 },
+	-- [27] Omniversal (全能真金)
+	Zone26 = { gradient = { Color3.fromRGB(255, 230, 100), Color3.fromRGB(255, 200, 0) }, rotation = -40 },
+	-- [28] Infinite (无限幽邃靛青)
+	Zone27 = { gradient = { Color3.fromRGB(100, 50, 180), Color3.fromRGB(60, 0, 130) }, rotation = 30 },
+	-- [29] Immortal (不朽暗沉红)
+	Zone28 = { gradient = { Color3.fromRGB(220, 50, 60), Color3.fromRGB(180, 10, 20) }, rotation = -30 },
+	-- [30] Eternal (永恒亮蓝光辉)
+	Zone29 = { gradient = { Color3.fromRGB(100, 230, 255), Color3.fromRGB(0, 200, 255) }, rotation = 0 },
+	-- [31] Primordial (远古青铜质感)
+	Zone30 = { gradient = { Color3.fromRGB(220, 140, 70), Color3.fromRGB(180, 100, 30) }, rotation = 25 },
+	-- [32] Supreme (无上高光亮紫)
+	Zone31 = { gradient = { Color3.fromRGB(255, 100, 255), Color3.fromRGB(220, 0, 220) }, rotation = -25 },
+	-- [33] Absolute (绝对白银领域，平稳0度)
+	Zone32 = { gradient = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(230, 235, 240), Color3.fromRGB(180, 185, 190) }, rotation = 0 },
+	-- [34] Omnipotent (全知高压电蓝)
+	Zone33 = { gradient = { Color3.fromRGB(100, 150, 255), Color3.fromRGB(30, 80, 255) }, rotation = 35 },
+	-- [35] Nightmare (梦魇黑红深渊)
+	Zone34 = { gradient = { Color3.fromRGB(130, 20, 20), Color3.fromRGB(80, 0, 0) }, rotation = -35 },
+	-- [36] Corrupted (侵蚀剧毒酸绿)
+	Zone35 = { gradient = { Color3.fromRGB(200, 255, 80), Color3.fromRGB(170, 255, 0) }, rotation = 45 },
+	-- [37] Abstract (抽象珊瑚橘红)
+	Zone36 = { gradient = { Color3.fromRGB(255, 180, 140), Color3.fromRGB(255, 130, 90) }, rotation = -45 },
+	-- [38] Cursed (诅咒深沉暗紫)
+	Zone37 = { gradient = { Color3.fromRGB(150, 80, 200), Color3.fromRGB(100, 40, 150) }, rotation = 20 },
+	-- [39] Brainrot (纯正高饱和魔怔粉)
+	Zone38 = { gradient = { Color3.fromRGB(255, 180, 230), Color3.fromRGB(255, 120, 200) }, rotation = -20 },
+	-- [40] Unfathomable (不可名状之漆黑红)
+	Zone39 = { gradient = { Color3.fromRGB(60, 20, 40), Color3.fromRGB(30, 0, 20) }, rotation = 0 },
+
+	-- [41] Singularity (三段奇点塌缩玫红)
+	Zone40 = { gradient = { Color3.fromRGB(255, 100, 180), Color3.fromRGB(255, 0, 128), Color3.fromRGB(120, 0, 60) }, rotation = 30 },
+	-- [42] Oblivion (遗忘石板灰)
+	Zone41 = { gradient = { Color3.fromRGB(160, 170, 180), Color3.fromRGB(112, 128, 144) }, rotation = -30 },
+	-- [43] Genesis (创世生命春绿)
+	Zone42 = { gradient = { Color3.fromRGB(100, 255, 180), Color3.fromRGB(0, 255, 127) }, rotation = 40 },
+	-- [44] Omega (终焉毁灭橙红)
+	Zone43 = { gradient = { Color3.fromRGB(255, 120, 50), Color3.fromRGB(255, 69, 0) }, rotation = -40 },
+	-- [45] Anomaly (异常突变酸黄绿)
+	Zone44 = { gradient = { Color3.fromRGB(220, 255, 100), Color3.fromRGB(192, 255, 0) }, rotation = 25 },
+	-- [46] [REDACTED] (三段极暗数据黑洞)
+	Zone45 = { gradient = { Color3.fromRGB(80, 80, 80), Color3.fromRGB(45, 45, 45), Color3.fromRGB(10, 10, 10) }, rotation = 0 },
+	-- [47] Zenith (天顶极光幻白)
+	Zone46 = { gradient = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(240, 245, 255) }, rotation = 45 },
+	-- [48] Apotheosis (登神炽金白，神圣终极光辉)
+	Zone47 = { gradient = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 245, 220), Color3.fromRGB(255, 215, 100) }, rotation = -45 },
 	
 } :: JumpRunwayMovementBarZoneStyleMap
 GameConfig.DecelerationButtonShowSpeed = 40

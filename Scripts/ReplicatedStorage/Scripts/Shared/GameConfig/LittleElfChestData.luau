@@ -1,7 +1,7 @@
 return {
 	[1] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box1",
+		["resourceName"] = "LuckyBox_1",
 		["zoneId"] = 1,
 		["id"] = 1,
 		["iconImageId"] = "rbxassetid://119836096425123",
@@ -10,7 +10,7 @@ return {
 	},
 	[2] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box2",
+		["resourceName"] = "LuckyBox_2",
 		["zoneId"] = 2,
 		["id"] = 2,
 		["iconImageId"] = "rbxassetid://92022275554709",
@@ -19,7 +19,7 @@ return {
 	},
 	[3] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box3",
+		["resourceName"] = "LuckyBox_3",
 		["zoneId"] = 3,
 		["id"] = 3,
 		["iconImageId"] = "rbxassetid://129022654862676",
@@ -28,7 +28,7 @@ return {
 	},
 	[4] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box4",
+		["resourceName"] = "LuckyBox_4",
 		["zoneId"] = 4,
 		["id"] = 4,
 		["iconImageId"] = "rbxassetid://99426019150398",
@@ -37,7 +37,7 @@ return {
 	},
 	[5] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box5",
+		["resourceName"] = "LuckyBox_5",
 		["zoneId"] = 5,
 		["id"] = 5,
 		["iconImageId"] = "rbxassetid://100504318605769",
@@ -46,7 +46,7 @@ return {
 	},
 	[6] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box1",
+		["resourceName"] = "LuckyBox_6",
 		["zoneId"] = 6,
 		["id"] = 6,
 		["iconImageId"] = "rbxassetid://119836096425123",
@@ -55,7 +55,7 @@ return {
 	},
 	[7] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box2",
+		["resourceName"] = "LuckyBox_7",
 		["zoneId"] = 7,
 		["id"] = 7,
 		["iconImageId"] = "rbxassetid://92022275554709",
@@ -64,7 +64,7 @@ return {
 	},
 	[8] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box3",
+		["resourceName"] = "LuckyBox_8",
 		["zoneId"] = 8,
 		["id"] = 8,
 		["iconImageId"] = "rbxassetid://129022654862676",
@@ -73,7 +73,7 @@ return {
 	},
 	[9] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box4",
+		["resourceName"] = "LuckyBox_9",
 		["zoneId"] = 9,
 		["id"] = 9,
 		["iconImageId"] = "rbxassetid://99426019150398",
@@ -82,7 +82,7 @@ return {
 	},
 	[10] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box5",
+		["resourceName"] = "LuckyBox_10",
 		["zoneId"] = 10,
 		["id"] = 10,
 		["iconImageId"] = "rbxassetid://100504318605769",
@@ -91,7 +91,7 @@ return {
 	},
 	[11] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box1",
+		["resourceName"] = "LuckyBox_11",
 		["zoneId"] = 11,
 		["id"] = 11,
 		["iconImageId"] = "rbxassetid://119836096425123",
@@ -100,7 +100,7 @@ return {
 	},
 	[12] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box2",
+		["resourceName"] = "LuckyBox_12",
 		["zoneId"] = 12,
 		["id"] = 12,
 		["iconImageId"] = "rbxassetid://92022275554709",
@@ -109,7 +109,7 @@ return {
 	},
 	[13] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box3",
+		["resourceName"] = "LuckyBox_13",
 		["zoneId"] = 13,
 		["id"] = 13,
 		["iconImageId"] = "rbxassetid://129022654862676",
@@ -118,7 +118,7 @@ return {
 	},
 	[14] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box4",
+		["resourceName"] = "LuckyBox_14",
 		["zoneId"] = 14,
 		["id"] = 14,
 		["iconImageId"] = "rbxassetid://99426019150398",
@@ -127,7 +127,7 @@ return {
 	},
 	[15] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box5",
+		["resourceName"] = "LuckyBox_15",
 		["zoneId"] = 15,
 		["id"] = 15,
 		["iconImageId"] = "rbxassetid://100504318605769",
@@ -136,7 +136,7 @@ return {
 	},
 	[16] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box1",
+		["resourceName"] = "LuckyBox_16",
 		["zoneId"] = 16,
 		["id"] = 16,
 		["iconImageId"] = "rbxassetid://119836096425123",
@@ -145,7 +145,7 @@ return {
 	},
 	[17] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box2",
+		["resourceName"] = "LuckyBox_17",
 		["zoneId"] = 17,
 		["id"] = 17,
 		["iconImageId"] = "rbxassetid://92022275554709",
@@ -154,7 +154,7 @@ return {
 	},
 	[18] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box3",
+		["resourceName"] = "LuckyBox_18",
 		["zoneId"] = 18,
 		["id"] = 18,
 		["iconImageId"] = "rbxassetid://129022654862676",
@@ -163,7 +163,7 @@ return {
 	},
 	[19] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box4",
+		["resourceName"] = "LuckyBox_19",
 		["zoneId"] = 19,
 		["id"] = 19,
 		["iconImageId"] = "rbxassetid://99426019150398",
@@ -172,7 +172,7 @@ return {
 	},
 	[20] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box5",
+		["resourceName"] = "LuckyBox_20",
 		["zoneId"] = 20,
 		["id"] = 20,
 		["iconImageId"] = "rbxassetid://100504318605769",
@@ -181,7 +181,7 @@ return {
 	},
 	[21] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box1",
+		["resourceName"] = "LuckyBox_21",
 		["zoneId"] = 21,
 		["id"] = 21,
 		["iconImageId"] = "rbxassetid://119836096425123",
@@ -190,7 +190,7 @@ return {
 	},
 	[22] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box2",
+		["resourceName"] = "LuckyBox_22",
 		["zoneId"] = 22,
 		["id"] = 22,
 		["iconImageId"] = "rbxassetid://92022275554709",
@@ -199,7 +199,7 @@ return {
 	},
 	[23] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box3",
+		["resourceName"] = "LuckyBox_23",
 		["zoneId"] = 23,
 		["id"] = 23,
 		["iconImageId"] = "rbxassetid://129022654862676",
@@ -208,7 +208,7 @@ return {
 	},
 	[24] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box4",
+		["resourceName"] = "LuckyBox_24",
 		["zoneId"] = 24,
 		["id"] = 24,
 		["iconImageId"] = "rbxassetid://99426019150398",
@@ -217,7 +217,7 @@ return {
 	},
 	[25] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box5",
+		["resourceName"] = "LuckyBox_25",
 		["zoneId"] = 25,
 		["id"] = 25,
 		["iconImageId"] = "rbxassetid://100504318605769",
@@ -226,7 +226,7 @@ return {
 	},
 	[26] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box1",
+		["resourceName"] = "LuckyBox_26",
 		["zoneId"] = 26,
 		["id"] = 26,
 		["iconImageId"] = "rbxassetid://119836096425123",
@@ -235,7 +235,7 @@ return {
 	},
 	[27] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box2",
+		["resourceName"] = "LuckyBox_27",
 		["zoneId"] = 27,
 		["id"] = 27,
 		["iconImageId"] = "rbxassetid://92022275554709",
@@ -244,7 +244,7 @@ return {
 	},
 	[28] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box3",
+		["resourceName"] = "LuckyBox_28",
 		["zoneId"] = 28,
 		["id"] = 28,
 		["iconImageId"] = "rbxassetid://129022654862676",
@@ -253,7 +253,7 @@ return {
 	},
 	[29] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box4",
+		["resourceName"] = "LuckyBox_29",
 		["zoneId"] = 29,
 		["id"] = 29,
 		["iconImageId"] = "rbxassetid://99426019150398",
@@ -262,7 +262,7 @@ return {
 	},
 	[30] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box5",
+		["resourceName"] = "LuckyBox_30",
 		["zoneId"] = 30,
 		["id"] = 30,
 		["iconImageId"] = "rbxassetid://100504318605769",
@@ -271,7 +271,7 @@ return {
 	},
 	[31] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box1",
+		["resourceName"] = "LuckyBox_31",
 		["zoneId"] = 31,
 		["id"] = 31,
 		["iconImageId"] = "rbxassetid://119836096425123",
@@ -280,7 +280,7 @@ return {
 	},
 	[32] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box2",
+		["resourceName"] = "LuckyBox_32",
 		["zoneId"] = 32,
 		["id"] = 32,
 		["iconImageId"] = "rbxassetid://92022275554709",
@@ -289,7 +289,7 @@ return {
 	},
 	[33] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box3",
+		["resourceName"] = "LuckyBox_33",
 		["zoneId"] = 33,
 		["id"] = 33,
 		["iconImageId"] = "rbxassetid://129022654862676",
@@ -298,7 +298,7 @@ return {
 	},
 	[34] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box4",
+		["resourceName"] = "LuckyBox_34",
 		["zoneId"] = 34,
 		["id"] = 34,
 		["iconImageId"] = "rbxassetid://99426019150398",
@@ -307,7 +307,7 @@ return {
 	},
 	[35] = {
 		["onlyPay"] = 0,
-		["resourceName"] = "box5",
+		["resourceName"] = "LuckyBox_35",
 		["zoneId"] = 35,
 		["id"] = 35,
 		["iconImageId"] = "rbxassetid://100504318605769",
