@@ -14,7 +14,7 @@ local marketplaceService: MarketplaceService = game:GetService("MarketplaceServi
 --玩家是否拥有通行证
 function MarketplaceTool.SafeUserOwnsGamePass(player: Player, gamePassId: number): (boolean, any)
 	return RetryAsync(function()
-		return marketplaceService:UserOwnsGamePassAsync(player.UserId, gamePassId)
+		return marketplaceService:UserOwnsGamePassAsync(player.User, gamePassId)
 	end, AttemptLimit, RetryDelay)
 end
 
