@@ -3333,7 +3333,14 @@ function RunwaySession.GetGuideSlowMotionScale(): number
 	return if Refs.guideSlowMotionActive then GuideSlowMotionSpeedScale else 1
 end
 
+function RunwaySession.IsFinalDashGuideEnabled(): boolean
+	return cfg.FINAL_DASH_JET_MODE == GameConfig.JumpRunwayFinalDashJetMode.Manual
+end
+
 function RunwaySession.IsFinalDashTutorialGateOpen(): boolean
+	if not RunwaySession.IsFinalDashGuideEnabled() then
+		return true
+	end
 	if RunwaySession.IsGuideStepDone(GameConfig.GuideStepKey.FinalDashFinished) then
 		return true
 	end
@@ -3350,13 +3357,30 @@ function RunwaySession.IsFinalDashActivationGateOpen(): boolean
 	return Refs.finalDashActivationApexReady
 end
 
+function RunwaySession.IsFinalDashAutoJetAtApexActive(): boolean
+	return cfg.FINAL_DASH_JET_MODE == GameConfig.JumpRunwayFinalDashJetMode.AutoAtApex
+		and localState.phase == Ph.Airborne
+		and localState.takeoffCount >= cfg.N_TOTAL_JUMPS
+		and localState.fuel > 0
+		and Refs.finalDashActivationApexReady
+		and RunwaySession.IsFinalDashTutorialGateOpen()
+end
+
+function RunwaySession.IsFinalDashManualJetActive(): boolean
+	return cfg.FINAL_DASH_JET_MODE == GameConfig.JumpRunwayFinalDashJetMode.Manual
+		and localState.dashHeld
+		and RunwaySession.IsFinalDashActivationGateOpen()
+end
+
 function RunwaySession.IsFinalDashThrustActive(): boolean
 	return localState.phase == Ph.Airborne
 		and localState.takeoffCount >= cfg.N_TOTAL_JUMPS
-		and localState.dashHeld
 		and localState.fuel > 0
 		and RunwaySession.IsFinalDashTutorialGateOpen()
-		and RunwaySession.IsFinalDashActivationGateOpen()
+		and (
+			RunwaySession.IsFinalDashAutoJetAtApexActive()
+			or RunwaySession.IsFinalDashManualJetActive()
+		)
 end
 
 function RunwaySession.UpdateAutoRunVelocity(hrp: BasePart, forward: Vector3, dt: number, humanoid: Humanoid)
@@ -7100,6 +7124,9 @@ function RunwaySession.SetRunwayGuideSlowMotion(guideType: number, stepKey: stri
 	if RunwaySession.IsGuideStepDone(stepKey) then
 		return
 	end
+	if stepKey == GameConfig.GuideStepKey.FinalDashFinished and not RunwaySession.IsFinalDashGuideEnabled() then
+		return
+	end
 	if Refs.guideSlowMotionActive and Refs.guideSlowMotionStepKey == stepKey then
 		return
 	end
@@ -7145,6 +7172,14 @@ function RunwaySession.RefreshRunwayGuideSlowMotionState()
 		RunwaySession.ClearRunwayGuideSlowMotion()
 		return
 	end
+	if
+		Refs.guideSlowMotionActive
+		and Refs.guideSlowMotionStepKey == GameConfig.GuideStepKey.FinalDashFinished
+		and not RunwaySession.IsFinalDashGuideEnabled()
+	then
+		RunwaySession.ClearRunwayGuideSlowMotion()
+		return
+	end
 	if localState.phase == Ph.JumpWindow and not RunwaySession.IsGuideStepDone(GameConfig.GuideStepKey.BeginLineJumpFinished) then
 		RunwaySession.SetRunwayGuideSlowMotion(GameConfig.GuideType.TutorialBeginLineJump, GameConfig.GuideStepKey.BeginLineJumpFinished)
 	elseif
@@ -7160,6 +7195,7 @@ function RunwaySession.RefreshRunwayGuideSlowMotionState()
 		and localState.takeoffCount >= cfg.N_TOTAL_JUMPS
 		and localState.fuel > 0
 		and RunwaySession.GetExpectedPlayerMaxFuel() > 0
+		and RunwaySession.IsFinalDashGuideEnabled()
 		and not RunwaySession.IsGuideStepDone(GameConfig.GuideStepKey.FinalDashFinished)
 		and RunwaySession.IsFinalJumpGuideSlowMotionApexReady()
 	then
@@ -7907,30 +7943,32 @@ function RunwaySession.WarnSlideEndContext(reason: string)
 		end
 		chestYDelta = chestDelta.Y
 	end
-	warn(
-		string.format(
-			"[RunwaySession] SlideEndFallback reason=%s phase=%d slide=%s sub=%d elapsed=%.2f endOver=%.2f grounded=%s speed=%.2f along=%.2f chestSpawned=%s chestReady=%s chestLanded=%s chestRewardStarted=%s chestAwaitingExit=%s finalSent=%s chestAlongDelta=%.2f chestLateralDelta=%.2f chestYDelta=%.2f chestDist=%.2f",
-			reason,
-			localState.phase,
-			localState.runwaySlideKind,
-			localState.finalLandSubPhase,
-			nowClock - localState.slideStartClock,
-			nowClock - localState.slideEndClock,
-			tostring(grounded),
-			speed,
-			along,
-			tostring(Refs.chestSpawnedForThisRun),
-			tostring(Refs.chestReadyForHit),
-			tostring(Refs.chestLandedOnGround),
-			tostring(Refs.chestRewardPresentationStarted),
-			tostring(Refs.chestRunwayAwaitingExit),
-			tostring(localState.finalSent),
-			chestAlongDelta,
-			chestLateralDelta,
-			chestYDelta,
-			chestDelta.Magnitude
+	if GameConfig.JumpRunway.DEBUG then
+		warn(
+			string.format(
+				"[RunwaySession] SlideEndFallback reason=%s phase=%d slide=%s sub=%d elapsed=%.2f endOver=%.2f grounded=%s speed=%.2f along=%.2f chestSpawned=%s chestReady=%s chestLanded=%s chestRewardStarted=%s chestAwaitingExit=%s finalSent=%s chestAlongDelta=%.2f chestLateralDelta=%.2f chestYDelta=%.2f chestDist=%.2f",
+				reason,
+				localState.phase,
+				localState.runwaySlideKind,
+				localState.finalLandSubPhase,
+				nowClock - localState.slideStartClock,
+				nowClock - localState.slideEndClock,
+				tostring(grounded),
+				speed,
+				along,
+				tostring(Refs.chestSpawnedForThisRun),
+				tostring(Refs.chestReadyForHit),
+				tostring(Refs.chestLandedOnGround),
+				tostring(Refs.chestRewardPresentationStarted),
+				tostring(Refs.chestRunwayAwaitingExit),
+				tostring(localState.finalSent),
+				chestAlongDelta,
+				chestLateralDelta,
+				chestYDelta,
+				chestDelta.Magnitude
+			)
 		)
-	)
+	end
 end
 
 function RunwaySession.ShouldBlockFinalLandingSlideEndForChest(): boolean
@@ -8471,7 +8509,7 @@ function RunwaySession.TryPresentLittleElfChestReward()
 	end
 	Refs.chestRewardPresentationStarted = true
 	Refs.chestAnimPlaying = true
-	RunwayCameraController.SetChestOpenZoomActive(true)
+	RunwayCameraController.BeginChestOpenZoom(workspace, cfg, RunwaySession.GetCharacterParts, localState.runwayForward, NormalizeRunwayForward)
 
 	local runwayChestModelForOpen = Refs.chestSpawnedModel
 	local openCFrame = if runwayChestModelForOpen and runwayChestModelForOpen.Parent
@@ -8523,7 +8561,7 @@ function RunwaySession.TryPresentLittleElfChestReward()
 		end
 		Refs.chestPickedBrainrotId = selectedBrainrotId
 	end
-	RunwayCameraController.SetChestOpenZoomActive(false)
+	RunwayCameraController.EndChestOpenZoom(workspace, cfg, RunwaySession.GetCharacterParts, localState.runwayForward, NormalizeRunwayForward)
 	if Refs.chestPickedConfigId ~= pickedConfigId or Refs.chestRewardPresentationStarted ~= true then
 		return
 	end
@@ -9741,7 +9779,11 @@ function RunwaySession.OnInputBegan(input: InputObject, processed: boolean)
 		end
 	end
 	-- 冲刺：与起跳相同的主操作键（Space / 左键 / 触摸）；终局空由 takeoffCount/fuel 决定是否叠加速
-	if IsRunwayPrimaryActionInput(input) and RunwaySession.IsRunwayActivePhase(localState.phase) then
+	if
+		IsRunwayPrimaryActionInput(input)
+		and RunwaySession.IsRunwayActivePhase(localState.phase)
+		and RunwaySession.IsFinalDashGuideEnabled()
+	then
 		if RunwaySession.IsFinalDashTutorialGateOpen() then
 			localState.dashHeld = true
 			RunwaySession.NetReportDashIfChanged()

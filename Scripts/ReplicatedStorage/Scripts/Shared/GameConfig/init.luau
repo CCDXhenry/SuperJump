@@ -23,8 +23,8 @@ local ShopBundleConfigurationDataModule = require(script:WaitForChild("ShopBundl
 local ShopBundleDataModule = require(script:WaitForChild("ShopBundleData"))
 local OnlineRewardDataModule = require(script:WaitForChild("OnlineRewardData"))
 
-GameConfig.GameVersion = "1.0.1"
-GameConfig.ABTestVersion = "1.0.1"
+GameConfig.GameVersion = "1.0.2"
+GameConfig.ABTestVersion = "1.0.2"
 GameConfig.PlayerSaveInfoDataVersion = 2
 GameConfig.GameId = 10269142148
 
@@ -1382,6 +1382,11 @@ GameConfig.JumpRunwayJumpMechanismMode = {
 	Auto = "Auto",
 }
 
+GameConfig.JumpRunwayFinalDashJetMode = {
+	Manual = "Manual",
+	AutoAtApex = "AutoAtApex",
+}
+
 -- JumpRunway 策划调参：仅修改本表数值；经 GameConfig.JumpRunway 透传，业务勿直接读此表。
 GameConfig.JumpRunwayDesigner = {
 	-- ═══════════════════════════════════════
@@ -1466,6 +1471,8 @@ GameConfig.JumpRunwayDesigner = {
 	DASH_MAX_SPEED = 100,
 	-- 冲刺燃料上限(s)；↑ 可冲更久
 	DASH_FUEL_MAX = 2.5,
+	-- 终局喷气模式：Manual=按住主操作键喷气；AutoAtApex=第 N 跳到达最高点后自动喷气
+	FINAL_DASH_JET_MODE = GameConfig.JumpRunwayFinalDashJetMode.AutoAtApex,
 	-- 冲刺向上线加速度；↑ 抬头爬升更强
 	DASH_UPWARD_ACCEL = 196.2 * 0.075,
 	-- 冲刺最高竖直速度；↑ 可飞更高
@@ -1765,6 +1772,7 @@ GameConfig.JumpRunway = {
 	DASH_ACCEL = jumpRunwayDesigner.DASH_ACCEL,
 	DASH_MAX_SPEED = jumpRunwayDesigner.DASH_MAX_SPEED,
 	DASH_FUEL_MAX = jumpRunwayDesigner.DASH_FUEL_MAX,
+	FINAL_DASH_JET_MODE = jumpRunwayDesigner.FINAL_DASH_JET_MODE,
 	DASH_FUEL_DRAIN_PER_SEC = 1.0,
 	-- 终局冲刺：除沿前向 DASH_ACCEL 外，每帧叠加向上线加速度（studs/s²）；vy 不超过 DASH_UPWARD_VY_MAX
 	DASH_UPWARD_ACCEL = jumpRunwayDesigner.DASH_UPWARD_ACCEL,

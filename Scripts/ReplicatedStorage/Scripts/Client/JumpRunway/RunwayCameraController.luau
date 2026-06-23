@@ -2,6 +2,7 @@
 
 local RunwayCameraController = {}
 
+local players = game:GetService("Players")
 local runService = game:GetService("RunService")
 local userInputService = game:GetService("UserInputService")
 
@@ -49,6 +50,7 @@ local state: CameraState = {
 local TransitionFallbackPollIntervalSec = 0.03
 local DeferredSubjectRestorePollIntervalSec = 0.05
 local DeferredSubjectRestoreMaxAttempts = 100
+local InitialCameraZoomApplyDelaySec = 0.15
 
 local deferredSubjectRestoreToken = 0
 
@@ -177,6 +179,14 @@ local function HasRestoreSnapshot(): boolean
 	return state.cameraTypeBeforeRunway ~= nil or state.cameraSubjectBeforeRunway ~= nil or state.cameraFovBeforeRunway ~= nil
 end
 
+local function CaptureRestoreSnapshot(camera: Camera)
+	if not state.active and not HasRestoreSnapshot() then
+		state.cameraTypeBeforeRunway = camera.CameraType
+		state.cameraSubjectBeforeRunway = camera.CameraSubject
+		state.cameraFovBeforeRunway = camera.FieldOfView
+	end
+end
+
 local function ClearRestoreSnapshot(transitionToken: number?)
 	if transitionToken ~= nil and state.releaseTransitionToken ~= transitionToken then
 		return
@@ -195,6 +205,48 @@ local function WaitForNextTransitionFrame()
 	else
 		task.wait(TransitionFallbackPollIntervalSec)
 	end
+end
+
+local function ApplyInitialCameraZoomDistance(player: Player, targetPosition: Vector3, targetLookAt: Vector3)
+	local originalMin = player.CameraMinZoomDistance
+	local originalMax = player.CameraMaxZoomDistance
+	local minValue = math.min(originalMin, originalMax)
+	local maxValue = math.max(originalMin, originalMax)
+	local desired = math.clamp((targetPosition - targetLookAt).Magnitude, minValue, maxValue)
+
+	player.CameraMinZoomDistance = desired
+	player.CameraMaxZoomDistance = desired
+
+	task.delay(InitialCameraZoomApplyDelaySec, function()
+		if player.CameraMinZoomDistance ~= desired or player.CameraMaxZoomDistance ~= desired then
+			return
+		end
+		player.CameraMinZoomDistance = originalMin
+		player.CameraMaxZoomDistance = originalMax
+	end)
+end
+
+local function RestorePlayerCameraControlFromHrp(camera: Camera, hrp: BasePart, targetFov: number?)
+	local character = hrp:FindFirstAncestorOfClass("Model")
+	local humanoid = if character ~= nil then character:FindFirstChildOfClass("Humanoid") else nil
+	if humanoid ~= nil and humanoid.Health > 0 then
+		camera.CameraSubject = humanoid
+	end
+	if targetFov ~= nil then
+		camera.FieldOfView = targetFov
+	end
+	camera.CameraType = Enum.CameraType.Custom
+end
+
+local function RestorePlayerCameraControlAtTarget(
+	camera: Camera,
+	hrp: BasePart,
+	targetPosition: Vector3,
+	targetLookAt: Vector3,
+	targetFov: number?
+)
+	ApplyInitialCameraZoomDistance(players.LocalPlayer, targetPosition, targetLookAt)
+	RestorePlayerCameraControlFromHrp(camera, hrp, targetFov)
 end
 
 local function PlayCameraTransition(
@@ -268,7 +320,10 @@ local function PlayReleaseTransition(
 	restoreSubject: Instance?,
 	restoreFov: number?,
 	getCharacterParts: () -> (Model?, Humanoid?, BasePart?),
-	onComplete: (() -> ())?
+	onComplete: (() -> ())?,
+	finalZoomHrp: BasePart?,
+	finalZoomPosition: Vector3?,
+	finalZoomLookAt: Vector3?
 )
 	if not PlayCameraTransition(camera, transitionToken, releaseDuration, startCFrame, targetCFrame, startFov, targetFov) then
 		if state.releaseTransitionToken == transitionToken then
@@ -277,7 +332,11 @@ local function PlayReleaseTransition(
 		EndReleaseTransition()
 		return
 	end
-	RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+	if finalZoomHrp ~= nil and finalZoomPosition ~= nil and finalZoomLookAt ~= nil then
+		RestorePlayerCameraControlAtTarget(camera, finalZoomHrp, finalZoomPosition, finalZoomLookAt, targetFov)
+	else
+		RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+	end
 	if onComplete ~= nil then
 		onComplete()
 	end
@@ -461,20 +520,74 @@ function RunwayCameraController.Enable(workspaceRef: Workspace, cfg: any, hrp: B
 		return
 	end
 	state.releaseTransitionToken += 1
-	if not state.active and not HasRestoreSnapshot() then
-		state.cameraTypeBeforeRunway = camera.CameraType
-		state.cameraSubjectBeforeRunway = camera.CameraSubject
-		state.cameraFovBeforeRunway = camera.FieldOfView
-	end
-	state.active = true
+	CaptureRestoreSnapshot(camera)
+	state.active = false
 	state.chestOpenZoomActive = false
 	local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(hrp, runwayForward, cfg, normalizeForward, false)
-	state.smoothedCameraPosition = targetPosition
-	state.smoothedCameraLookAt = targetLookAt
-	state.smoothedCameraFov = cfg.RUNWAY_CAMERA_FOV
+	state.smoothedCameraPosition = nil
+	state.smoothedCameraLookAt = nil
+	state.smoothedCameraFov = nil
 	camera.CameraType = Enum.CameraType.Scriptable
 	camera.FieldOfView = cfg.RUNWAY_CAMERA_FOV
 	camera.CFrame = CFrame.lookAt(targetPosition, targetLookAt, Vector3.yAxis)
+	RestorePlayerCameraControlAtTarget(camera, hrp, targetPosition, targetLookAt, cfg.RUNWAY_CAMERA_FOV)
+end
+
+function RunwayCameraController.BeginChestOpenZoom(
+	workspaceRef: Workspace,
+	cfg: any,
+	getCharacterParts: () -> (Model?, Humanoid?, BasePart?),
+	runwayForward: Vector3,
+	normalizeForward: (Vector3) -> Vector3
+)
+	local camera = workspaceRef.CurrentCamera
+	if camera == nil then
+		return
+	end
+	local _character, _humanoid, hrp = getCharacterParts()
+	if hrp == nil then
+		return
+	end
+	state.releaseTransitionToken += 1
+	CaptureRestoreSnapshot(camera)
+	state.active = true
+	state.chestOpenZoomActive = true
+	local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(hrp, runwayForward, cfg, normalizeForward, true)
+	local targetDistance = math.max(1, (targetLookAt - targetPosition).Magnitude)
+	state.smoothedCameraPosition = camera.CFrame.Position
+	state.smoothedCameraLookAt = camera.CFrame.Position + camera.CFrame.LookVector * targetDistance
+	state.smoothedCameraFov = camera.FieldOfView
+	camera.CameraType = Enum.CameraType.Scriptable
+end
+
+function RunwayCameraController.EndChestOpenZoom(
+	workspaceRef: Workspace,
+	cfg: any,
+	getCharacterParts: () -> (Model?, Humanoid?, BasePart?),
+	runwayForward: Vector3,
+	normalizeForward: (Vector3) -> Vector3
+)
+	local camera = workspaceRef.CurrentCamera
+	if camera == nil then
+		state.active = false
+		state.chestOpenZoomActive = false
+		ClearRestoreSnapshot(nil)
+		return
+	end
+	local _character, _humanoid, hrp = getCharacterParts()
+	if hrp ~= nil then
+		local targetPosition, targetLookAt = RunwayCameraController.CalculateTargets(hrp, runwayForward, cfg, normalizeForward, true)
+		camera.CFrame = CFrame.lookAt(targetPosition, targetLookAt, Vector3.yAxis)
+		RestorePlayerCameraControlAtTarget(camera, hrp, targetPosition, targetLookAt, ResolveChestOpenFov(cfg))
+	else
+		RestoreCameraControl(camera, state.cameraTypeBeforeRunway, state.cameraSubjectBeforeRunway, nil, getCharacterParts)
+	end
+	state.active = false
+	state.chestOpenZoomActive = false
+	state.smoothedCameraPosition = nil
+	state.smoothedCameraLookAt = nil
+	state.smoothedCameraFov = nil
+	ClearRestoreSnapshot(nil)
 end
 
 function RunwayCameraController.Disable(
@@ -493,6 +606,11 @@ function RunwayCameraController.Disable(
 		if state.releaseTransitionInProgress then
 			ForceCompletePendingRelease()
 		end
+		local camera = workspaceRef.CurrentCamera
+		if camera ~= nil and HasRestoreSnapshot() then
+			RestoreCameraControl(camera, state.cameraTypeBeforeRunway, state.cameraSubjectBeforeRunway, nil, getCharacterParts)
+			ClearRestoreSnapshot(nil)
+		end
 		return
 	end
 	state.active = false
@@ -502,7 +620,7 @@ function RunwayCameraController.Disable(
 		local transitionToken = state.releaseTransitionToken
 		local restoreCameraType = state.cameraTypeBeforeRunway
 		local restoreSubject = state.cameraSubjectBeforeRunway
-		local restoreFov = state.cameraFovBeforeRunway
+		local restoreFov: number? = nil
 		local releaseDuration = ResolveReleaseTransitionDuration(cfg)
 		local completeInvoked = { false }
 		if releaseForward ~= nil and cfg ~= nil and normalizeForward ~= nil then
@@ -539,7 +657,10 @@ function RunwayCameraController.Disable(
 						getCharacterParts,
 						function()
 							InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
-						end
+						end,
+						nil,
+						nil,
+						nil
 					)
 				end)
 			elseif hrp ~= nil then
@@ -580,19 +701,17 @@ function RunwayCameraController.FocusChaserThenDisable(
 	state.smoothedCameraLookAt = nil
 	state.smoothedCameraFov = nil
 	state.chestOpenZoomActive = false
-	if not state.active then
-		return
-	end
 	state.active = false
 	local camera = workspaceRef.CurrentCamera
 	if camera == nil then
 		return
 	end
 	state.releaseTransitionToken += 1
+	CaptureRestoreSnapshot(camera)
 	local transitionToken = state.releaseTransitionToken
 	local restoreCameraType = state.cameraTypeBeforeRunway
 	local restoreSubject = state.cameraSubjectBeforeRunway
-	local restoreFov = state.cameraFovBeforeRunway
+	local restoreFov: number? = nil
 	local focusDuration = ResolveChaserFocusTransitionDuration(cfg)
 	local holdDuration = ResolveChaserFocusHoldDuration(cfg)
 	local releaseDuration = ResolveChaserReturnHomeTransitionDuration(cfg)
@@ -652,12 +771,15 @@ function RunwayCameraController.FocusChaserThenDisable(
 					getCharacterParts,
 					function()
 						InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
-					end
+					end,
+					releaseHrp,
+					targetPosition,
+					targetLookAt
 				)
 			else
 				camera.CFrame = targetCFrame
 				camera.FieldOfView = targetFov
-				RestoreCameraControl(camera, restoreCameraType, restoreSubject, restoreFov, getCharacterParts)
+				RestorePlayerCameraControlAtTarget(camera, releaseHrp, targetPosition, targetLookAt, targetFov)
 				InvokeOnCompleteOnce(onFocusSequenceComplete, completeInvoked)
 				ClearRestoreSnapshot(transitionToken)
 				EndReleaseTransition()
@@ -685,7 +807,7 @@ function RunwayCameraController.Update(
 	if not state.active then
 		return
 	end
-	if not isRunwayActivePhase(phase) then
+	if not isRunwayActivePhase(phase) and not state.chestOpenZoomActive then
 		RunwayCameraController.Disable(workspaceRef, getCharacterParts, runwayForward, cfg, normalizeForward)
 		return
 	end
