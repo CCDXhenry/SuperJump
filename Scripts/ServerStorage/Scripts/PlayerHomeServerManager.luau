@@ -36,10 +36,7 @@ local basePlotsCount = 0
 local initDone = false
 
 local function teleportPlayerToAnotherServer(player: Player)
-	local teleportOptions = Instance.new("TeleportOptions")
-	teleportOptions.ShouldReserveServer = true
-
-	local teleportSuccess, teleportResult = TeleportTool.SafeTeleport(game.PlaceId, { player }, teleportOptions)
+	local teleportSuccess, teleportResult = TeleportTool.SafeTeleport(game.PlaceId, { player }, nil)
 	if teleportSuccess then
 		print(LogPrefix, "Server is full. Teleporting", player.Name, "to another server")
 		return
