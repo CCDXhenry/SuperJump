@@ -26,6 +26,7 @@ local ModelBillboardOffsetTool = require(scripts:WaitForChild("Client"):WaitForC
 local NumberExtension = require(coreSharedScripts:WaitForChild("NumberExtension"))
 local ChestOpenAnimationManager = require(scripts:WaitForChild("Client"):WaitForChild("ChestOpenAnimationManager"))
 local BrainrotVariantVisualTool = require(scripts:WaitForChild("Client"):WaitForChild("BrainrotVariantVisualTool"))
+local BrainrotQualityUILabel = require(scripts:WaitForChild("Client"):WaitForChild("BrainrotQualityUILabel"))
 
 local actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
 local modelsFolderForChests = replicatedStorage:WaitForChild("Models")
@@ -149,6 +150,24 @@ local function SetupVisualBrainrot(targetPart: BasePart, overrideVariantId: numb
 	local existingVisual = targetPart:FindFirstChild("VisualModel")
 	if existingVisual and existingVisual:IsA("Model") then
 		RefreshVariantUiOnTarget(targetPart, overrideVariantId)
+		local existingConfigId = targetPart:GetAttribute("ConfigId") :: number?
+		if existingConfigId then
+			local existingLevel = (targetPart:GetAttribute("Level") :: number) or 1
+			local existingItemType = targetPart:GetAttribute("ItemType") :: number? or GameConfig.ItemType.Brainrot
+			local existingData = if existingItemType == GameConfig.ItemType.LittleElfChest
+				then GameConfig.LittleElfChestIdMap[existingConfigId]
+				else GameConfig.BrainrotIdMap[existingConfigId]
+			if existingData then
+				AttachInfoUIToModel(
+					targetPart,
+					targetPart :: BasePart,
+					existingConfigId,
+					existingLevel,
+					ResolveBrainrotDisplayQuality(targetPart, existingConfigId, existingData.quality or 1),
+					existingVisual
+				)
+			end
+		end
 		return
 	end
 
@@ -278,24 +297,13 @@ function AttachInfoUIToModel(targetParent: Instance, adornee: BasePart, configId
 			local timerTextLabel = controller:FindFirstChild("TimerText") :: TextLabel?
 			local timerImgLabel = controller:FindFirstChild("TimerImg") :: ImageLabel?
 
-		local qualityCfg = GameConfig.BrainrotQualityConfig[quality]
-
 		if nameLabel then
 			nameLabel.Text = data.name_t or ""
 			-- NameLabel 颜色固定为白色，不随品质变化
 			nameLabel.TextColor3 = Color3.new(1, 1, 1)
 		end
 		if qualityLabel then
-			local qualityTextName = GameConfig.BrainrotQualityTextMap[quality]
-			local qualityTextData = if qualityTextName then ((GameTexts :: any)[qualityTextName] :: { source: string, key: string }?) else nil
-			if qualityTextData then
-				TranslationTool.CustomAutoLocalizeTextLabel(qualityLabel, qualityTextData.source, qualityTextData.key, {})
-			else
-				TranslationTool.CustomAutoLocalizeTextLabel(qualityLabel, "", "", {})
-			end
-			if qualityCfg then
-				qualityLabel.TextColor3 = qualityCfg.textColor
-			end
+			BrainrotQualityUILabel.Apply(qualityLabel, quality)
 		end
 		if levelText then
 			levelText.Visible = true

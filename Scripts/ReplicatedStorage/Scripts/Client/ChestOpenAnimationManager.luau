@@ -23,6 +23,7 @@ local TranslationTool = require(coreClientScripts:WaitForChild("TranslationTool"
 local BillboardManager = require(clientScripts:WaitForChild("BillboardManager"))
 local ModelBillboardOffsetTool = require(clientScripts:WaitForChild("ModelBillboardOffsetTool"))
 local BrainrotVariantVisualTool = require(clientScripts:WaitForChild("BrainrotVariantVisualTool"))
+local BrainrotQualityUILabel = require(clientScripts:WaitForChild("BrainrotQualityUILabel"))
 local GameSoundManager = require(clientScripts:WaitForChild("GameSoundManager"))
 
 local actualModels = replicatedStorage:WaitForChild("Models"):WaitForChild("Brainrots")
@@ -224,7 +225,6 @@ local function CreateOrUpdateInfoUI(
 		return
 	end
 
-	local qualityCfg = GameConfig.BrainrotQualityConfig[brainrotData.quality]
 	local ui = parentInstance:FindFirstChild("BrainrotInfoUI") :: BillboardGui?
 
 	if not ui then
@@ -258,16 +258,7 @@ local function CreateOrUpdateInfoUI(
 		nameLabel.TextColor3 = Color3.new(1, 1, 1)
 	end
 	if qualityLabel then
-		local qualityTextName = GameConfig.BrainrotQualityTextMap[brainrotData.quality]
-		local qualityTextData = if qualityTextName then ((GameTexts :: any)[qualityTextName] :: { source: string, key: string }?) else nil
-		if qualityTextData then
-			TranslationTool.CustomAutoLocalizeTextLabel(qualityLabel, qualityTextData.source, qualityTextData.key, {})
-		else
-			TranslationTool.CustomAutoLocalizeTextLabel(qualityLabel, "", "", {})
-		end
-		if qualityCfg then
-			qualityLabel.TextColor3 = qualityCfg.textColor
-		end
+		BrainrotQualityUILabel.Apply(qualityLabel, brainrotData.quality)
 	end
 	if levelText then
 		levelText.Visible = true

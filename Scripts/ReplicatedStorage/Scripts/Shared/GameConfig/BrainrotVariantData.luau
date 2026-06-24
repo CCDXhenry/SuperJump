@@ -2,7 +2,7 @@ return {
 	[1] = {
 		["id"] = 1,
 		["coinBonusPercent"] = 50,
-		["name_t"] = "Halo",
+		["name_t"] = "Gold",
 		["resourceName"] = "FX04_04",
 	},
 	[2] = {

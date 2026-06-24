@@ -1260,17 +1260,22 @@ GameConfig.BrainrotQualityConfig = {
 
 GameConfig.RobuxIconText = "\u{E002}"
 
-GameConfig.BrainrotQualityTextMap = {
-	[1] = "QualityCommon",
-	[2] = "QualityUncommon",
-	[3] = "QualityRare",
-	[4] = "QualityEpic",
-	[5] = "QualityLegendary",
-	[6] = "QualityMythical",
-	[7] = "QualityCosmic",
-	[8] = "QualitySecret",
-	[9] = "QualityCelestial",
-}
+local function getBrainrotQualityTextKey(rarity: string): string
+	if rarity == "[REDACTED]" then
+		return "QualityRedacted"
+	end
+	return "Quality" .. rarity
+end
+
+GameConfig.BrainrotQualityTextMap = {}
+for qualityTier, qualityCfg in pairs(GameConfig.BrainrotQualityConfig) do
+	if type(qualityTier) == "number" and type(qualityCfg) == "table" then
+		local rarity = qualityCfg.rarity
+		if type(rarity) == "string" and rarity ~= "" then
+			GameConfig.BrainrotQualityTextMap[qualityTier] = getBrainrotQualityTextKey(rarity)
+		end
+	end
+end
 
 GameConfig.BrainrotLevelTierSize = 30
 -- Brainrot 模型缩放：每升 1 级在当前尺寸上复利增加的百分比（1 表示每级 ×1.01）

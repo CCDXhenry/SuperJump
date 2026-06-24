@@ -21,6 +21,7 @@ local GameTexts = require(sharedScripts:FindFirstChild("GameTexts"))
 local BillboardManager = require(clientScripts:FindFirstChild("BillboardManager"))
 local ModelBillboardOffsetTool = require(clientScripts:FindFirstChild("ModelBillboardOffsetTool"))
 local BrainrotVariantVisualTool = require(clientScripts:FindFirstChild("BrainrotVariantVisualTool"))
+local BrainrotQualityUILabel = require(clientScripts:FindFirstChild("BrainrotQualityUILabel"))
 local NumberExtension = require(coreSharedScripts:FindFirstChild("NumberExtension"))
 
 local actualModels = replicatedStorage:WaitForChild("Models"):FindFirstChild("Brainrots")
@@ -506,13 +507,7 @@ local function EnsureBillboardTracked(gui: BillboardGui)
 end
 
 local function LocalizeQualityLabel(qualityLabel: TextLabel, quality: number)
-	local qualityTextName = GameConfig.BrainrotQualityTextMap[quality]
-	local qualityTextData = if qualityTextName then ((GameTexts :: any)[qualityTextName] :: { source: string, key: string }?) else nil
-	if qualityTextData then
-		TranslationTool.CustomAutoLocalizeTextLabel(qualityLabel, qualityTextData.source, qualityTextData.key, {})
-	else
-		TranslationTool.CustomAutoLocalizeTextLabel(qualityLabel, "", "", {})
-	end
+	BrainrotQualityUILabel.Apply(qualityLabel, quality)
 end
 
 -- Forward declarations
