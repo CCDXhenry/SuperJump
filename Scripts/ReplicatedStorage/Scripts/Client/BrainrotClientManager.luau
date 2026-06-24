@@ -61,6 +61,18 @@ local pendingOpenChestToolMap: { [string]: Tool } = {}
 local pendingOpenChestCFrameMap: { [string]: CFrame } = {}
 local pendingOpenChestResultMap: { [string]: { brainrotId: number, variantId: number } } = {}
 
+local function ResolveBrainrotDisplayQuality(targetParent: Instance, configId: number, passedQuality: number): number
+	local attrQuality = tonumber(targetParent:GetAttribute("Quality"))
+	if attrQuality then
+		return attrQuality
+	end
+	if passedQuality > 0 then
+		return passedQuality
+	end
+	local data = GameConfig.BrainrotIdMap[configId]
+	return if data then data.quality else 1
+end
+
 local function ResolveTargetVariantId(targetPart: BasePart, overrideVariantId: number?): number
 	if overrideVariantId ~= nil and overrideVariantId > 0 then
 		return overrideVariantId
@@ -214,16 +226,20 @@ local function SetupVisualBrainrot(targetPart: BasePart, overrideVariantId: numb
 	local variantId = ResolveTargetVariantId(targetPart, overrideVariantId)
 	BrainrotVariantVisualTool.AttachVariantEffect(newVisual, variantId)
 	BrainrotVariantVisualTool.ApplyVisualCarryWeld(targetPart, newVisual, variantId)
-	AttachInfoUIToModel(targetPart, targetPart :: BasePart, configId, level, data.quality or 1, newVisual)
+	AttachInfoUIToModel(
+		targetPart,
+		targetPart :: BasePart,
+		configId,
+		level,
+		ResolveBrainrotDisplayQuality(targetPart, configId, data.quality or 1),
+		newVisual
+	)
 end
 
 -- Attach UI
 function AttachInfoUIToModel(targetParent: Instance, adornee: BasePart, configId: number, level: number, quality: number, visualModel: Model?)
-	if targetParent:FindFirstChild("BrainrotInfoUI") or targetParent:FindFirstChild("ChestInfoUI") or targetParent:FindFirstChild("LittleElfChestInfoUI") then
-		return
-	end
-
 	local itemType = targetParent:GetAttribute("ItemType") :: number? or GameConfig.ItemType.Brainrot
+	quality = ResolveBrainrotDisplayQuality(targetParent, configId, quality)
 	local data: any
 	if itemType == GameConfig.ItemType.LittleElfChest then
 		data = GameConfig.LittleElfChestIdMap[configId]
@@ -235,9 +251,14 @@ function AttachInfoUIToModel(targetParent: Instance, adornee: BasePart, configId
 		return
 	end
 
-	local newBrainrotUI = if itemType == GameConfig.ItemType.LittleElfChest then chestInfoUIParams:Clone() else brainrotInfoUIParams:Clone()
+	local uiName = if itemType == GameConfig.ItemType.LittleElfChest then "ChestInfoUI" else "BrainrotInfoUI"
+	local newBrainrotUI = (adornee:FindFirstChild(uiName) or targetParent:FindFirstChild(uiName)) :: BillboardGui?
+	if not newBrainrotUI then
+		newBrainrotUI = if itemType == GameConfig.ItemType.LittleElfChest then chestInfoUIParams:Clone() else brainrotInfoUIParams:Clone()
+		newBrainrotUI.Name = uiName
+		newBrainrotUI.Parent = adornee
+	end
 	newBrainrotUI.Adornee = adornee
-	newBrainrotUI.Name = if itemType == GameConfig.ItemType.LittleElfChest then "ChestInfoUI" else "BrainrotInfoUI"
 
 	local controller = newBrainrotUI:FindFirstChild("Controller") or newBrainrotUI:FindFirstChild("ControllerFrame")
 	if controller then
@@ -334,8 +355,9 @@ function AttachInfoUIToModel(targetParent: Instance, adornee: BasePart, configId
 		end
 	end
 	newBrainrotUI.StudsOffset = Vector3.new(0, offsetY, 0)
-	newBrainrotUI.Adornee = adornee
-	newBrainrotUI.Parent = targetParent
+	if newBrainrotUI.Parent ~= adornee and newBrainrotUI.Parent ~= targetParent then
+		newBrainrotUI.Parent = adornee
+	end
 	EnsureBillboardTracked(newBrainrotUI)
 end
 

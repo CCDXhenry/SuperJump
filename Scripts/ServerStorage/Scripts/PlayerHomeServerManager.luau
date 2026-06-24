@@ -294,6 +294,15 @@ local function onRequestSellModel(player: Player, pointIndex: number)
 	print(LogPrefix, "Player", player.Name, "sold model at point", pointIndex, "for", returnVal)
 end
 
+local function resolvePlacedModelQuality(model: any, configId: number): number
+	local storedQuality = tonumber(model and model.quality)
+	if storedQuality then
+		return storedQuality
+	end
+	local brainrotData = GameConfig.BrainrotIdMap[configId]
+	return if brainrotData then brainrotData.quality else 1
+end
+
 local function getActiveBrainrotForPickup(plr: Player): Instance?
 	local char = plr.Character
 	if not char then
@@ -356,7 +365,7 @@ local function onRequestPickupHomeModel(player: Player, pointIndex: number)
 
 			local oldConfigId = model.configId
 			local oldLevel = (model :: any).level or 1
-			local oldQuality = (model :: any).quality or 1
+			local oldQuality = resolvePlacedModelQuality(model, oldConfigId)
 
 			heldBrainrot:Destroy()
 
@@ -383,7 +392,7 @@ local function onRequestPickupHomeModel(player: Player, pointIndex: number)
 
 	local configId = model.configId
 	local level = (model :: any).level or 1
-	local quality = (model :: any).quality or 1
+	local quality = resolvePlacedModelQuality(model, configId)
 	local modelVariantId = (model :: any).variantId
 	ServerGameInfo.UpdatePlayerPlacedModel(player, pointIndex, nil :: any)
 

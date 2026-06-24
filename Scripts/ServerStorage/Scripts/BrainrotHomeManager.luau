@@ -198,9 +198,12 @@ local function onRequestPlaceCarryingBrainrot(player: Player, pointIndex: number
 	local carryingBrainrot = getActiveBrainrot(player)
 	if carryingBrainrot then
 		local configId = carryingBrainrot:GetAttribute("ConfigId")
-		local quality = carryingBrainrot:GetAttribute("Quality") or 2
 
 		if configId then
+			local configIdNum = tonumber(configId) or 0
+			local brainrotConfig = GameConfig.BrainrotIdMap[configIdNum]
+			local attrQuality = tonumber(carryingBrainrot:GetAttribute("Quality"))
+			local quality = if attrQuality then attrQuality else if brainrotConfig then brainrotConfig.quality else 1
 			local uid = carryingBrainrot:GetAttribute("BrainrotUID") :: string?
 			if not uid then
 				return
@@ -233,11 +236,12 @@ local function onRequestPlaceCarryingBrainrot(player: Player, pointIndex: number
 
 			ServerGameInfo.UpdatePlayerPlacedModel(player, pointIndex, {
 				instanceId = "brainrot_" .. tostring(math.floor(os.clock() * 1000)),
-				configId = tonumber(configId) or 1,
+				configId = configIdNum,
 				level = placedLevel,
+				quality = quality,
 				rarity = rarity,
 				variantId = resolvedVariantId,
-			})
+			} :: any)
 
 			AnalyticsTool.LogModelPlace(player, tonumber(configId) or 1, placedLevel)
 
