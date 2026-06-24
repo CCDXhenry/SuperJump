@@ -59,6 +59,7 @@ ratingText.Visible = false
 
 local fuelBg: ImageLabel? = nil
 local fuelMask: Frame? = nil
+local fuelFillImage: ImageLabel? = nil
 local fuelMaskBaseSizeY: UDim? = nil
 local distanceLabel: TextLabel? = nil
 local distanceValue: TextLabel? = nil
@@ -918,6 +919,15 @@ local function StartEscapeRedScreen()
 	end)
 end
 
+local function UpdateFuelFillImageSize(fuelRatio: number)
+	if fuelFillImage == nil then
+		return
+	end
+	local currentSize = fuelFillImage.Size
+	local scaleY = if fuelRatio > 0 then 1 / fuelRatio else 1
+	fuelFillImage.Size = UDim2.new(currentSize.X.Scale, currentSize.X.Offset, scaleY, 0)
+end
+
 local function ResolveFuelSizeBar()
 	local bg = thisFrame:FindFirstChild("FuelSizeBarBg")
 	if bg == nil or not bg:IsA("ImageLabel") then
@@ -933,6 +943,14 @@ local function ResolveFuelSizeBar()
 	end
 	fuelMask = mask :: Frame
 	fuelMaskBaseSizeY = fuelMask.Size.Y
+
+	local fillImage = fuelMask:FindFirstChild("ImageLabel")
+	if fillImage == nil or not fillImage:IsA("ImageLabel") then
+		warn("[JumpRunWayFrame] FuelSizeBarBg.MaskFrame.ImageLabel missing or not ImageLabel")
+		return
+	end
+	fuelFillImage = fillImage :: ImageLabel
+	UpdateFuelFillImageSize(1)
 end
 
 local function ResolveDistanceValue()
@@ -1081,6 +1099,7 @@ local function RefreshRunwayStats(
 		local currentSize = fuelMask.Size
 		local baseSizeY = fuelMaskBaseSizeY :: UDim
 		fuelMask.Size = UDim2.new(currentSize.X.Scale, currentSize.X.Offset, baseSizeY.Scale * fuelRatio, math.floor(baseSizeY.Offset * fuelRatio + 0.5))
+		UpdateFuelFillImageSize(fuelRatio)
 	end
 
 	local isEscapePhase = ClientGameInfo.IsInJumpRunwayEscapePhase()
