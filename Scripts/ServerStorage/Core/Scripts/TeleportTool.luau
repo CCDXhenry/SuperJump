@@ -22,7 +22,7 @@ end
 function TeleportTool.SafeTeleport(placeId: number, players: { Instance }, teleportOptions: Instance?): (boolean, any)
 	for playerIndex: number, player: Instance in players do
 		if player:IsA("Player") then
-			teleportingPlayers[player.UserId] = true
+			teleportingPlayers[player.User.Id] = true
 		end
 	end
 	return RetryAsync(function()
@@ -43,7 +43,7 @@ local function HandleFailedTeleport(
 		task.wait(RetryDelay)
 	else
 		if player:IsA("Player") then
-			teleportingPlayers[player.UserId] = nil
+			teleportingPlayers[player.User.Id] = nil
 		end
 		error(("Invalid teleport [%s]: %s"):format(teleportResult.Name, errorMessage))
 	end
@@ -51,7 +51,7 @@ local function HandleFailedTeleport(
 end
 
 local function OnPlayerRemoving(player: Player)
-	teleportingPlayers[player.UserId] = nil
+	teleportingPlayers[player.User.Id] = nil
 end
 
 teleportService.TeleportInitFailed:Connect(HandleFailedTeleport)
