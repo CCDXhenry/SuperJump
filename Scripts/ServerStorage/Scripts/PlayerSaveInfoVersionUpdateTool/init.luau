@@ -7,10 +7,12 @@ local sharedScripts = scripts:WaitForChild("Shared")
 local GameConfig = require(sharedScripts:FindFirstChild("GameConfig"))
 local PlayerSaveInfoVersionUpdate1 = require(script:WaitForChild("PlayerSaveInfoVersionUpdate1"))
 local PlayerSaveInfoVersionUpdate2 = require(script:WaitForChild("PlayerSaveInfoVersionUpdate2"))
+local PlayerSaveInfoVersionUpdate3 = require(script:WaitForChild("PlayerSaveInfoVersionUpdate3"))
 
 local PlayerSaveInfoVersionUpdateFunctionList: { [number]: (playerSaveInfo: any) -> () } = {
 	[1] = PlayerSaveInfoVersionUpdate1,
 	[2] = PlayerSaveInfoVersionUpdate2,
+	[3] = PlayerSaveInfoVersionUpdate3,
 }
 
 function PlayerSaveInfoVersionUpdateTool.Update(playerSaveInfo: any)

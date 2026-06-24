@@ -589,6 +589,48 @@ local function CreateLittleElfChestCarryPart(pending: PendingLittleElfChestRewar
 	return carryPart
 end
 
+local function ShouldForceLittleElfChestVariant(player: Player, chestConfig: GameConfig.LittleElfChestConfigData): boolean
+	local zoneId = chestConfig.zoneId or 0
+	if zoneId <= 0 then
+		return false
+	end
+	local playerInfo = ServerGameInfo.GetPlayerInfo(player)
+	if playerInfo == nil then
+		return false
+	end
+	local previousMaxZoneId = playerInfo.jumpRunwayMaxZoneId or 0
+	local isNewMaxZone = zoneId > previousMaxZoneId
+	if isNewMaxZone then
+		playerInfo.jumpRunwayMaxZoneId = zoneId
+		playerInfo.playerInfoChanged = true
+	end
+	local forceVariant = isNewMaxZone and playerInfo.playerConfigInfo.isFirstZone == true
+	if cfg.FIRST_ZONE_DEBUG == true then
+		print(
+			"[JumpRunwayServerManager][FirstZone]",
+			"userId",
+			player.UserId,
+			"name",
+			player.Name,
+			"chestConfigId",
+			chestConfig.id,
+			"zoneId",
+			zoneId,
+			"previousMaxZoneId",
+			previousMaxZoneId,
+			"currentMaxZoneId",
+			playerInfo.jumpRunwayMaxZoneId,
+			"isNewMaxZone",
+			isNewMaxZone,
+			"isFirstZone",
+			playerInfo.playerConfigInfo.isFirstZone,
+			"forceVariant",
+			forceVariant
+		)
+	end
+	return forceVariant
+end
+
 local function EndRunwaySessionWithoutTeleport(player: Player)
 	local st = runMap[player.UserId]
 	if st == nil then
@@ -679,7 +721,25 @@ local function TryCreateFallbackLittleElfChestPending(player: Player, brainrotId
 		return false
 	end
 	local rewardEntry = GameConfig.FindLittleElfChestRewardEntry(chestConfigId, brainrotId)
-	local variantId = if rewardEntry then GameConfig.RollVariantIdFromEntry(rewardEntry) else 0
+	local forceVariant = ShouldForceLittleElfChestVariant(player, chestConfig)
+	local variantId = if rewardEntry then GameConfig.RollVariantIdFromEntry(rewardEntry, forceVariant) else 0
+	if cfg.FIRST_ZONE_DEBUG == true then
+		print(
+			"[JumpRunwayServerManager][FirstZoneReward]",
+			"source",
+			"fallback",
+			"userId",
+			player.UserId,
+			"chestConfigId",
+			chestConfigId,
+			"brainrotId",
+			brainrotId,
+			"forceVariant",
+			forceVariant,
+			"variantId",
+			variantId
+		)
+	end
 	pendingLittleElfChestRewardMap[player.UserId] = {
 		brainrotId = brainrotId,
 		chestConfigId = chestConfigId,
@@ -746,7 +806,25 @@ local function HandleLittleElfChestReward(player: Player, chestConfigId: number)
 		warn("[JumpRunwayServerManager] HandleLittleElfChestReward: brainrotId", brainrotId, "not found in BrainrotIdMap")
 		return
 	end
-	local variantId = GameConfig.RollVariantIdFromEntry(chosenEntry)
+	local forceVariant = ShouldForceLittleElfChestVariant(player, chestConfig)
+	local variantId = GameConfig.RollVariantIdFromEntry(chosenEntry, forceVariant)
+	if cfg.FIRST_ZONE_DEBUG == true then
+		print(
+			"[JumpRunwayServerManager][FirstZoneReward]",
+			"source",
+			"normal",
+			"userId",
+			player.UserId,
+			"chestConfigId",
+			chestConfigId,
+			"brainrotId",
+			brainrotId,
+			"forceVariant",
+			forceVariant,
+			"variantId",
+			variantId
+		)
+	end
 	-- 服务端只 Notify 一次：Roll 结果缓存，入背包由客户端开箱动画结束后再请求
 	pendingLittleElfChestRewardMap[player.UserId] = {
 		brainrotId = brainrotId,

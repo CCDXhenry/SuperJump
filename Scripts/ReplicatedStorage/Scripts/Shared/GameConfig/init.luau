@@ -25,7 +25,7 @@ local OnlineRewardDataModule = require(script:WaitForChild("OnlineRewardData"))
 
 GameConfig.GameVersion = "1.0.3"
 GameConfig.ABTestVersion = "1.0.3"
-GameConfig.PlayerSaveInfoDataVersion = 2
+GameConfig.PlayerSaveInfoDataVersion = 3
 GameConfig.GameId = 10269142148
 
 if game.GameId == GameConfig.GameId then
@@ -905,7 +905,7 @@ function GameConfig.GetLittleElfChestByZoneName(zoneName: string): LittleElfChes
 	return GameConfig.GetLittleElfChestByRunZoneResourceName(zoneName)
 end
 
-function GameConfig.RollVariantIdFromEntry(entry: LittleElfChestRewardPoolEntry): number
+function GameConfig.RollVariantIdFromEntry(entry: LittleElfChestRewardPoolEntry, excludeNoVariant: boolean?): number
 	local variantList = entry.variantList
 	if variantList == nil or #variantList == 0 then
 		return 0
@@ -913,24 +913,32 @@ function GameConfig.RollVariantIdFromEntry(entry: LittleElfChestRewardPoolEntry)
 	local variantWeight = entry.variantWeight
 	local totalWeight = 0
 	for i = 1, #variantList do
+		local variantId = variantList[i]
 		local w = if variantWeight then variantWeight[i] or 0 else 1
-		if w > 0 then
+		if w > 0 and (excludeNoVariant ~= true or variantId > 0) then
 			totalWeight += w
 		end
 	end
 	if totalWeight <= 0 then
+		if excludeNoVariant == true then
+			return 0
+		end
 		return variantList[1]
 	end
 	local roll = math.random(1, totalWeight)
 	local cumulative = 0
 	for i = 1, #variantList do
+		local variantId = variantList[i]
 		local w = if variantWeight then variantWeight[i] or 0 else 1
-		if w > 0 then
+		if w > 0 and (excludeNoVariant ~= true or variantId > 0) then
 			cumulative += w
 			if roll <= cumulative then
-				return variantList[i]
+				return variantId
 			end
 		end
+	end
+	if excludeNoVariant == true then
+		return 0
 	end
 	return variantList[1]
 end
@@ -1696,6 +1704,8 @@ GameConfig.JumpRunway = {
 	-- 开发诊断：为 true 时客户端显示调试 HUD、服务端节流打印状态；发布务必保持 false（零额外 GUI/打印开销）
 	DEBUG = false,
 	MOVEMENT_BAR_DEBUG = false,
+	-- IsFirstZone / 最大 Zone 保底变种测试日志；发布务必保持 false
+	FIRST_ZONE_DEBUG = false,
 	-- 分阶段真实位移日志：独立于 DEBUG，用于公式校准
 	RUNWAY_DISTANCE_LOG_ENABLED = jumpRunwayDesigner.RUNWAY_DISTANCE_LOG_ENABLED,
 	JUMP_MECHANISM_MODE = jumpRunwayDesigner.JUMP_MECHANISM_MODE,
@@ -2320,6 +2330,7 @@ export type SettingInfo = {
 
 export type PlayerConfigInfo = {
 	arePaidRandomItemsRestricted: boolean,
+	isFirstZone: boolean,
 }
 
 export type PlayerInventorySaveInfo = {
@@ -2367,6 +2378,7 @@ export type PlayerSaveInfo = {
 	jumpRunwayJumpCount: number,
 	jumpRunwayWeeklyBestDistance: number,
 	jumpRunwayWeeklyBestDistanceWeekIndex: number,
+	jumpRunwayMaxZoneId: number,
 	brainrotsInfo: BrainrotInventoryInfo,
 	brainrotQueue: { BrainrotQueueItem },
 	exEquipInventory: ExEquipInventory,
@@ -2439,6 +2451,7 @@ function GameConfig.CreateDefaultPlayerSaveInfo(): PlayerSaveInfo
 		jumpRunwayJumpCount = 0,
 		jumpRunwayWeeklyBestDistance = 0,
 		jumpRunwayWeeklyBestDistanceWeekIndex = 0,
+		jumpRunwayMaxZoneId = 0,
 		brainrotsInfo = {
 			ownedBrainrots = {},
 			equippedBrainrots = {},

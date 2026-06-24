@@ -48,6 +48,9 @@ local GAME_TIME_UPDATE_INTERVAL = 0.25
 local LOGIN_DAY_CHECK_INTERVAL = 5
 local newDayHour = GameConfig.newDayHour
 local newDayMinute = GameConfig.newDayMinute
+local ConfigRetryAttemptLimit = 5
+local ConfigRetryDelay = 1
+local IsFirstZoneConfigKey = "IsFirstZone"
 
 local gameTimeAccumulator = 0
 local loginDayCheckAccumulator = 0
@@ -78,6 +81,56 @@ local function IsVersionAfter(version1: string, version2: string): boolean
 		end
 	end
 	return true
+end
+
+local function SafeGetConfigSnapshot(player: Player, usePlayerConfig: boolean): ConfigSnapshot?
+	local success: boolean, result: any = RetryAsync(function()
+		if usePlayerConfig then
+			return configService:GetConfigForPlayerAsync(player)
+		end
+		return configService:GetConfigAsync()
+	end, ConfigRetryAttemptLimit, ConfigRetryDelay)
+	if not success then
+		warn("[ServerGameManager] SafeGetConfigSnapshot failed:", result)
+		return nil
+	end
+	return result :: ConfigSnapshot
+end
+
+local function SafeGetConfigBool(config: ConfigSnapshot?, key: string, defaultValue: boolean): boolean
+	if config == nil then
+		return defaultValue
+	end
+	local success: boolean, result: any = pcall(function()
+		return config:GetValue(key)
+	end)
+	if not success then
+		warn("[ServerGameManager] SafeGetConfigBool failed:", key, result)
+		return defaultValue
+	end
+	if typeof(result) ~= "boolean" then
+		return defaultValue
+	end
+	return result
+end
+
+local function PrintFirstZoneDebug(player: Player, usePlayerConfig: boolean, config: ConfigSnapshot?, isFirstZone: boolean)
+	if GameConfig.JumpRunway.FIRST_ZONE_DEBUG ~= true then
+		return
+	end
+	print(
+		"[ServerGameManager][FirstZone]",
+		"userId",
+		player.UserId,
+		"name",
+		player.Name,
+		"usePlayerConfig",
+		usePlayerConfig,
+		"configLoaded",
+		config ~= nil,
+		"isFirstZone",
+		isFirstZone
+	)
 end
 
 local function CheckPlayerLoginDays(player: Player, todayDate: DateTimeExtension.DateTimeTable)
@@ -159,14 +212,17 @@ local function OnPlayerAdded(player: Player)
 		return
 	end
 	local countryRegion: string = success and result or "unknown"
-	----远程配置
-	--local _config: ConfigSnapshot
-	--if IsVersionAfter(playerSaveInfo.firstEnterVersion, GameConfig.ABTestVersion) then
-	--	_config = configService:GetConfigForPlayerAsync(player)
-	--else
-	--	--老玩家不参与AB测试
-	--	_config = configService:GetConfigAsync()
-	--end
+	--远程配置
+	local usePlayerConfig = IsVersionAfter(playerSaveInfo.firstEnterVersion, GameConfig.ABTestVersion)
+	local config: ConfigSnapshot?
+	if usePlayerConfig then
+		config = SafeGetConfigSnapshot(player, true)
+	else
+		--老玩家不参与AB测试
+		config = SafeGetConfigSnapshot(player, false)
+	end
+	local isFirstZone = SafeGetConfigBool(config, IsFirstZoneConfigKey, false)
+	PrintFirstZoneDebug(player, usePlayerConfig, config, isFirstZone)
 	if not IsPlayerConnected(player) then
 		return
 	end
@@ -183,6 +239,7 @@ local function OnPlayerAdded(player: Player)
 	end
 	local playerConfigInfo: GameConfig.PlayerConfigInfo = {
 		arePaidRandomItemsRestricted = arePaidRandomItemsRestricted,
+		isFirstZone = isFirstZone,
 	}
 	if not IsPlayerConnected(player) then
 		return
