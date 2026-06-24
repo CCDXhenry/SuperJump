@@ -23,8 +23,8 @@ local ShopBundleConfigurationDataModule = require(script:WaitForChild("ShopBundl
 local ShopBundleDataModule = require(script:WaitForChild("ShopBundleData"))
 local OnlineRewardDataModule = require(script:WaitForChild("OnlineRewardData"))
 
-GameConfig.GameVersion = "1.0.2"
-GameConfig.ABTestVersion = "1.0.2"
+GameConfig.GameVersion = "1.0.3"
+GameConfig.ABTestVersion = "1.0.3"
 GameConfig.PlayerSaveInfoDataVersion = 2
 GameConfig.GameId = 10269142148
 
